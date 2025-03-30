@@ -594,10 +594,13 @@ function renderFiles(files) {
         fileDiv.addEventListener('dblclick', (e) => handleFileDblClick(e, fileDiv));
         
         // 드래그 이벤트 리스너
-        fileDiv.addEventListener('dragstart', handleDragStart);
-        fileDiv.addEventListener('dragover', handleDragOver);
-        fileDiv.addEventListener('dragleave', handleDragLeave);
-        fileDiv.addEventListener('drop', handleDrop);
+        fileDiv.addEventListener('dragstart', (e) => handleDragStart(e, fileDiv));
+        fileDiv.addEventListener('dragend', handleDragEnd);
+        
+        // 폴더인 경우 드롭 영역으로 설정
+        if (file.isFolder) {
+            window.addFolderDragEvents(fileDiv);
+        }
         
         fileView.appendChild(fileDiv);
     });
@@ -992,84 +995,47 @@ function handleDragEnd() {
     isDragging = false;
 }
 
-// 드래그 앤 드롭 초기화
-function initDragAndDrop() {
-    // 드롭 영역 처리
-    fileList.addEventListener('dragenter', () => {
-        if (isDragging) return; // 내부 드래그는 무시
-        dropZone.classList.add('active');
-    });
+// 드래그 오버 처리
+function handleDragOver(e) {
+    e.preventDefault();
     
-    dropZone.addEventListener('dragleave', (e) => {
-        // 내부 요소로의 이벤트 전파는 무시
-        if (e.relatedTarget && dropZone.contains(e.relatedTarget)) return;
-        dropZone.classList.remove('active');
-    });
+    // 자기 자신으로의 드래그는 무시 (폴더를 자신 위에 드래그)
+    if (selectedItems.has(e.currentTarget.getAttribute('data-name'))) {
+        return;
+    }
     
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-    });
+    // 드래그 오버 효과 추가
+    e.currentTarget.classList.add('drag-over');
+    e.dataTransfer.dropEffect = 'move';
+}
+
+// 드래그 리브 처리
+function handleDragLeave(e) {
+    // 내부 요소로의 이벤트 전파는 무시
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
+    e.currentTarget.classList.remove('drag-over');
+}
+
+// 드롭 처리
+function handleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
     
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('active');
-        
-        if (isDragging) {
-            // 내부 드래그 앤 드롭 처리
-            const draggedItems = e.dataTransfer.getData('text/plain').split(',');
-            moveItems(draggedItems);
-        } else {
-            // 외부 파일 업로드 처리
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                uploadFiles(files);
-            }
-        }
-    });
+    // 자기 자신으로의 드롭은 무시
+    if (selectedItems.has(e.currentTarget.getAttribute('data-name'))) {
+        return;
+    }
     
-    // 폴더 아이템에 드래그 앤 드롭 이벤트 추가
-    const handleFolderDragOver = (e) => {
-        e.preventDefault();
-        
-        // 자기 자신으로의 드래그는 무시 (폴더를 자신 위에 드래그)
-        if (selectedItems.has(e.currentTarget.getAttribute('data-name'))) {
-            return;
-        }
-        
-        // 드래그 오버 효과 추가
-        e.currentTarget.classList.add('drag-over');
-        e.dataTransfer.dropEffect = 'move';
-    };
+    // 내부 드래그 앤 드롭 처리
+    const draggedItems = e.dataTransfer.getData('text/plain').split(',');
+    const targetFolder = e.currentTarget.getAttribute('data-name');
+    const isFolder = e.currentTarget.getAttribute('data-is-folder') === 'true';
     
-    const handleFolderDragLeave = (e) => {
-        // 내부 요소로의 이벤트 전파는 무시
-        if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
-        e.currentTarget.classList.remove('drag-over');
-    };
-    
-    const handleFolderDrop = (e) => {
-        e.preventDefault();
-        e.currentTarget.classList.remove('drag-over');
-        
-        // 자기 자신으로의 드롭은 무시
-        if (selectedItems.has(e.currentTarget.getAttribute('data-name'))) {
-            return;
-        }
-        
-        // 내부 드래그 앤 드롭 처리
-        const draggedItems = e.dataTransfer.getData('text/plain').split(',');
-        const targetFolder = e.currentTarget.getAttribute('data-name');
-        
+    // 폴더인 경우만 이동 처리
+    if (isFolder && draggedItems.length > 0) {
         // 선택된 항목을 타겟 폴더로 이동
         moveItemsToFolder(draggedItems, targetFolder);
-    };
-    
-    // 폴더 아이템에 이벤트 핸들러 등록 함수 (동적으로 생성된 요소에 적용하기 위함)
-    window.addFolderDragEvents = (folderItem) => {
-        folderItem.addEventListener('dragover', handleFolderDragOver);
-        folderItem.addEventListener('dragleave', handleFolderDragLeave);
-        folderItem.addEventListener('drop', handleFolderDrop);
-    };
+    }
 }
 
 // 폴더 항목을 다른 폴더로 이동
@@ -1529,6 +1495,49 @@ function moveItems(itemIds) {
     
     clipboardOperation = 'cut';
     pasteBtn.disabled = false;
+}
+
+// 드래그 앤 드롭 초기화
+function initDragAndDrop() {
+    // 드롭 영역 처리
+    fileList.addEventListener('dragenter', () => {
+        if (isDragging) return; // 내부 드래그는 무시
+        dropZone.classList.add('active');
+    });
+    
+    dropZone.addEventListener('dragleave', (e) => {
+        // 내부 요소로의 이벤트 전파는 무시
+        if (e.relatedTarget && dropZone.contains(e.relatedTarget)) return;
+        dropZone.classList.remove('active');
+    });
+    
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('active');
+        
+        if (isDragging) {
+            // 내부 드래그 앤 드롭 처리
+            const draggedItems = e.dataTransfer.getData('text/plain').split(',');
+            moveItems(draggedItems);
+        } else {
+            // 외부 파일 업로드 처리
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                uploadFiles(files);
+            }
+        }
+    });
+    
+    // 폴더 아이템에 이벤트 핸들러 등록 함수 (동적으로 생성된 요소에 적용하기 위함)
+    window.addFolderDragEvents = (folderItem) => {
+        folderItem.addEventListener('dragover', handleDragOver);
+        folderItem.addEventListener('dragleave', handleDragLeave);
+        folderItem.addEventListener('drop', handleDrop);
+    };
 }
 
 // 애플리케이션 초기화
