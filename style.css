@@ -167,7 +167,7 @@ h1 {
 .file-list {
     overflow-y: auto;
     flex: 1;
-    padding: 0;
+    padding: 15px 20px;
     position: relative;
 }
 
@@ -175,7 +175,7 @@ h1 {
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
-    padding: 15px 20px;
+    position: relative;
 }
 
 .file-item {
@@ -729,19 +729,12 @@ h1 {
     font-weight: bold;
     color: #555;
     border-bottom: 1px solid #ddd;
-    padding: 10px 15px;
+    padding: 8px 15px;
+    margin-bottom: 5px;
     position: sticky;
     top: 0;
     z-index: 10;
-}
-
-.header-item {
-    padding: 0 10px;
-    cursor: pointer;
-}
-
-.header-item:hover {
-    color: #007bff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .header-icon {
@@ -750,16 +743,25 @@ h1 {
 
 .header-name {
     flex: 2;
+    cursor: pointer;
+    padding: 0 10px;
 }
 
 .header-size {
     flex: 1;
     text-align: right;
+    cursor: pointer;
 }
 
 .header-date {
     flex: 1.5;
     text-align: right;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.files-container {
+    width: 100%;
 }
 
 /* 일반 모드에서 숨김 처리 */
