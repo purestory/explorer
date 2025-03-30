@@ -207,111 +207,105 @@ function initContextMenu() {
     });
 }
 
-// 드래그 선택 초기화
-function initDragSelection() {
+// 파일 드래그 선택 초기화
+function initDragSelect() {
+    const fileList = document.getElementById('fileList');
     let isSelecting = false;
     
+    // 마우스 이벤트를 file-list에 연결 (파일 아이템 사이의 빈 공간 포함)
     fileList.addEventListener('mousedown', (e) => {
-        // 왼쪽 버튼만 처리
-        if (e.button !== 0) return;
-        
-        // 빈 공간에서만 드래그 선택 시작
-        // 파일 아이템에서는 드래그 선택 시작하지 않음
-        if (e.target === fileList || e.target === fileView) {
-            // 실제 파일 아이템이나 그 자식 요소를 클릭한 경우는 제외
-            if (e.target.closest('.file-item')) return;
-            
-            isSelecting = true;
-            
-            // 정확한 클릭 위치 계산
-            const rect = fileList.getBoundingClientRect();
-            startX = e.clientX - rect.left + fileList.scrollLeft;
-            startY = e.clientY - rect.top + fileList.scrollTop;
-            
-            // Ctrl 키가 눌려있지 않으면 기존 선택 해제
-            if (!e.ctrlKey) {
-                clearSelection();
-            }
-            
-            // 선택 상자 초기화
-            selectionBox.style.display = 'block';
-            selectionBox.style.left = `${startX}px`;
-            selectionBox.style.top = `${startY}px`;
-            selectionBox.style.width = '0px';
-            selectionBox.style.height = '0px';
+        // 파일 항목 또는 컨텍스트 메뉴에서 시작된 이벤트는 무시
+        if (e.target.closest('.file-item') || e.target.closest('.file-list-header') 
+            || e.target.closest('.context-menu') || e.button !== 0) {
+            return;
         }
+        
+        e.preventDefault();
+        
+        // 초기 좌표 저장
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        // Ctrl 키가 눌려있지 않으면 선택 해제
+        if (!e.ctrlKey) {
+            clearSelection();
+        }
+        
+        isSelecting = true;
+        
+        // 선택 박스 초기화
+        const selectionBox = document.getElementById('selectionBox');
+        const rect = fileList.getBoundingClientRect();
+        
+        // 선택 박스 위치와 크기 설정
+        selectionBox.style.left = `${startX - rect.left}px`;
+        selectionBox.style.top = `${startY - rect.top}px`;
+        selectionBox.style.width = '0px';
+        selectionBox.style.height = '0px';
+        selectionBox.style.display = 'block';
     });
     
+    // 마우스 이동 이벤트
     document.addEventListener('mousemove', (e) => {
         if (!isSelecting) return;
         
-        // 정확한 현재 마우스 위치 계산
+        const fileList = document.getElementById('fileList');
+        const selectionBox = document.getElementById('selectionBox');
         const rect = fileList.getBoundingClientRect();
-        const currentX = e.clientX - rect.left + fileList.scrollLeft;
-        const currentY = e.clientY - rect.top + fileList.scrollTop;
         
-        // 선택 상자 업데이트
-        const x = Math.min(startX, currentX);
-        const y = Math.min(startY, currentY);
+        // 현재 마우스 위치
+        const currentX = e.clientX;
+        const currentY = e.clientY;
+        
+        // 박스 위치와 크기 계산
+        const left = Math.min(currentX, startX) - rect.left;
+        const top = Math.min(currentY, startY) - rect.top;
         const width = Math.abs(currentX - startX);
         const height = Math.abs(currentY - startY);
         
-        selectionBox.style.left = `${x}px`;
-        selectionBox.style.top = `${y}px`;
+        // 선택 박스 업데이트
+        selectionBox.style.left = `${left}px`;
+        selectionBox.style.top = `${top}px`;
         selectionBox.style.width = `${width}px`;
         selectionBox.style.height = `${height}px`;
         
-        // 자동 스크롤 기능
-        const buffer = 50; // 화면 가장자리로부터의 거리
-        const scrollSpeed = 15; // 스크롤 속도
-        
-        // 하단 스크롤
-        if (e.clientY > rect.bottom - buffer) {
-            fileList.scrollTop += scrollSpeed;
-        }
-        // 상단 스크롤
-        else if (e.clientY < rect.top + buffer) {
-            fileList.scrollTop -= scrollSpeed;
-        }
-        
-        // 선택 상자와 겹치는 항목 선택
-        const selectionRect = {
-            left: x,
-            top: y,
-            right: x + width,
-            bottom: y + height
-        };
-        
-        document.querySelectorAll('.file-item').forEach(item => {
+        // 박스와 겹치는 파일 항목 선택
+        const items = document.querySelectorAll('.file-item');
+        items.forEach(item => {
             const itemRect = item.getBoundingClientRect();
-            const itemRectAdjusted = {
-                left: itemRect.left - rect.left + fileList.scrollLeft,
-                top: itemRect.top - rect.top + fileList.scrollTop,
-                right: itemRect.right - rect.left + fileList.scrollLeft,
-                bottom: itemRect.bottom - rect.top + fileList.scrollTop
-            };
             
-            // 겹침 확인
-            if (!(itemRectAdjusted.right < selectionRect.left || 
-                  itemRectAdjusted.left > selectionRect.right || 
-                  itemRectAdjusted.bottom < selectionRect.top || 
-                  itemRectAdjusted.top > selectionRect.bottom)) {
-                item.classList.add('selected');
-                selectedItems.add(item.getAttribute('data-id'));
+            const overlap = !(
+                itemRect.right < Math.min(currentX, startX) ||
+                itemRect.left > Math.max(currentX, startX) ||
+                itemRect.bottom < Math.min(currentY, startY) ||
+                itemRect.top > Math.max(currentY, startY)
+            );
+            
+            if (overlap) {
+                if (!item.classList.contains('selected')) {
+                    item.classList.add('selected');
+                    selectedItems.add(item.getAttribute('data-name'));
+                }
             } else if (!e.ctrlKey) {
-                item.classList.remove('selected');
-                selectedItems.delete(item.getAttribute('data-id'));
+                if (item.classList.contains('selected')) {
+                    item.classList.remove('selected');
+                    selectedItems.delete(item.getAttribute('data-name'));
+                }
             }
         });
         
         updateButtonStates();
     });
     
+    // 마우스 업 이벤트
     document.addEventListener('mouseup', () => {
-        if (isSelecting) {
-            isSelecting = false;
-            selectionBox.style.display = 'none';
-        }
+        if (!isSelecting) return;
+        
+        isSelecting = false;
+        
+        // 선택 박스 숨기기
+        const selectionBox = document.getElementById('selectionBox');
+        selectionBox.style.display = 'none';
     });
 }
 
@@ -838,7 +832,7 @@ function handleFileClick(e, fileItem) {
             
             for (let i = start; i <= end; i++) {
                 items[i].classList.add('selected');
-                selectedItems.add(items[i].getAttribute('data-id'));
+                selectedItems.add(items[i].getAttribute('data-name'));
             }
         }
     } else {
@@ -1654,7 +1648,7 @@ function init() {
     // 기본 기능 초기화
     initModals();
     initContextMenu();
-    initDragSelection();
+    initDragSelect();
     initDragAndDrop();
     initShortcuts();
     initViewModes();
