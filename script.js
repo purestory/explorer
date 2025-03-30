@@ -667,6 +667,7 @@ function renderFiles(files) {
                     case 'mp4': case 'avi': case 'mov': case 'wmv': fileIcon.innerHTML = '<i class="fas fa-file-video"></i>'; break;
                     case 'txt': case 'rtf': fileIcon.innerHTML = '<i class="fas fa-file-alt"></i>'; break;
                     case 'html': case 'htm': case 'css': case 'js': fileIcon.innerHTML = '<i class="fas fa-file-code"></i>'; break;
+                    case 'exe': case 'msi': fileIcon.innerHTML = '<i class="fas fa-cog"></i>'; break;
                     default: fileIcon.innerHTML = '<i class="fas fa-file"></i>';
                 }
             }
@@ -736,7 +737,6 @@ function renderFiles(files) {
                     }
                 } else {
                     // 일반 클릭: 단일 선택
-                    // 폴더 더블클릭 확인
                     if (fileItem.getAttribute('data-is-folder') === 'true') {
                         if (fileItem.clickTimer) {
                             clearTimeout(fileItem.clickTimer);
@@ -754,12 +754,25 @@ function renderFiles(files) {
                             fileItem.classList.add('selected');
                             selectedItems.add(file.name);
                             updateButtonStates();
-                        }, 400); // 200ms에서 400ms로 늘림
+                        }, 400); // 400ms로 설정
                     } else {
-                        // 파일인 경우 바로 선택
-                        clearSelection();
-                        fileItem.classList.add('selected');
-                        selectedItems.add(file.name);
+                        // 파일인 경우
+                        if (fileItem.clickTimer) {
+                            clearTimeout(fileItem.clickTimer);
+                            fileItem.clickTimer = null;
+                            // 더블클릭: 파일 다운로드 및 실행
+                            downloadAndOpenFile(file.name);
+                            return;
+                        }
+                        
+                        fileItem.clickTimer = setTimeout(() => {
+                            fileItem.clickTimer = null;
+                            // 단일 클릭: 파일 선택
+                            clearSelection();
+                            fileItem.classList.add('selected');
+                            selectedItems.add(file.name);
+                            updateButtonStates();
+                        }, 400); // 400ms로 설정
                     }
                 }
                 
@@ -908,7 +921,7 @@ function handleFileClick(e, fileItem) {
             }
         }
     } else {
-        // 일반 클릭
+        // 일반 클릭: 단일 선택
         selectItem(fileItem);
     }
     
@@ -1792,6 +1805,60 @@ function initHistoryNavigation() {
             loadFiles(currentPath);
         }
     });
+}
+
+// 파일 다운로드 및 실행 함수
+function downloadAndOpenFile(fileName) {
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    const encodedPath = encodeURIComponent(filePath);
+    const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+    
+    // 파일 확장자 확인
+    const fileExt = fileName.split('.').pop().toLowerCase();
+    
+    // 실행 가능 확장자 목록
+    const executableTypes = ['exe', 'msi', 'bat', 'cmd', 'ps1', 'sh', 'app', 'vbs', 'jar'];
+    
+    // 브라우저에서 볼 수 있는 파일 확장자
+    const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
+                          'mp4', 'webm', 'ogg', 'mp3', 'wav', 
+                          'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
+    
+    // 실행 가능한 파일인 경우
+    if (executableTypes.includes(fileExt)) {
+        // 사용자에게 알림
+        statusInfo.textContent = `${fileName} 다운로드 중...`;
+        
+        // a 태그를 생성하여 다운로드 속성 설정
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.setAttribute('download', fileName); // 다운로드 속성
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => {
+            statusInfo.textContent = `${fileName} 다운로드 완료됨. 파일을 실행하세요.`;
+        }, 1000);
+    } 
+    // 브라우저에서 볼 수 있는 파일인 경우
+    else if (viewableTypes.includes(fileExt)) {
+        // 새 창에서 열기
+        window.open(fileUrl, '_blank');
+        statusInfo.textContent = `${fileName} 파일 열기`;
+    } 
+    // 그 외 파일은 단순 다운로드
+    else {
+        // a 태그를 생성하여 다운로드 속성 설정
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.setAttribute('download', fileName); // 다운로드 속성
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        statusInfo.textContent = `${fileName} 다운로드 중...`;
+    }
 }
 
 // 애플리케이션 초기화
