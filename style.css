@@ -178,6 +178,31 @@ h1 {
     position: relative;
 }
 
+.file-view:not(.list-view) {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+}
+
+.file-view:not(.list-view) .files-container {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.file-view:not(.list-view) .file-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    margin: 8px;
+    width: 100px;
+    height: 100px;
+}
+
+.file-view:not(.list-view) .file-details {
+    display: none;
+}
+
 .file-item {
     position: relative;
     cursor: pointer;
