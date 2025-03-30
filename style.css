@@ -209,7 +209,7 @@ h1 {
     display: flex;
     flex-direction: row;
     align-items: center;
-    padding: 10px 15px;
+    padding: 6px 12px;
     margin: 0;
     width: 100%;
     height: auto;
@@ -219,12 +219,16 @@ h1 {
 .file-view.list-view .file-icon {
     margin-right: 10px;
     margin-bottom: 0;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
 }
 
 .file-view.list-view .file-name {
     flex: 2;
     text-align: left;
     margin-right: 10px;
+    font-size: 0.85rem;
 }
 
 .file-view.list-view .file-details {
@@ -237,14 +241,14 @@ h1 {
     flex: 1;
     text-align: right;
     color: #666;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
 }
 
 .file-date {
     flex: 1.5;
     text-align: right;
     color: #666;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     margin-left: 10px;
 }
 
@@ -284,11 +288,11 @@ h1 {
 }
 
 .file-name {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     text-align: center;
     word-break: break-word;
     max-width: 100%;
-    max-height: 40px;
+    max-height: 38px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
