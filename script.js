@@ -754,7 +754,7 @@ function renderFiles(files) {
                             fileItem.classList.add('selected');
                             selectedItems.add(file.name);
                             updateButtonStates();
-                        }, 200);
+                        }, 400); // 200ms에서 400ms로 늘림
                     } else {
                         // 파일인 경우 바로 선택
                         clearSelection();
