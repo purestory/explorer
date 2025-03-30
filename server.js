@@ -379,37 +379,52 @@ app.delete('/api/files/*', (req, res) => {
   }
 });
 
-// 파일 업로드
-app.post('/api/upload', (req, res) => {
-  log('파일 업로드 요청 시작');
-  
-  upload.array('files')(req, res, function(err) {
-    if (err) {
-      errorLog('업로드 처리 오류:', err);
-      return res.status(500).send(`업로드 오류: ${err.message}`);
+// 파일 업로드 API
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    // 업로드 경로와 파일 정보 로깅
+    if (!req.file) {
+      errorLog('업로드 파일이 없습니다.');
+      return res.status(400).json({ error: '업로드 파일이 없습니다.' });
     }
     
-    if (!req.files || req.files.length === 0) {
-      errorLog('업로드된 파일 없음');
-      return res.status(400).send('업로드된 파일이 없습니다.');
-    }
+    const uploadedFile = req.file;
+    const uploadPath = req.body.path ? path.join(ROOT_DIRECTORY, req.body.path) : ROOT_DIRECTORY;
+    const destinationPath = path.join(uploadPath, uploadedFile.filename);
     
-    // 업로드된 파일명 한글 인코딩 처리
-    const uploadedFiles = req.files.map(file => {
-      const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-      return {
-        ...file,
-        originalName
-      };
-    });
+    log(`파일 업로드 완료: ${destinationPath} (${formatBytes(uploadedFile.size)})`);
     
-    log(`파일 ${uploadedFiles.length}개 업로드 완료`);
-    res.status(200).json({
-      message: '업로드 성공',
-      files: uploadedFiles.map(file => file.originalName)
+    // 파일 권한 설정
+    fs.chmodSync(destinationPath, 0o666);
+    
+    // 응답 전송
+    res.status(201).json({
+      message: '파일 업로드 성공',
+      file: {
+        name: uploadedFile.filename,
+        size: uploadedFile.size,
+        path: req.body.path || '',
+        mimetype: uploadedFile.mimetype
+      }
     });
-  });
+  } catch (error) {
+    errorLog('파일 업로드 오류:', error);
+    res.status(500).json({ error: '파일 업로드 중 오류가 발생했습니다.' });
+  }
 });
+
+// 바이트 단위를 읽기 쉬운 형식으로 변환하는 함수
+function formatBytes(bytes, decimals = 2) {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
 
 // 유틸리티 함수
 function getFileIconClass(filename) {
