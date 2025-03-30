@@ -222,7 +222,8 @@ function initDragSelect() {
         
         e.preventDefault();
         
-        // 초기 좌표 저장
+        // 초기 좌표 저장 - 스크롤 위치 고려
+        const rect = fileList.getBoundingClientRect();
         startX = e.clientX;
         startY = e.clientY;
         
@@ -235,11 +236,10 @@ function initDragSelect() {
         
         // 선택 박스 초기화
         const selectionBox = document.getElementById('selectionBox');
-        const rect = fileList.getBoundingClientRect();
         
-        // 선택 박스 위치와 크기 설정
+        // 선택 박스 위치와 크기 설정 - 스크롤 위치 고려
         selectionBox.style.left = `${startX - rect.left}px`;
-        selectionBox.style.top = `${startY - rect.top}px`;
+        selectionBox.style.top = `${startY - rect.top + fileList.scrollTop}px`;
         selectionBox.style.width = '0px';
         selectionBox.style.height = '0px';
         selectionBox.style.display = 'block';
@@ -257,9 +257,10 @@ function initDragSelect() {
         const currentX = e.clientX;
         const currentY = e.clientY;
         
-        // 박스 위치와 크기 계산
+        // 박스 위치와 크기 계산 - 스크롤 위치 고려
+        const scrollTop = fileList.scrollTop;
         const left = Math.min(currentX, startX) - rect.left;
-        const top = Math.min(currentY, startY) - rect.top;
+        const top = Math.min(currentY, startY) - rect.top + scrollTop;
         const width = Math.abs(currentX - startX);
         const height = Math.abs(currentY - startY);
         
@@ -269,16 +270,35 @@ function initDragSelect() {
         selectionBox.style.width = `${width}px`;
         selectionBox.style.height = `${height}px`;
         
-        // 박스와 겹치는 파일 항목 선택
+        // 목록 상단/하단 자동 스크롤
+        const buffer = 50; // 자동 스크롤 감지 영역 (픽셀)
+        
+        if (currentY < rect.top + buffer) {
+            // 상단으로 스크롤
+            fileList.scrollTop -= 10;
+        } else if (currentY > rect.bottom - buffer) {
+            // 하단으로 스크롤
+            fileList.scrollTop += 10;
+        }
+        
+        // 박스와 겹치는 파일 항목 선택 - 스크롤 위치 고려하여 계산
+        const topWithScroll = top - scrollTop;
+        const bottomWithScroll = topWithScroll + height;
+        
         const items = document.querySelectorAll('.file-item');
         items.forEach(item => {
             const itemRect = item.getBoundingClientRect();
             
+            const itemLeft = itemRect.left;
+            const itemRight = itemRect.right;
+            const itemTop = itemRect.top - rect.top;
+            const itemBottom = itemRect.bottom - rect.top;
+            
             const overlap = !(
-                itemRect.right < Math.min(currentX, startX) ||
-                itemRect.left > Math.max(currentX, startX) ||
-                itemRect.bottom < Math.min(currentY, startY) ||
-                itemRect.top > Math.max(currentY, startY)
+                itemRight < Math.min(currentX, startX) ||
+                itemLeft > Math.max(currentX, startX) ||
+                itemBottom < topWithScroll ||
+                itemTop > bottomWithScroll
             );
             
             if (overlap) {
