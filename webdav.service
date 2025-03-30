@@ -1,0 +1,15 @@
+[Unit]
+Description=WebDAV Server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/purestory/webdav/server.js
+Restart=always
+User=purestory
+Group=purestory
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=NODE_ENV=production
+WorkingDirectory=/home/purestory/webdav
+
+[Install]
+WantedBy=multi-user.target 

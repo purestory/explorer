@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebDAV 파일 탐색기</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1><i class="fas fa-cloud"></i> WebDAV 파일 서버</h1>
+        <div class="header-right">
+            <div class="storage-info">
+                <i class="fas fa-database"></i>
+                <div id="storageInfoText">
+                    <span>0B / 0B (0%)</span>
+                    <div class="storage-bar-container">
+                        <div class="storage-bar"></div>
+                    </div>
+                </div>
+                <button id="refreshStorageBtn" title="저장소 정보 새로고침"><i class="fas fa-sync-alt"></i></button>
+            </div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="file-explorer">
+            <div class="navigation-bar">
+                <div class="breadcrumb" id="breadcrumb">
+                    <span data-path="">홈</span>
+                </div>
+                <div class="view-options">
+                    <button id="gridViewBtn" class="view-option active" title="아이콘 보기"><i class="fas fa-th"></i></button>
+                    <button id="listViewBtn" class="view-option" title="목록 보기"><i class="fas fa-list"></i></button>
+                </div>
+            </div>
+            
+            <div class="file-actions">
+                <div class="action-buttons">
+                    <button id="createFolder" class="btn btn-primary"><i class="fas fa-folder-plus"></i> 새 폴더</button>
+                    <div class="upload-form">
+                        <button class="btn btn-success"><i class="fas fa-upload"></i> 파일 업로드</button>
+                        <input type="file" id="fileUpload" multiple>
+                    </div>
+                    <button id="cutBtn" class="btn btn-secondary" disabled><i class="fas fa-cut"></i> 잘라내기</button>
+                    <button id="pasteBtn" class="btn btn-secondary" disabled><i class="fas fa-paste"></i> 붙여넣기</button>
+                    <button id="renameBtn" class="btn btn-secondary" disabled><i class="fas fa-edit"></i> 이름 변경</button>
+                    <button id="downloadBtn" class="btn btn-info" disabled><i class="fas fa-download"></i> 다운로드</button>
+                    <button id="deleteBtn" class="btn btn-danger" disabled><i class="fas fa-trash-alt"></i> 삭제</button>
+                </div>
+                
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="파일/폴더 검색">
+                    <button class="btn btn-primary"><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+            
+            <div class="file-container">
+                <div class="file-list" id="fileList">
+                    <div class="file-view" id="fileView">
+                        <!-- 파일 목록이 여기에 동적으로 로드됩니다 -->
+                    </div>
+                    <div class="selection-box" id="selectionBox" style="display: none;"></div>
+                </div>
+                
+                <div class="drop-zone" id="dropZone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>파일을 여기에 끌어다 놓으세요</p>
+                    <p class="drop-zone-info">최대 파일 크기: 10GB</p>
+                </div>
+                
+                <div id="progressContainer" class="progress-container">
+                    <div class="upload-file-info">현재 <span id="currentFileUpload">파일을 선택해주세요</span> 업로드 중...</div>
+                    <div class="progress">
+                        <div id="progressBar" class="progress-bar"></div>
+                    </div>
+                    <div id="uploadStatus" class="upload-status">파일을 선택해주세요</div>
+                </div>
+            </div>
+            
+            <div class="statusbar" id="statusbar">
+                <div class="status-info">Ready</div>
+                <div class="selection-info">0개 선택됨</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 새 폴더 생성 모달 -->
+    <div class="modal" id="folderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>새 폴더 만들기</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="folderName">폴더 이름</label>
+                <input type="text" id="folderName" placeholder="폴더 이름 입력">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelFolderBtn">취소</button>
+                <button class="btn btn-primary" id="createFolderBtn">생성</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 이름 변경 모달 -->
+    <div class="modal" id="renameModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>이름 변경</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="newName">새 이름</label>
+                <input type="text" id="newName" placeholder="새 이름 입력">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelRenameBtn">취소</button>
+                <button class="btn btn-primary" id="confirmRenameBtn">변경</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 컨텍스트 메뉴 -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" id="ctxOpen"><i class="fas fa-folder-open"></i> 열기</div>
+        <div class="context-menu-item" id="ctxDownload"><i class="fas fa-download"></i> 다운로드</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="ctxCut"><i class="fas fa-cut"></i> 잘라내기</div>
+        <div class="context-menu-item" id="ctxPaste"><i class="fas fa-paste"></i> 붙여넣기</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="ctxNewFolder"><i class="fas fa-folder-plus"></i> 새 폴더</div>
+        <div class="context-menu-item" id="ctxRename"><i class="fas fa-edit"></i> 이름 변경</div>
+        <div class="context-menu-item" id="ctxDelete"><i class="fas fa-trash-alt"></i> 삭제</div>
+    </div>
+    
+    <!-- 로딩 오버레이 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
