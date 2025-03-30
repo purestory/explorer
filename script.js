@@ -11,6 +11,8 @@ let diskUsage = null;
 // 정렬 상태 추가
 let sortField = 'name'; // 정렬 필드: name, size, date
 let sortDirection = 'asc'; // 정렬 방향: asc, desc
+// 파일 정보 저장을 위한 맵 추가
+let fileInfoMap = new Map();
 
 // DOM 요소
 const fileView = document.getElementById('fileView');
@@ -139,6 +141,22 @@ function initContextMenu() {
                 selectItem(fileItem);
             }
             
+            // 파일 타입에 따라 열기/다운로드 메뉴 표시 조정
+            const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
+            const ctxOpen = document.getElementById('ctxOpen');
+            const ctxDownload = document.getElementById('ctxDownload');
+            
+            if (isFolder) {
+                ctxOpen.innerHTML = '<i class="fas fa-folder-open"></i> 열기';
+                ctxDownload.style.display = 'none';
+            } else {
+                ctxOpen.innerHTML = '<i class="fas fa-external-link-alt"></i> 열기';
+                ctxDownload.style.display = 'flex';
+            }
+            
+            // 압축 메뉴 표시
+            document.getElementById('ctxCompress').style.display = 'flex';
+            
             // 메뉴 표시
             contextMenu.style.display = 'block';
             contextMenu.style.left = `${e.pageX}px`;
@@ -187,8 +205,17 @@ function initContextMenu() {
     // 컨텍스트 메뉴 항목 클릭 핸들러
     document.getElementById('ctxOpen').addEventListener('click', () => {
         const selectedItem = document.querySelector('.file-item.selected');
-        if (selectedItem && selectedItem.getAttribute('data-is-folder') === 'true') {
-            navigateToFolder(selectedItem.getAttribute('data-name'));
+        if (!selectedItem) return;
+        
+        const isFolder = selectedItem.getAttribute('data-is-folder') === 'true';
+        const fileName = selectedItem.getAttribute('data-name');
+        
+        if (isFolder) {
+            // 폴더인 경우 열기
+            navigateToFolder(fileName);
+        } else {
+            // 파일인 경우 열기 (브라우저에서 직접 열기)
+            openFile(fileName);
         }
     });
     
@@ -205,6 +232,45 @@ function initContextMenu() {
         folderModal.style.display = 'flex';
         folderNameInput.focus();
     });
+    
+    // 압축 메뉴 이벤트 추가
+    document.getElementById('ctxCompress').addEventListener('click', compressSelectedItems);
+}
+
+// 파일 열기 함수 (브라우저에서 직접 열기)
+function openFile(fileName) {
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    const encodedPath = encodeURIComponent(filePath);
+    const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+    
+    // 파일 확장자 확인
+    const fileExt = fileName.split('.').pop().toLowerCase();
+    
+    // 브라우저에서 볼 수 있는 파일 확장자
+    const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
+                          'mp4', 'webm', 'ogg', 'mp3', 'wav', 
+                          'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
+    
+    // 브라우저에서 볼 수 있는 파일인 경우
+    if (viewableTypes.includes(fileExt)) {
+        // 새 창에서 열기
+        window.open(fileUrl, '_blank');
+        statusInfo.textContent = `${fileName} 파일 열기`;
+    } else {
+        // 브라우저에서 직접 볼 수 없는 파일은 다운로드
+        statusInfo.textContent = `${fileName} 다운로드 중...`;
+        
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => {
+            statusInfo.textContent = `${fileName} 다운로드 완료`;
+        }, 1000);
+    }
 }
 
 // 파일 드래그 선택 초기화
@@ -465,6 +531,16 @@ function loadFiles(path = '') {
             return response.json();
         })
         .then(data => {
+            // 파일 정보 맵 업데이트
+            fileInfoMap.clear();
+            data.forEach(file => {
+                fileInfoMap.set(file.name, {
+                    type: file.isFolder ? 'folder' : 'file',
+                    size: file.size,
+                    modified: file.modifiedTime
+                });
+            });
+            
             // 정렬 적용
             renderFiles(data);
             updateBreadcrumb(path);
@@ -760,8 +836,8 @@ function renderFiles(files) {
                         if (fileItem.clickTimer) {
                             clearTimeout(fileItem.clickTimer);
                             fileItem.clickTimer = null;
-                            // 더블클릭: 파일 다운로드 및 실행
-                            downloadAndOpenFile(file.name);
+                            // 더블클릭: 파일 열기
+                            openFile(file.name);
                             return;
                         }
                         
@@ -976,7 +1052,20 @@ function downloadFile(fileName) {
     const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
     // 경로에 한글이 포함된 경우를 위해 인코딩 처리
     const encodedPath = encodeURIComponent(filePath);
-    window.location.href = `${API_BASE_URL}/api/files/${encodedPath}`;
+    const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+    
+    // 강제 다운로드 진행
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    statusInfo.textContent = `${fileName} 다운로드 중...`;
+    setTimeout(() => {
+        statusInfo.textContent = `${fileName} 다운로드 완료`;
+    }, 1000);
 }
 
 // 모든 항목 선택
@@ -1195,124 +1284,584 @@ function handleDragEnd() {
 
 // 드래그 앤 드롭 초기화
 function initDragAndDrop() {
-    // 파일 드래그 이벤트 처리
-    document.querySelectorAll('.file-item').forEach(fileItem => {
-        // 드래그 가능하게 설정
-        fileItem.setAttribute('draggable', 'true');
+    // 파일 리스트에 이벤트 위임 사용 - 동적으로 생성된 파일 항목에도 이벤트 처리
+    const fileList = document.getElementById('fileList');
+    
+    // 파일 드래그 이벤트 위임
+    fileList.addEventListener('dragstart', (e) => {
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) return;
         
-        // 드래그 시작 이벤트
-        fileItem.addEventListener('dragstart', (e) => {
-            // 드래그 중인 요소 식별을 위한 데이터 설정
-            const fileId = fileItem.getAttribute('data-name');
-            e.dataTransfer.setData('text/plain', fileId);
-            
-            // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
-            if (!fileItem.classList.contains('selected')) {
-                clearSelection();
-                fileItem.classList.add('selected');
-                selectedItems.add(fileId);
-                updateButtonStates();
-            }
-            
-            // 드래그 중 스타일 적용
-            setTimeout(() => {
-                document.querySelectorAll('.file-item.selected').forEach(item => {
-                    item.classList.add('dragging');
-                });
-            }, 0);
+        // 드래그 중인 요소 식별을 위한 데이터 설정
+        const fileId = fileItem.getAttribute('data-name');
+        e.dataTransfer.setData('text/plain', fileId);
+        
+        // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
+        if (!fileItem.classList.contains('selected')) {
+            clearSelection();
+            fileItem.classList.add('selected');
+            selectedItems.add(fileId);
+            updateButtonStates();
+        }
+        
+        // 드래그 중 스타일 적용
+        setTimeout(() => {
+            document.querySelectorAll('.file-item.selected').forEach(item => {
+                item.classList.add('dragging');
+            });
+        }, 0);
+    });
+    
+    // 드래그 종료 이벤트 위임
+    fileList.addEventListener('dragend', (e) => {
+        // 드래그 스타일 제거
+        document.querySelectorAll('.file-item.dragging').forEach(item => {
+            item.classList.remove('dragging');
         });
         
-        // 드래그 종료 이벤트
-        fileItem.addEventListener('dragend', () => {
-            // 드래그 스타일 제거
-            document.querySelectorAll('.file-item.dragging').forEach(item => {
-                item.classList.remove('dragging');
-            });
-            
-            // 드래그 오버 스타일 제거
-            document.querySelectorAll('.file-item.drag-over').forEach(item => {
-                item.classList.remove('drag-over');
-            });
+        // 드래그 오버 스타일 제거
+        document.querySelectorAll('.file-item.drag-over').forEach(item => {
+            item.classList.remove('drag-over');
         });
+    });
+    
+    // 드래그 진입 이벤트 위임
+    fileList.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) return;
         
-        // 폴더인 경우 드롭 영역으로 설정
+        // 폴더인 경우에만 처리
         if (fileItem.getAttribute('data-is-folder') === 'true') {
-            // 드래그 진입 이벤트
-            fileItem.addEventListener('dragenter', (e) => {
-                e.preventDefault();
-                // 자기 자신이 선택되었으면 무시
-                if (fileItem.classList.contains('selected')) return;
-                
-                fileItem.classList.add('drag-over');
-            });
+            // 자기 자신이 선택되었으면 무시
+            if (fileItem.classList.contains('selected')) return;
             
-            // 드래그 영역 위에 있을 때
-            fileItem.addEventListener('dragover', (e) => {
-                e.preventDefault(); // 드롭 허용
-                // 자기 자신이 선택되었으면 무시
-                if (fileItem.classList.contains('selected')) return;
-                
-                fileItem.classList.add('drag-over');
-            });
-            
-            // 드래그 영역 벗어날 때
-            fileItem.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                fileItem.classList.remove('drag-over');
-            });
-            
-            // 드롭 이벤트
-            fileItem.addEventListener('drop', (e) => {
-                e.preventDefault();
-                fileItem.classList.remove('drag-over');
-                
-                // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
-                if (fileItem.classList.contains('selected')) return;
-                
-                const targetFolder = fileItem.getAttribute('data-name');
-                
-                // 선택된 모든 파일을 이동
-                if (selectedItems.size > 0) {
-                    // 드롭된 폴더 경로 계산
-                    const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
-                    
-                    // 확인 대화상자
-                    const itemCount = selectedItems.size;
-                    const confirmMsg = `선택한 ${itemCount}개 항목을 '${targetFolder}' 폴더로 이동하시겠습니까?`;
-                    
-                    if (confirm(confirmMsg)) {
-                        showLoading();
-                        
-                        // 선택된 모든 항목 이동
-                        const movePromises = Array.from(selectedItems).map(item => {
-                            const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
-                            return moveItem(sourceFullPath, targetPath);
-                        });
-                        
-                        Promise.all(movePromises)
-                            .then(() => {
-                                // 이동 성공
-                                statusInfo.textContent = `${itemCount}개 항목을 이동했습니다.`;
-                                
-                                // 선택 초기화
-                                clearSelection();
-                                
-                                // 목록 새로고침
-                                loadFiles(currentPath);
-                            })
-                            .catch(error => {
-                                // 이동 실패
-                                statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error}`;
-                                console.error('Move error:', error);
-                            })
-                            .finally(() => {
-                                hideLoading();
-                            });
-                    }
-                }
-            });
+            fileItem.classList.add('drag-over');
         }
     });
+    
+    // 드래그 영역 위 이벤트 위임
+    fileList.addEventListener('dragover', (e) => {
+        e.preventDefault(); // 드롭 허용
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) {
+            // 빈 영역으로 드래그 시 활성화
+            dropZone.classList.add('active');
+            return;
+        }
+        
+        // 폴더인 경우에만 처리
+        if (fileItem.getAttribute('data-is-folder') === 'true') {
+            // 자기 자신이 선택되었으면 무시
+            if (fileItem.classList.contains('selected')) return;
+            
+            fileItem.classList.add('drag-over');
+        }
+    });
+    
+    // 드래그 영역 벗어날 때 이벤트 위임
+    fileList.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) return;
+        
+        fileItem.classList.remove('drag-over');
+    });
+    
+    // 드롭 이벤트 위임
+    fileList.addEventListener('drop', (e) => {
+        e.preventDefault();
+        
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) {
+            // 파일 영역의 빈 곳에 드롭한 경우
+            dropZone.classList.remove('active');
+            if (e.dataTransfer.files.length > 0) {
+                uploadFiles(e.dataTransfer.files);
+            }
+            return;
+        }
+        
+        fileItem.classList.remove('drag-over');
+        
+        // 폴더가 아닌 경우 무시
+        if (fileItem.getAttribute('data-is-folder') !== 'true') {
+            return;
+        }
+        
+        // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
+        if (fileItem.classList.contains('selected')) return;
+        
+        const targetFolder = fileItem.getAttribute('data-name');
+        
+        // 외부에서 파일을 드래그한 경우 (웹 브라우저 외부 파일)
+        if (e.dataTransfer.files.length > 0) {
+            // 현재 폴더에 파일 업로드
+            const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+            uploadFilesToFolder(e.dataTransfer.files, targetPath);
+            return;
+        }
+        
+        // 선택된 모든 파일을 이동
+        if (selectedItems.size > 0) {
+            // 드롭된 폴더 경로 계산
+            const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+            
+            // 확인 대화상자
+            const itemCount = selectedItems.size;
+            const confirmMsg = `선택한 ${itemCount}개 항목을 '${targetFolder}' 폴더로 이동하시겠습니까?`;
+            
+            if (confirm(confirmMsg)) {
+                showLoading();
+                
+                // 선택된 모든 항목 이동
+                const movePromises = Array.from(selectedItems).map(item => {
+                    const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                    return moveItem(sourceFullPath, targetPath);
+                });
+                
+                Promise.all(movePromises)
+                    .then(() => {
+                        // 이동 성공
+                        statusInfo.textContent = `${itemCount}개 항목을 이동했습니다.`;
+                        
+                        // 선택 초기화
+                        clearSelection();
+                        
+                        // 목록 새로고침
+                        loadFiles(currentPath);
+                    })
+                    .catch(error => {
+                        // 이동 실패
+                        statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error}`;
+                        console.error('Move error:', error);
+                    })
+                    .finally(() => {
+                        hideLoading();
+                    });
+            }
+        }
+    });
+    
+    // 드롭존 이벤트 처리 (파일 업로드용)
+    const dropZone = document.getElementById('dropZone');
+    
+    // 드래그 영역 진입
+    window.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('active');
+    });
+    
+    // 드래그 영역 위
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('active');
+    });
+    
+    // 드래그 영역 이탈
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = dropZone.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        // 실제로 영역을 벗어났는지 확인
+        if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
+            dropZone.classList.remove('active');
+        }
+    });
+    
+    // 드롭 이벤트
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('active');
+        
+        // 파일 객체 가져오기
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            uploadFiles(files);
+        }
+    });
+}
+
+// 특정 폴더에 파일 업로드
+function uploadFilesToFolder(files, targetPath) {
+    if (files.length === 0) return;
+    
+    // 업로드 UI 표시
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    
+    // 전체 파일 크기와 현재까지 업로드된 크기를 추적
+    const totalFiles = files.length;
+    let totalSize = 0;
+    let currentFileIndex = 0;
+    
+    // 모든 파일 이름 배열 생성
+    let fileNames = [];
+    for (let i = 0; i < files.length; i++) {
+        fileNames.push(files[i].name);
+        totalSize += files[i].size;
+    }
+    
+    // 현재 처리 중인 파일 정보 업데이트
+    function updateCurrentFileInfo() {
+        let currentFileName = "";
+        if (currentFileIndex < files.length) {
+            currentFileName = files[currentFileIndex].name;
+            const fileSize = formatFileSize(files[currentFileIndex].size);
+            document.getElementById('currentFileUpload').textContent = `${currentFileName} (${fileSize}) - 총 ${formatFileSize(totalSize)}`;
+        }
+        document.getElementById('currentFileUpload').style.display = 'block';
+    }
+    
+    // 첫 번째 파일 정보 표시
+    updateCurrentFileInfo();
+    
+    // 시작 시간 기록
+    const startTime = new Date().getTime();
+    
+    // FormData에 모든 파일 추가
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('file', files[i]);
+    }
+    formData.append('path', targetPath);
+    
+    // AJAX 요청으로 파일 전송
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE_URL}/api/upload`);
+    
+    // 업로드 완료 플래그
+    let uploadCompleted = false;
+    let lastLoaded = 0;
+    
+    xhr.upload.onprogress = (e) => {
+        // 업로드가 이미 완료된 상태라면 진행률 업데이트 중지
+        if (uploadCompleted) return;
+        
+        if (e.lengthComputable) {
+            // 현재 업로드된 양이 이전 파일의 크기를 초과하면 다음 파일로 진행
+            const currentProgress = e.loaded - lastLoaded;
+            
+            if (currentFileIndex < files.length && 
+                currentProgress >= files[currentFileIndex].size) {
+                // 이전 파일 크기 누적
+                lastLoaded += files[currentFileIndex].size;
+                // 다음 파일로 이동
+                currentFileIndex++;
+                // 현재 파일 정보 업데이트
+                updateCurrentFileInfo();
+            }
+            
+            // 전체 업로드 진행률 계산
+            const totalProgress = (e.loaded / e.total) * 100;
+            
+            // 업로드 속도 및 남은 시간 계산
+            const currentTime = new Date().getTime();
+            const elapsedTimeSeconds = (currentTime - startTime) / 1000;
+            const uploadedBytes = e.loaded;
+            const uploadSpeed = uploadedBytes / elapsedTimeSeconds; // bytes per second
+            const uploadSpeedFormatted = formatFileSize(uploadSpeed) + '/s';
+            
+            // 업로드가 거의 완료되면 진행률을 99%로 고정
+            let progressValue = totalProgress;
+            if (progressValue > 99) progressValue = 99;
+            
+            let remainingTime = (e.total - e.loaded) / uploadSpeed; // 남은 시간(초)
+            if (remainingTime < 0) remainingTime = 0;
+            
+            let timeDisplay;
+            
+            if (remainingTime < 60) {
+                timeDisplay = `${Math.round(remainingTime)}초`;
+            } else if (remainingTime < 3600) {
+                timeDisplay = `${Math.floor(remainingTime / 60)}분 ${Math.round(remainingTime % 60)}초`;
+            } else {
+                timeDisplay = `${Math.floor(remainingTime / 3600)}시간 ${Math.floor((remainingTime % 3600) / 60)}분`;
+            }
+            
+            // 진행률 표시 업데이트
+            progressBar.style.width = `${progressValue}%`;
+            
+            // 업로드 상태 메시지 업데이트
+            let progressStatusText = "";
+            if (files.length === 1) {
+                progressStatusText = `파일 업로드 중 - ${Math.round(progressValue)}% 완료 (${uploadSpeedFormatted}, 남은 시간: ${timeDisplay})`;
+            } else {
+                progressStatusText = `${currentFileIndex + 1}/${totalFiles} 파일 업로드 중 - ${Math.round(progressValue)}% 완료 (${uploadSpeedFormatted}, 남은 시간: ${timeDisplay})`;
+            }
+            uploadStatus.textContent = progressStatusText;
+            uploadStatus.style.display = 'block';
+            
+            // 현재 상태 업데이트
+            statusInfo.textContent = `파일 업로드 중 (${Math.round(progressValue)}%, ${formatFileSize(e.loaded)}/${formatFileSize(e.total)})`;
+        }
+    };
+    
+    xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+            // 업로드 완료 플래그 설정
+            uploadCompleted = true;
+            
+            if (xhr.status === 200 || xhr.status === 201) {
+                // 업로드 성공 - 프로그레스바 100%로 설정
+                progressBar.style.width = '100%';
+                
+                if (files.length === 1) {
+                    uploadStatus.textContent = '파일 업로드 완료';
+                } else {
+                    uploadStatus.textContent = `${files.length}개 파일 업로드 완료`;
+                }
+                
+                // 잠시 후 업로드 UI 숨기기
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    document.getElementById('currentFileUpload').style.display = 'none';
+                    uploadStatus.style.display = 'none';
+                    loadFiles(currentPath); // 파일 목록 새로고침
+                }, 500);
+                
+                if (files.length === 1) {
+                    statusInfo.textContent = '파일 업로드 완료';
+                } else {
+                    statusInfo.textContent = `${files.length}개 파일 업로드 완료`;
+                }
+            } else {
+                // 오류 처리
+                let errorMsg = '업로드 실패';
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.error) {
+                        errorMsg = `업로드 실패: ${response.message || response.error}`;
+                    }
+                } catch (e) {
+                    errorMsg = `업로드 실패: ${xhr.status} ${xhr.statusText || '알 수 없는 오류'}`;
+                }
+                
+                uploadStatus.textContent = errorMsg;
+                statusInfo.textContent = errorMsg;
+                
+                // 잠시 후 업로드 UI 숨기기
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    document.getElementById('currentFileUpload').style.display = 'none';
+                    uploadStatus.style.display = 'none';
+                }, 2000);
+            }
+        }
+    };
+    
+    xhr.onerror = () => {
+        // 업로드 완료 플래그 설정
+        uploadCompleted = true;
+        
+        uploadStatus.textContent = `파일 업로드 실패: 네트워크 오류`;
+        statusInfo.textContent = `파일 업로드 실패: 네트워크 오류`;
+        
+        // 잠시 후 업로드 UI 숨기기
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            document.getElementById('currentFileUpload').style.display = 'none';
+            uploadStatus.style.display = 'none';
+        }, 2000);
+    };
+    
+    xhr.send(formData);
+}
+
+// 파일 업로드
+function uploadFiles(files) {
+    if (files.length === 0) return;
+    
+    // 업로드 UI 표시
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    
+    // 전체 파일 크기와 현재까지 업로드된 크기를 추적
+    const totalFiles = files.length;
+    let totalSize = 0;
+    let currentFileIndex = 0;
+    
+    // 모든 파일 이름 배열 생성
+    let fileNames = [];
+    for (let i = 0; i < files.length; i++) {
+        fileNames.push(files[i].name);
+        totalSize += files[i].size;
+    }
+    
+    // 업로드 큐 초기화
+    let uploadQueue = [...files];
+    
+    // 현재 처리 중인 파일 정보 업데이트
+    function updateCurrentFileInfo() {
+        let currentFileName = "";
+        if (currentFileIndex < files.length) {
+            currentFileName = files[currentFileIndex].name;
+            const fileSize = formatFileSize(files[currentFileIndex].size);
+            document.getElementById('currentFileUpload').textContent = `${currentFileName} (${fileSize}) - 총 ${formatFileSize(totalSize)}`;
+        }
+        document.getElementById('currentFileUpload').style.display = 'block';
+    }
+    
+    // 첫 번째 파일 정보 표시
+    updateCurrentFileInfo();
+    
+    // 시작 시간 기록
+    const startTime = new Date().getTime();
+    
+    // FormData에 모든 파일 추가
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('file', files[i]);
+    }
+    formData.append('path', currentPath);
+    
+    // AJAX 요청으로 파일 전송
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE_URL}/api/upload`);
+    
+    // 업로드 완료 플래그
+    let uploadCompleted = false;
+    let lastLoaded = 0;
+    let currentFileStartOffset = 0;
+    
+    xhr.upload.onprogress = (e) => {
+        // 업로드가 이미 완료된 상태라면 진행률 업데이트 중지
+        if (uploadCompleted) return;
+        
+        if (e.lengthComputable) {
+            // 현재 업로드된 양이 이전 파일의 크기를 초과하면 다음 파일로 진행
+            const currentProgress = e.loaded - lastLoaded;
+            
+            if (currentFileIndex < files.length && 
+                currentProgress >= files[currentFileIndex].size) {
+                // 이전 파일 크기 누적
+                lastLoaded += files[currentFileIndex].size;
+                // 다음 파일로 이동
+                currentFileIndex++;
+                // 현재 파일 정보 업데이트
+                updateCurrentFileInfo();
+            }
+            
+            // 전체 업로드 진행률 계산
+            const totalProgress = (e.loaded / e.total) * 100;
+            
+            // 업로드 속도 및 남은 시간 계산
+            const currentTime = new Date().getTime();
+            const elapsedTimeSeconds = (currentTime - startTime) / 1000;
+            const uploadedBytes = e.loaded;
+            const uploadSpeed = uploadedBytes / elapsedTimeSeconds; // bytes per second
+            const uploadSpeedFormatted = formatFileSize(uploadSpeed) + '/s';
+            
+            // 업로드가 거의 완료되면 진행률을 99%로 고정
+            let progressValue = totalProgress;
+            if (progressValue > 99) progressValue = 99;
+            
+            let remainingTime = (e.total - e.loaded) / uploadSpeed; // 남은 시간(초)
+            if (remainingTime < 0) remainingTime = 0;
+            
+            let timeDisplay;
+            
+            if (remainingTime < 60) {
+                timeDisplay = `${Math.round(remainingTime)}초`;
+            } else if (remainingTime < 3600) {
+                timeDisplay = `${Math.floor(remainingTime / 60)}분 ${Math.round(remainingTime % 60)}초`;
+            } else {
+                timeDisplay = `${Math.floor(remainingTime / 3600)}시간 ${Math.floor((remainingTime % 3600) / 60)}분`;
+            }
+            
+            // 진행률 표시 업데이트
+            progressBar.style.width = `${progressValue}%`;
+            
+            // 업로드 상태 메시지 업데이트
+            let progressStatusText = "";
+            if (files.length === 1) {
+                progressStatusText = `파일 업로드 중 - ${Math.round(progressValue)}% 완료 (${uploadSpeedFormatted}, 남은 시간: ${timeDisplay})`;
+            } else {
+                progressStatusText = `${currentFileIndex + 1}/${totalFiles} 파일 업로드 중 - ${Math.round(progressValue)}% 완료 (${uploadSpeedFormatted}, 남은 시간: ${timeDisplay})`;
+            }
+            uploadStatus.textContent = progressStatusText;
+            uploadStatus.style.display = 'block';
+            
+            // 현재 상태 업데이트
+            statusInfo.textContent = `파일 업로드 중 (${Math.round(progressValue)}%, ${formatFileSize(e.loaded)}/${formatFileSize(e.total)})`;
+        }
+    };
+    
+    xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+            // 업로드 완료 플래그 설정
+            uploadCompleted = true;
+            
+            if (xhr.status === 200 || xhr.status === 201) {
+                // 업로드 성공 - 프로그레스바 100%로 설정
+                progressBar.style.width = '100%';
+                
+                if (files.length === 1) {
+                    uploadStatus.textContent = '파일 업로드 완료';
+                } else {
+                    uploadStatus.textContent = `${files.length}개 파일 업로드 완료`;
+                }
+                
+                // 잠시 후 업로드 UI 숨기기
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    document.getElementById('currentFileUpload').style.display = 'none';
+                    uploadStatus.style.display = 'none';
+                    loadFiles(currentPath); // 파일 목록 새로고침
+                }, 500);
+                
+                if (files.length === 1) {
+                    statusInfo.textContent = '파일 업로드 완료';
+                } else {
+                    statusInfo.textContent = `${files.length}개 파일 업로드 완료`;
+                }
+            } else {
+                // 오류 처리
+                let errorMsg = '업로드 실패';
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.error) {
+                        errorMsg = `업로드 실패: ${response.message || response.error}`;
+                    }
+                } catch (e) {
+                    errorMsg = `업로드 실패: ${xhr.status} ${xhr.statusText || '알 수 없는 오류'}`;
+                }
+                
+                uploadStatus.textContent = errorMsg;
+                statusInfo.textContent = errorMsg;
+                
+                // 잠시 후 업로드 UI 숨기기
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    document.getElementById('currentFileUpload').style.display = 'none';
+                    uploadStatus.style.display = 'none';
+                }, 2000);
+            }
+        }
+    };
+    
+    xhr.onerror = () => {
+        // 업로드 완료 플래그 설정
+        uploadCompleted = true;
+        
+        uploadStatus.textContent = `파일 업로드 실패: 네트워크 오류`;
+        statusInfo.textContent = `파일 업로드 실패: 네트워크 오류`;
+        
+        // 잠시 후 업로드 UI 숨기기
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            document.getElementById('currentFileUpload').style.display = 'none';
+            uploadStatus.style.display = 'none';
+        }, 2000);
+    };
+    
+    xhr.send(formData);
 }
 
 // 파일/폴더 이동 함수
@@ -1343,133 +1892,6 @@ function moveItem(sourcePath, targetPath) {
             reject(error);
         });
     });
-}
-
-// 파일 업로드
-function uploadFiles(files) {
-    if (files.length === 0) return;
-    
-    // 업로드 UI 표시
-    progressContainer.style.display = 'block';
-    progressBar.style.width = '0%';
-    
-    // 전체 파일 크기와 현재까지 업로드된 크기를 추적
-    const totalFiles = files.length;
-    let currentFileIndex = 0;
-    let totalSize = 0;
-    let uploadedTotalSize = 0;
-    
-    // 전체 파일 크기 계산
-    for (let i = 0; i < files.length; i++) {
-        totalSize += files[i].size;
-    }
-    
-    // 시작 시간 기록
-    const startTime = new Date().getTime();
-    
-    // 파일을 순차적으로 업로드
-    const uploadNextFile = (index) => {
-        if (index >= files.length) {
-            // 모든 파일 업로드 완료
-            progressContainer.style.display = 'none';
-            loadFiles(currentPath); // 파일 목록 새로고침
-            statusInfo.textContent = '모든 파일 업로드 완료';
-            return;
-        }
-        
-        const file = files[index];
-        const fileName = file.name;
-        currentFileIndex = index + 1;
-        
-        // 현재 파일 정보 업데이트
-        document.getElementById('currentFileUpload').textContent = `${fileName} (${currentFileIndex}/${totalFiles})`;
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('path', currentPath);
-        
-        // 이전 파일들의 크기
-        let previousFilesSize = 0;
-        for (let i = 0; i < index; i++) {
-            previousFilesSize += files[i].size;
-        }
-        
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${API_BASE_URL}/api/upload`);
-        
-        xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-                // 현재 파일 업로드 진행률
-                const currentFileProgress = (e.loaded / e.total) * 100;
-                
-                // 전체 업로드 진행률 계산
-                const totalUploaded = previousFilesSize + e.loaded;
-                const totalProgress = (totalUploaded / totalSize) * 100;
-                
-                // 업로드 속도 및 남은 시간 계산
-                const currentTime = new Date().getTime();
-                const elapsedTimeSeconds = (currentTime - startTime) / 1000;
-                const uploadedBytes = totalUploaded;
-                const uploadSpeed = uploadedBytes / elapsedTimeSeconds; // bytes per second
-                
-                let remainingTime = (totalSize - totalUploaded) / uploadSpeed; // 남은 시간(초)
-                let timeDisplay;
-                
-                if (remainingTime < 60) {
-                    timeDisplay = `${Math.round(remainingTime)}초`;
-                } else if (remainingTime < 3600) {
-                    timeDisplay = `${Math.floor(remainingTime / 60)}분 ${Math.round(remainingTime % 60)}초`;
-                } else {
-                    timeDisplay = `${Math.floor(remainingTime / 3600)}시간 ${Math.floor((remainingTime % 3600) / 60)}분`;
-                }
-                
-                // 진행률 표시 업데이트
-                progressBar.style.width = `${totalProgress}%`;
-                uploadStatus.textContent = `${currentFileIndex}/${totalFiles} 파일 업로드 중 - ${Math.round(totalProgress)}% 완료 (남은 시간: ${timeDisplay})`;
-                
-                // 현재 파일 진행 상태 업데이트
-                statusInfo.textContent = `${fileName} 업로드 중 (${Math.round(currentFileProgress)}%)`;
-            }
-        };
-        
-        xhr.onreadystatechange = () => {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200 || xhr.status === 201) {
-                    // 현재 파일 업로드 성공, 다음 파일로 진행
-                    uploadedTotalSize += file.size;
-                    uploadNextFile(index + 1);
-                } else {
-                    // 오류 처리
-                    let errorMsg = '업로드 실패';
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        if (response.error) {
-                            errorMsg = `업로드 실패: ${response.message || response.error}`;
-                        }
-                    } catch (e) {
-                        errorMsg = `업로드 실패: ${xhr.status} ${xhr.statusText || '알 수 없는 오류'}`;
-                    }
-                    
-                    uploadStatus.textContent = errorMsg;
-                    statusInfo.textContent = errorMsg;
-                    
-                    // 계속해서 다음 파일 업로드
-                    uploadNextFile(index + 1);
-                }
-            }
-        };
-        
-        xhr.onerror = () => {
-            uploadStatus.textContent = `${fileName} 업로드 실패: 네트워크 오류`;
-            statusInfo.textContent = `${fileName} 업로드 실패: 네트워크 오류`;
-            uploadNextFile(index + 1);
-        };
-        
-        xhr.send(formData);
-    };
-    
-    // 첫 번째 파일부터 업로드 시작
-    uploadNextFile(0);
 }
 
 // 뷰 모드 전환
@@ -1679,7 +2101,32 @@ function downloadSelectedItems() {
     // 단일 파일 다운로드
     if (selectedItems.size === 1) {
         const itemId = [...selectedItems][0];
-        downloadFile(itemId);
+        const isFolder = document.querySelector(`.file-item[data-id="${itemId}"]`).getAttribute('data-is-folder') === 'true';
+        
+        // 폴더인 경우 무시
+        if (isFolder) {
+            alert('폴더는 다운로드할 수 없습니다.');
+            return;
+        }
+        
+        // 파일 경로 생성
+        const filePath = currentPath ? `${currentPath}/${itemId}` : itemId;
+        const encodedPath = encodeURIComponent(filePath);
+        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+        
+        // 강제로 다운로드 진행
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.setAttribute('download', itemId); // 다운로드 속성 추가
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        statusInfo.textContent = `${itemId} 다운로드 중...`;
+        setTimeout(() => {
+            statusInfo.textContent = `${itemId} 다운로드 완료`;
+        }, 1000);
+        
         return;
     }
     
@@ -1712,10 +2159,10 @@ function downloadSelectedItems() {
         const encodedPath = encodeURIComponent(filePath);
         const downloadUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
         
-        // 링크 생성 및 클릭 이벤트 발생
+        // 링크 생성 및 클릭 이벤트 발생 (download 속성 명시)
         const link = document.createElement('a');
         link.href = downloadUrl;
-        link.download = fileName; // 다운로드 파일명 설정
+        link.setAttribute('download', fileName); // 다운로드 속성 설정
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -1894,3 +2341,90 @@ function init() {
 
 // 페이지 로드 시 애플리케이션 초기화
 document.addEventListener('DOMContentLoaded', init);
+
+// 선택한 파일 압축
+function compressSelectedItems() {
+    if (selectedItems.size === 0) return;
+    
+    // 선택된 파일/폴더 중 첫 번째 항목의 이름 가져오기
+    const selectedItemsArray = Array.from(selectedItems);
+    const firstItemName = selectedItemsArray[0];
+    
+    // 파일 크기 확인
+    let hasLargeFile = false;
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+    
+    for (const item of selectedItemsArray) {
+        const fileInfo = fileInfoMap.get(item);
+        if (fileInfo && fileInfo.type === 'file' && fileInfo.size > MAX_FILE_SIZE) {
+            hasLargeFile = true;
+            break;
+        }
+    }
+    
+    if (hasLargeFile) {
+        alert('500MB 이상의 파일이 포함되어 있어 압축할 수 없습니다.');
+        return;
+    }
+    
+    // 현재 날짜와 시간을 문자열로 변환
+    const now = new Date();
+    const dateTimeStr = now.getFullYear() +
+                        String(now.getMonth() + 1).padStart(2, '0') +
+                        String(now.getDate()).padStart(2, '0') + '_' +
+                        String(now.getHours()).padStart(2, '0') +
+                        String(now.getMinutes()).padStart(2, '0') +
+                        String(now.getSeconds()).padStart(2, '0');
+    
+    // 기본 압축 파일 이름 설정 (첫 번째 선택 항목 + 날짜시간)
+    const defaultZipName = `${firstItemName}_${dateTimeStr}`;
+    
+    // 압축 파일 이름 입력 받기
+    const zipName = prompt('압축 파일 이름을 입력하세요:', defaultZipName);
+    if (!zipName) return; // 취소한 경우
+    
+    showLoading();
+    statusInfo.textContent = '압축 중...';
+    
+    // 압축할 파일 목록 생성
+    const filesToCompress = selectedItemsArray;
+    
+    // API 요청 데이터
+    const requestData = {
+        files: filesToCompress,
+        targetPath: currentPath,
+        zipName: zipName
+    };
+    
+    // 압축 API 호출
+    fetch(`${API_BASE_URL}/api/compress`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || '압축 중 오류가 발생했습니다.');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        // 성공 처리
+        statusInfo.textContent = `${filesToCompress.length}개 항목이 ${data.zipFile}로 압축되었습니다.`;
+        hideLoading();
+        
+        // 압축 후 파일 목록 새로고침
+        loadFiles(currentPath);
+    })
+    .catch(error => {
+        // 오류 처리
+        console.error('압축 오류:', error);
+        statusInfo.textContent = `압축 실패: ${error.message}`;
+        alert(`압축 실패: ${error.message}`);
+        hideLoading();
+    });
+}

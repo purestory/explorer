@@ -380,32 +380,38 @@ app.delete('/api/files/*', (req, res) => {
 });
 
 // 파일 업로드 API
-app.post('/api/upload', upload.single('file'), async (req, res) => {
+app.post('/api/upload', upload.array('file', 50), async (req, res) => {
   try {
     // 업로드 경로와 파일 정보 로깅
-    if (!req.file) {
+    if (!req.files || req.files.length === 0) {
       errorLog('업로드 파일이 없습니다.');
       return res.status(400).json({ error: '업로드 파일이 없습니다.' });
     }
     
-    const uploadedFile = req.file;
+    const uploadedFiles = req.files;
     const uploadPath = req.body.path ? path.join(ROOT_DIRECTORY, req.body.path) : ROOT_DIRECTORY;
-    const destinationPath = path.join(uploadPath, uploadedFile.filename);
     
-    log(`파일 업로드 완료: ${destinationPath} (${formatBytes(uploadedFile.size)})`);
-    
-    // 파일 권한 설정
-    fs.chmodSync(destinationPath, 0o666);
+    // 각 파일에 대해 처리
+    const processedFiles = uploadedFiles.map(file => {
+      const destinationPath = path.join(uploadPath, file.filename);
+      
+      // 파일 권한 설정
+      fs.chmodSync(destinationPath, 0o666);
+      
+      log(`파일 업로드 완료: ${destinationPath} (${formatBytes(file.size)})`);
+      
+      return {
+        name: file.filename,
+        size: file.size,
+        path: req.body.path || '',
+        mimetype: file.mimetype
+      };
+    });
     
     // 응답 전송
     res.status(201).json({
       message: '파일 업로드 성공',
-      file: {
-        name: uploadedFile.filename,
-        size: uploadedFile.size,
-        path: req.body.path || '',
-        mimetype: uploadedFile.mimetype
-      }
+      files: processedFiles
     });
   } catch (error) {
     errorLog('파일 업로드 오류:', error);
@@ -488,6 +494,66 @@ app.get('/api/disk-usage', (req, res) => {
       error: '디스크 사용량 조회 오류',
       message: '디스크 사용량 조회 중 오류가 발생했습니다.'
     });
+  }
+});
+
+// 파일 압축 API
+app.post('/api/compress', bodyParser.json(), (req, res) => {
+  try {
+    const { files, targetPath, zipName } = req.body;
+    
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: '압축할 파일이 선택되지 않았습니다.' });
+    }
+    
+    if (!zipName) {
+      return res.status(400).json({ error: '압축 파일 이름이 필요합니다.' });
+    }
+    
+    log(`압축 요청: ${files.length}개 파일, 대상 경로: ${targetPath || '루트'}, 압축파일명: ${zipName}`);
+    
+    // 압축 파일 전체 경로
+    const basePath = targetPath ? path.join(ROOT_DIRECTORY, targetPath) : ROOT_DIRECTORY;
+    const zipFilePath = path.join(basePath, zipName.endsWith('.zip') ? zipName : `${zipName}.zip`);
+    
+    // 중복 확인
+    if (fs.existsSync(zipFilePath)) {
+      return res.status(409).json({ error: '같은 이름의 압축 파일이 이미 존재합니다.' });
+    }
+    
+    // zip 명령어 구성 - 압축률 0 옵션 추가 (-0)
+    let zipCommand = `cd "${ROOT_DIRECTORY}" && zip -0 -r "${zipFilePath}"`;
+    
+    // 파일 경로 추가
+    files.forEach(file => {
+      const filePath = targetPath ? `${targetPath}/${file}` : file;
+      const fullPath = path.join(ROOT_DIRECTORY, filePath);
+      
+      // 파일/폴더 존재 확인
+      if (fs.existsSync(fullPath)) {
+        // 상대 경로 추출 (ROOT_DIRECTORY 기준)
+        const relativePath = path.relative(ROOT_DIRECTORY, fullPath);
+        zipCommand += ` "${relativePath}"`;
+      }
+    });
+    
+    // 압축 실행
+    log(`실행 명령어: ${zipCommand}`);
+    execSync(zipCommand);
+    
+    // 압축 파일 권한 설정
+    fs.chmodSync(zipFilePath, 0o666);
+    
+    log(`압축 완료: ${zipFilePath}`);
+    res.status(200).json({ 
+      success: true, 
+      message: '압축이 완료되었습니다.',
+      zipFile: path.basename(zipFilePath),
+      zipPath: targetPath || ''
+    });
+  } catch (error) {
+    errorLog('압축 오류:', error);
+    res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
   }
 });
 
