@@ -257,21 +257,9 @@ function initDragSelect() {
         const currentX = e.clientX;
         const currentY = e.clientY;
         
-        // 헤더 높이 가져오기
-        const headerHeight = document.querySelector('.file-list-header')?.offsetHeight || 0;
-        
         // 박스 위치와 크기 계산
         const left = Math.min(currentX, startX) - rect.left;
-        
-        // 헤더 영역을 고려한 상단 위치 계산
-        let top = Math.min(currentY, startY) - rect.top;
-        
-        // fileView 내에 있는 헤더의 바로 아래부터 선택 가능하게 제한
-        if (listView && document.querySelector('.file-list-header')) {
-            const minTop = headerHeight;
-            top = Math.max(top, minTop);
-        }
-        
+        const top = Math.min(currentY, startY) - rect.top;
         const width = Math.abs(currentX - startX);
         const height = Math.abs(currentY - startY);
         
@@ -442,37 +430,40 @@ function updateStorageInfoDisplay() {
 }
 
 // 파일 목록 로드 함수
-function loadFiles(path) {
+function loadFiles(path = '') {
     showLoading();
-    statusInfo.textContent = '파일 로드 중...';
+    currentPath = path;
     
-    // 경로에 한글이 포함된 경우를 위해 인코딩 처리
+    // URL 인코딩 처리
     const encodedPath = path ? encodeURIComponent(path) : '';
-    
-    // 디스크 사용량 가져오기
-    loadDiskUsage();
     
     fetch(`${API_BASE_URL}/api/files/${encodedPath}`)
         .then(response => {
             if (!response.ok) {
-                throw new Error('파일 목록을 가져오는데 실패했습니다.');
+                throw new Error(`상태 ${response.status}: ${response.statusText}`);
             }
             return response.json();
         })
         .then(data => {
             // 정렬 적용
-            const sortedData = sortFiles(data);
-            renderFiles(sortedData);
+            renderFiles(data);
             updateBreadcrumb(path);
             hideLoading();
+            
+            // 파일 드래그 이벤트 초기화
+            initDragAndDrop();
+            
+            // 상태 업데이트
             statusInfo.textContent = `${data.length}개 항목`;
         })
         .catch(error => {
             console.error('Error:', error);
-            fileView.innerHTML = `<div class="error-message">오류가 발생했습니다: ${error.message}</div>`;
+            statusInfo.textContent = `오류: ${error.message}`;
             hideLoading();
-            statusInfo.textContent = '오류 발생';
         });
+    
+    // 디스크 사용량 로드
+    loadDiskUsage();
 }
 
 // 파일 정렬 함수
@@ -1118,137 +1109,154 @@ function handleDragEnd() {
 
 // 드래그 앤 드롭 초기화
 function initDragAndDrop() {
-    // 드롭 영역 처리
-    fileList.addEventListener('dragenter', () => {
-        if (isDragging) return; // 내부 드래그는 무시
-        dropZone.classList.add('active');
-    });
-    
-    dropZone.addEventListener('dragleave', (e) => {
-        // 내부 요소로의 이벤트 전파는 무시
-        if (e.relatedTarget && dropZone.contains(e.relatedTarget)) return;
-        dropZone.classList.remove('active');
-    });
-    
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-    });
-    
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('active');
+    // 파일 드래그 이벤트 처리
+    document.querySelectorAll('.file-item').forEach(fileItem => {
+        // 드래그 가능하게 설정
+        fileItem.setAttribute('draggable', 'true');
         
-        if (isDragging) {
-            // 내부 드래그 앤 드롭 처리
-            const draggedItems = e.dataTransfer.getData('text/plain').split(',');
-            moveItems(draggedItems);
-        } else {
-            // 외부 파일 업로드 처리
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                uploadFiles(files);
+        // 드래그 시작 이벤트
+        fileItem.addEventListener('dragstart', (e) => {
+            // 드래그 중인 요소 식별을 위한 데이터 설정
+            const fileId = fileItem.getAttribute('data-name');
+            e.dataTransfer.setData('text/plain', fileId);
+            
+            // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
+            if (!fileItem.classList.contains('selected')) {
+                clearSelection();
+                fileItem.classList.add('selected');
+                selectedItems.add(fileId);
+                updateButtonStates();
             }
+            
+            // 드래그 중 스타일 적용
+            setTimeout(() => {
+                document.querySelectorAll('.file-item.selected').forEach(item => {
+                    item.classList.add('dragging');
+                });
+            }, 0);
+        });
+        
+        // 드래그 종료 이벤트
+        fileItem.addEventListener('dragend', () => {
+            // 드래그 스타일 제거
+            document.querySelectorAll('.file-item.dragging').forEach(item => {
+                item.classList.remove('dragging');
+            });
+            
+            // 드래그 오버 스타일 제거
+            document.querySelectorAll('.file-item.drag-over').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        });
+        
+        // 폴더인 경우 드롭 영역으로 설정
+        if (fileItem.getAttribute('data-is-folder') === 'true') {
+            // 드래그 진입 이벤트
+            fileItem.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                // 자기 자신이 선택되었으면 무시
+                if (fileItem.classList.contains('selected')) return;
+                
+                fileItem.classList.add('drag-over');
+            });
+            
+            // 드래그 영역 위에 있을 때
+            fileItem.addEventListener('dragover', (e) => {
+                e.preventDefault(); // 드롭 허용
+                // 자기 자신이 선택되었으면 무시
+                if (fileItem.classList.contains('selected')) return;
+                
+                fileItem.classList.add('drag-over');
+            });
+            
+            // 드래그 영역 벗어날 때
+            fileItem.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                fileItem.classList.remove('drag-over');
+            });
+            
+            // 드롭 이벤트
+            fileItem.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileItem.classList.remove('drag-over');
+                
+                // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
+                if (fileItem.classList.contains('selected')) return;
+                
+                const targetFolder = fileItem.getAttribute('data-name');
+                
+                // 선택된 모든 파일을 이동
+                if (selectedItems.size > 0) {
+                    // 드롭된 폴더 경로 계산
+                    const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+                    
+                    // 확인 대화상자
+                    const itemCount = selectedItems.size;
+                    const confirmMsg = `선택한 ${itemCount}개 항목을 '${targetFolder}' 폴더로 이동하시겠습니까?`;
+                    
+                    if (confirm(confirmMsg)) {
+                        showLoading();
+                        
+                        // 선택된 모든 항목 이동
+                        const movePromises = Array.from(selectedItems).map(item => {
+                            const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                            return moveItem(sourceFullPath, targetPath);
+                        });
+                        
+                        Promise.all(movePromises)
+                            .then(() => {
+                                // 이동 성공
+                                statusInfo.textContent = `${itemCount}개 항목을 이동했습니다.`;
+                                
+                                // 선택 초기화
+                                clearSelection();
+                                
+                                // 목록 새로고침
+                                loadFiles(currentPath);
+                            })
+                            .catch(error => {
+                                // 이동 실패
+                                statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error}`;
+                                console.error('Move error:', error);
+                            })
+                            .finally(() => {
+                                hideLoading();
+                            });
+                    }
+                }
+            });
         }
     });
-    
-    // 폴더 아이템에 드래그 앤 드롭 이벤트 추가
-    const handleFolderDragOver = (e) => {
-        e.preventDefault();
-        
-        // 자기 자신으로의 드래그는 무시 (폴더를 자신 위에 드래그)
-        if (selectedItems.has(e.currentTarget.getAttribute('data-name'))) {
-            return;
-        }
-        
-        // 드래그 오버 효과 추가
-        e.currentTarget.classList.add('drag-over');
-        e.dataTransfer.dropEffect = 'move';
-    };
-    
-    const handleFolderDragLeave = (e) => {
-        // 내부 요소로의 이벤트 전파는 무시
-        if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
-        e.currentTarget.classList.remove('drag-over');
-    };
-    
-    const handleFolderDrop = (e) => {
-        e.preventDefault();
-        e.currentTarget.classList.remove('drag-over');
-        
-        // 자기 자신으로의 드롭은 무시
-        if (selectedItems.has(e.currentTarget.getAttribute('data-name'))) {
-            return;
-        }
-        
-        // 내부 드래그 앤 드롭 처리
-        const draggedItems = e.dataTransfer.getData('text/plain').split(',');
-        const targetFolder = e.currentTarget.getAttribute('data-name');
-        
-        // 선택된 항목을 타겟 폴더로 이동
-        moveItemsToFolder(draggedItems, targetFolder);
-    };
-    
-    // 폴더 아이템에 이벤트 핸들러 등록 함수 (동적으로 생성된 요소에 적용하기 위함)
-    window.addFolderDragEvents = (folderItem) => {
-        folderItem.addEventListener('dragover', handleFolderDragOver);
-        folderItem.addEventListener('dragleave', handleFolderDragLeave);
-        folderItem.addEventListener('drop', handleFolderDrop);
-    };
 }
 
-// 폴더 항목을 다른 폴더로 이동
-function moveItemsToFolder(itemIds, targetFolder) {
-    if (!Array.isArray(itemIds) || itemIds.length === 0 || !targetFolder) return;
-    
-    const promises = [];
-    showLoading();
-    statusInfo.textContent = '파일 이동 중...';
-    
-    itemIds.forEach(itemId => {
-        // 소스 경로
-        const sourcePath = currentPath ? `${currentPath}/${itemId}` : itemId;
-        // 타겟 경로
-        const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+// 파일/폴더 이동 함수
+function moveItem(sourcePath, targetPath) {
+    return new Promise((resolve, reject) => {
+        // 파일명 추출
+        const fileName = sourcePath.split('/').pop();
         
-        console.log(`드래그로 이동: ${sourcePath} -> ${targetPath}/${itemId}, 현재경로=${currentPath}`);
-        
-        // 경로에 한글이 포함된 경우를 위해 인코딩 처리
-        const encodedPath = encodeURIComponent(sourcePath);
-        
-        promises.push(
-            fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 
-                    newName: itemId,
-                    targetPath: targetPath
-                })
+        // API 요청
+        fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(sourcePath)}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                newName: fileName,
+                targetPath: targetPath
             })
-            .then(response => {
-                if (!response.ok) {
-                    // 응답 텍스트를 추출하여 오류 메시지로 사용
-                    return response.text().then(text => {
-                        throw new Error(text || `${itemId} 이동 실패 (${response.status})`);
-                    });
-                }
-                return itemId;
-            })
-        );
-    });
-    
-    Promise.all(promises)
-        .then(() => {
-            loadFiles(currentPath); // 파일 목록 새로고침
-            statusInfo.textContent = `${promises.length}개 항목 이동됨`;
-            hideLoading();
+        })
+        .then(response => {
+            if (response.ok) {
+                resolve();
+            } else {
+                response.text().then(text => reject(text));
+            }
         })
         .catch(error => {
-            alert(`오류 발생: ${error.message}`);
-            hideLoading();
-            loadFiles(currentPath);
+            reject(error);
         });
+    });
 }
 
 // 파일 업로드
