@@ -167,7 +167,7 @@ h1 {
 .file-list {
     overflow-y: auto;
     flex: 1;
-    padding: 15px 20px;
+    padding: 0;
     position: relative;
 }
 
@@ -175,7 +175,7 @@ h1 {
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
-    padding-top: 5px;
+    padding: 15px 20px;
 }
 
 .file-item {
@@ -722,57 +722,44 @@ h1 {
 }
 
 /* 파일 리스트 헤더 스타일 추가 */
-.file-header-container {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background-color: #f8f8f8;
-    border-bottom: 2px solid #ddd;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
 .file-list-header {
     display: flex;
     align-items: center;
-    padding: 8px 12px;
+    background-color: #f8f8f8;
     font-weight: bold;
     color: #555;
+    border-bottom: 1px solid #ddd;
+    padding: 10px 15px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
-.file-list-header .header-icon {
-    width: 20px;
-    margin-right: 10px;
-}
-
-.file-list-header .header-name {
-    flex: 2;
+.header-item {
+    padding: 0 10px;
     cursor: pointer;
-    font-size: 0.85rem;
 }
 
-.file-list-header .header-size {
-    flex: 1;
-    text-align: right;
-    cursor: pointer;
-    font-size: 0.8rem;
-}
-
-.file-list-header .header-date {
-    flex: 1.5;
-    text-align: right;
-    cursor: pointer;
-    font-size: 0.8rem;
-    margin-left: 10px;
-}
-
-.file-list-header [data-sort]:hover {
+.header-item:hover {
     color: #007bff;
 }
 
-/* 정렬 아이콘 스타일 */
-.file-list-header i.fas {
-    margin-left: 5px;
-    font-size: 12px;
+.header-icon {
+    width: 30px;
+}
+
+.header-name {
+    flex: 2;
+}
+
+.header-size {
+    flex: 1;
+    text-align: right;
+}
+
+.header-date {
+    flex: 1.5;
+    text-align: right;
 }
 
 /* 일반 모드에서 숨김 처리 */
@@ -789,4 +776,10 @@ h1 {
 /* 아이콘 뷰에서는 파일 세부 정보 표시 조정 */
 .file-item:not(.list-view .file-item) .file-details {
     display: none; /* 아이콘 뷰에서 숨김 */
+}
+
+/* 정렬 아이콘 스타일 */
+.header-item i.fas {
+    margin-left: 5px;
+    font-size: 12px;
 }
