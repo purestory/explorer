@@ -814,3 +814,16 @@ h1 {
     margin-left: 5px;
     font-size: 12px;
 }
+
+.file-item.parent-dir {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eee;
+}
+
+.file-item.parent-dir .file-icon {
+    color: #6c757d;
+}
+
+.file-item.parent-dir:hover {
+    background-color: #e9ecef;
+}

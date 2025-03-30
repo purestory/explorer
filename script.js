@@ -573,8 +573,46 @@ function renderFiles(files) {
     // 숨김 파일 제외 (점으로 시작하는 파일)
     const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
     
+    // 상위 폴더로 이동 항목 추가 (루트 폴더가 아닌 경우)
+    if (currentPath) {
+        // 상위 디렉토리 항목 생성
+        const parentItem = document.createElement('div');
+        parentItem.className = 'file-item parent-dir';
+        parentItem.setAttribute('data-id', '..');
+        parentItem.setAttribute('data-name', '..');
+        parentItem.setAttribute('data-is-folder', 'true');
+        
+        // 아이콘 생성
+        const parentIcon = document.createElement('div');
+        parentIcon.className = 'file-icon';
+        parentIcon.innerHTML = '<i class="fas fa-level-up-alt"></i>';
+        
+        // 이름 생성
+        const parentName = document.createElement('div');
+        parentName.className = 'file-name';
+        parentName.innerText = '.. (상위 폴더)';
+        
+        // 빈 세부 정보
+        const parentDetails = document.createElement('div');
+        parentDetails.className = 'file-details';
+        parentDetails.innerHTML = '<div class="file-size">--</div><div class="file-date">--</div>';
+        
+        // 부모 항목에 추가
+        parentItem.appendChild(parentIcon);
+        parentItem.appendChild(parentName);
+        parentItem.appendChild(parentDetails);
+        
+        // 클릭 이벤트 추가
+        parentItem.addEventListener('click', () => {
+            navigateToParentFolder();
+        });
+        
+        // 컨테이너에 추가
+        filesContainer.appendChild(parentItem);
+    }
+    
     // 파일 목록 렌더링
-    if (visibleFiles.length === 0) {
+    if (visibleFiles.length === 0 && !currentPath) {
         const noFilesDiv = document.createElement('div');
         noFilesDiv.className = 'no-files';
         noFilesDiv.textContent = '파일이 없습니다.';
@@ -890,6 +928,10 @@ function handleFileDblClick(e, fileItem) {
 function navigateToFolder(folderName) {
     let newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
     currentPath = newPath;
+    
+    // 폴더 이동 히스토리 상태 업데이트
+    updateHistoryState(currentPath);
+    
     loadFiles(newPath);
     
     // 선택 초기화
@@ -1674,6 +1716,64 @@ function moveItems(itemIds) {
     pasteBtn.disabled = false;
 }
 
+// 상위 폴더로 이동
+function navigateToParentFolder() {
+    if (!currentPath) return; // 이미 루트 폴더인 경우
+    
+    // 마지막 슬래시 위치 찾기
+    const lastSlashIndex = currentPath.lastIndexOf('/');
+    
+    if (lastSlashIndex === -1) {
+        // 슬래시가 없으면 루트 폴더로 이동
+        currentPath = '';
+    } else {
+        // 슬래시가 있으면 상위 경로로 이동
+        currentPath = currentPath.substring(0, lastSlashIndex);
+    }
+    
+    // 폴더 이동 히스토리 상태 업데이트
+    updateHistoryState(currentPath);
+    
+    // 파일 목록 새로고침
+    loadFiles(currentPath);
+    
+    // 선택 초기화
+    clearSelection();
+}
+
+// 브라우저 히스토리 상태 업데이트
+function updateHistoryState(path) {
+    const state = { path: path };
+    const url = new URL(window.location.href);
+    url.searchParams.set('path', path);
+    
+    // 현재 상태 교체
+    window.history.pushState(state, '', url);
+}
+
+// 브라우저 뒤로가기/앞으로가기 이벤트 처리
+function initHistoryNavigation() {
+    // 페이지 로드 시 URL에서 경로 파라미터 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const pathParam = urlParams.get('path');
+    
+    if (pathParam) {
+        currentPath = pathParam;
+    }
+    
+    // 초기 상태 설정
+    const initialState = { path: currentPath };
+    window.history.replaceState(initialState, '', window.location.href);
+    
+    // 팝스테이트 이벤트 핸들러
+    window.addEventListener('popstate', (e) => {
+        if (e.state && e.state.path !== undefined) {
+            currentPath = e.state.path;
+            loadFiles(currentPath);
+        }
+    });
+}
+
 // 애플리케이션 초기화
 function init() {
     // 기본 기능 초기화
@@ -1683,6 +1783,7 @@ function init() {
     initDragAndDrop();
     initShortcuts();
     initViewModes();
+    initHistoryNavigation(); // 히스토리 네비게이션 초기화 추가
     
     // 파일 관리 기능 초기화
     initFolderCreation();
