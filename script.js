@@ -435,38 +435,43 @@ function updateStorageInfoDisplay() {
     statusbar.appendChild(diskUsageInfo);
 }
 
-// 파일 목록 로드 함수
-function loadFiles(path) {
+// 파일 로드
+async function loadFiles(path) {
     showLoading();
-    statusInfo.textContent = '파일 로드 중...';
     
-    // 경로에 한글이 포함된 경우를 위해 인코딩 처리
-    const encodedPath = path ? encodeURIComponent(path) : '';
-    
-    // 디스크 사용량 가져오기
-    loadDiskUsage();
-    
-    fetch(`${API_BASE_URL}/api/files/${encodedPath}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('파일 목록을 가져오는데 실패했습니다.');
-            }
-            return response.json();
-        })
-        .then(data => {
-            // 정렬 적용
-            const sortedData = sortFiles(data);
-            renderFileList(sortedData);
-            updateBreadcrumb(path);
-            hideLoading();
-            statusInfo.textContent = `${data.length}개 항목`;
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            fileView.innerHTML = `<div class="error-message">오류가 발생했습니다: ${error.message}</div>`;
-            hideLoading();
-            statusInfo.textContent = '오류 발생';
-        });
+    try {
+        // 경로 인코딩
+        const encodedPath = encodeURIComponent(path);
+        
+        // 파일 목록 가져오기
+        const response = await fetch(`${API_BASE_URL}/api/files/${encodedPath}`);
+        
+        if (!response.ok) {
+            throw new Error(`서버 오류: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // 파일 정렬
+        const sortedData = sortFiles(data);
+        
+        // 경로 표시 업데이트
+        updateBreadcrumb(path);
+        
+        // 파일 목록 표시
+        renderFiles(sortedData);
+        
+        // 상태바 업데이트
+        statusInfo.textContent = `${data.length}개 항목`;
+        
+        // 클립보드에 아이템이 있으면 붙여넣기 버튼 활성화
+        pasteBtn.disabled = clipboardItems.length === 0;
+    } catch (error) {
+        console.error('파일 목록 로드 오류:', error);
+        fileView.innerHTML = `<div class="error-message">오류가 발생했습니다: ${error.message}</div>`;
+    } finally {
+        hideLoading();
+    }
 }
 
 // 파일 정렬 함수
@@ -511,95 +516,91 @@ function compareValues(a, b, field, direction) {
 }
 
 // 파일 목록 렌더링
-function renderFileList(files) {
+function renderFiles(files) {
+    // 파일 목록 초기화
     fileView.innerHTML = '';
     
-    // 목록 보기 모드일 때 헤더 추가
-    if (listView) {
-        const headerRow = document.createElement('div');
-        headerRow.className = 'file-list-header';
-        headerRow.style.position = 'sticky';
-        headerRow.style.top = '0';
-        headerRow.style.backgroundColor = 'var(--background-color)';
-        headerRow.style.zIndex = '10';
-        headerRow.style.boxShadow = '0 2px 4px rgba(0,0,0,0.15)';
-        headerRow.style.padding = '10px 0';
-        headerRow.innerHTML = `
-            <div class="header-item header-icon"></div>
-            <div class="header-item header-name" data-sort="name">이름 ${getSortIcon('name')}</div>
-            <div class="header-item header-size" data-sort="size">크기 ${getSortIcon('size')}</div>
-            <div class="header-item header-date" data-sort="date">수정된 날짜 ${getSortIcon('date')}</div>
-        `;
-        
-        // 헤더 클릭 이벤트 추가
-        headerRow.querySelectorAll('.header-item[data-sort]').forEach(header => {
-            header.addEventListener('click', () => {
-                const field = header.getAttribute('data-sort');
-                if (sortField === field) {
-                    // 같은 필드면 방향 전환
-                    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-                } else {
-                    // 다른 필드면 새 필드로 변경하고 오름차순 시작
-                    sortField = field;
-                    sortDirection = 'asc';
-                }
-                
-                // 현재 폴더 다시 로드 (정렬 적용)
-                loadFiles(currentPath);
-            });
-        });
-        
-        fileView.appendChild(headerRow);
-        
-        // 목록 보기 클래스 추가
-        fileView.classList.add('list-view');
-    } else {
-        // 목록 보기 클래스 제거
-        fileView.classList.remove('list-view');
+    // 목록 헤더 추가 (목록 뷰에서만 보임)
+    const headerHTML = `
+        <div class="file-list-header" id="fileListHeader">
+            <div class="header-icon"></div>
+            <div class="header-name" data-sort="name">이름 ${getSortIcon('name')}</div>
+            <div class="header-size" data-sort="size">크기 ${getSortIcon('size')}</div>
+            <div class="header-date" data-sort="date">수정일 ${getSortIcon('date')}</div>
+        </div>
+    `;
+    
+    // 헤더를 별도의 컨테이너에 추가
+    const headerContainer = document.createElement('div');
+    headerContainer.className = 'file-header-container';
+    headerContainer.innerHTML = headerHTML;
+    fileList.insertBefore(headerContainer, fileView);
+    
+    // 이미 존재하는 헤더가 있으면 제거
+    const existingHeader = document.querySelector('.file-header-container:not(:first-child)');
+    if (existingHeader) {
+        existingHeader.remove();
     }
     
+    // 정렬 이벤트 추가
+    document.querySelectorAll('.header-name, .header-size, .header-date').forEach(header => {
+        header.addEventListener('click', () => {
+            const field = header.getAttribute('data-sort');
+            if (field === sortField) {
+                // 같은 필드면 방향 전환
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                // 다른 필드면 해당 필드로 변경하고 오름차순으로 시작
+                sortField = field;
+                sortDirection = 'asc';
+            }
+            
+            // 정렬 후 다시 렌더링
+            const sortedFiles = sortFiles(files);
+            renderFiles(sortedFiles);
+        });
+    });
+    
+    // 파일 목록이 비어있는 경우
+    if (files.length === 0) {
+        fileView.innerHTML = '<div class="empty-message">이 폴더는 비어 있습니다.</div>';
+        return;
+    }
+    
+    // 파일 목록 생성
     files.forEach(file => {
-        const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
-        fileItem.setAttribute('data-id', file.name);
-        fileItem.setAttribute('data-name', file.name);
-        fileItem.setAttribute('data-is-folder', file.isFolder);
-        fileItem.setAttribute('data-size', file.size);
-        fileItem.setAttribute('data-date', file.modifiedTime);
+        const fileDiv = document.createElement('div');
+        fileDiv.className = 'file-item';
+        fileDiv.setAttribute('data-id', file.name);
+        fileDiv.setAttribute('data-name', file.name);
+        fileDiv.setAttribute('data-is-folder', file.isFolder);
+        fileDiv.setAttribute('draggable', 'true');
         
-        const iconClass = file.isFolder 
-            ? 'fas fa-folder' 
-            : getFileIconClass(file.name);
+        // 아이콘과 이름 설정
+        const iconClass = file.isFolder ? 'fas fa-folder' : getFileIconClass(file.name);
         
-        fileItem.innerHTML = `
+        fileDiv.innerHTML = `
             <div class="file-icon"><i class="${iconClass}"></i></div>
             <div class="file-name">${file.name}</div>
-            <input type="text" class="rename-input" value="${file.name}">
             <div class="file-details">
-                <span class="file-size">${formatFileSize(file.size)}</span>
-                <span class="file-date">${formatDate(file.modifiedTime)}</span>
+                <div class="file-size">${file.isFolder ? '-' : formatFileSize(file.size)}</div>
+                <div class="file-date">${formatDate(file.modifiedTime)}</div>
             </div>
+            <input type="text" class="rename-input">
         `;
         
         // 이벤트 리스너 추가
-        fileItem.addEventListener('click', (e) => handleFileClick(e, fileItem));
-        fileItem.addEventListener('dblclick', (e) => handleFileDblClick(e, fileItem));
+        fileDiv.addEventListener('click', (e) => handleFileClick(e, fileDiv));
+        fileDiv.addEventListener('dblclick', (e) => handleFileDblClick(e, fileDiv));
         
-        // 드래그 이벤트 처리
-        fileItem.setAttribute('draggable', 'true');
-        fileItem.addEventListener('dragstart', (e) => handleDragStart(e, fileItem));
-        fileItem.addEventListener('dragend', handleDragEnd);
+        // 드래그 이벤트 리스너
+        fileDiv.addEventListener('dragstart', handleDragStart);
+        fileDiv.addEventListener('dragover', handleDragOver);
+        fileDiv.addEventListener('dragleave', handleDragLeave);
+        fileDiv.addEventListener('drop', handleDrop);
         
-        // 폴더인 경우 드롭 영역으로 설정
-        if (file.isFolder) {
-            window.addFolderDragEvents(fileItem);
-        }
-        
-        fileView.appendChild(fileItem);
+        fileView.appendChild(fileDiv);
     });
-    
-    // 선택 초기화
-    clearSelection();
 }
 
 // 정렬 아이콘 가져오기
