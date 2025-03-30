@@ -2,7 +2,7 @@
 
 이 프로젝트는 Node.js와 Express를 기반으로 한 WebDAV 파일 서버 웹 애플리케이션입니다. 사용자 친화적인 웹 인터페이스를 통해 파일 시스템을 쉽게 관리할 수 있습니다.
 
-![WebDAV 파일 서버 메인 화면](screenshot/main.png)
+![WebDAV 파일 서버 메인 화면](https://github.com/purestory/webdav-explorer/raw/main/screenshot/main.png)
 
 ## 주요 기능
 
