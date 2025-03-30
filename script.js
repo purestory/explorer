@@ -570,14 +570,17 @@ function renderFiles(files) {
         return 0;
     });
     
+    // 숨김 파일 제외 (점으로 시작하는 파일)
+    const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
+    
     // 파일 목록 렌더링
-    if (sortedFiles.length === 0) {
+    if (visibleFiles.length === 0) {
         const noFilesDiv = document.createElement('div');
         noFilesDiv.className = 'no-files';
         noFilesDiv.textContent = '파일이 없습니다.';
         filesContainer.appendChild(noFilesDiv);
     } else {
-        sortedFiles.forEach(file => {
+        visibleFiles.forEach(file => {
             // 파일 항목 생성
             const fileItem = document.createElement('div');
             fileItem.className = 'file-item';
@@ -715,6 +718,14 @@ function renderFiles(files) {
         fileView.classList.add('list-view');
     } else {
         fileView.classList.remove('list-view');
+    }
+
+    // 상태 정보 업데이트 - 숨김 파일 카운트 포함
+    const hiddenCount = sortedFiles.length - visibleFiles.length;
+    if (hiddenCount > 0) {
+        statusInfo.textContent = `${visibleFiles.length}개 항목 (${hiddenCount}개 숨김 파일 제외)`;
+    } else {
+        statusInfo.textContent = `${visibleFiles.length}개 항목`;
     }
 }
 
