@@ -257,9 +257,21 @@ function initDragSelect() {
         const currentX = e.clientX;
         const currentY = e.clientY;
         
+        // 헤더 높이 가져오기
+        const headerHeight = document.querySelector('.file-list-header')?.offsetHeight || 0;
+        
         // 박스 위치와 크기 계산
         const left = Math.min(currentX, startX) - rect.left;
-        const top = Math.min(currentY, startY) - rect.top;
+        
+        // 헤더 영역을 고려한 상단 위치 계산
+        let top = Math.min(currentY, startY) - rect.top;
+        
+        // fileView 내에 있는 헤더의 바로 아래부터 선택 가능하게 제한
+        if (listView && document.querySelector('.file-list-header')) {
+            const minTop = headerHeight;
+            top = Math.max(top, minTop);
+        }
+        
         const width = Math.abs(currentX - startX);
         const height = Math.abs(currentY - startY);
         

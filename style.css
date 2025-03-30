@@ -343,7 +343,7 @@ h1 {
     border: 1px solid #007bff;
     background-color: rgba(0, 123, 255, 0.1);
     pointer-events: none;
-    z-index: 100;
+    z-index: 10;
 }
 
 .upload-form {
@@ -758,7 +758,7 @@ h1 {
     margin-bottom: 5px;
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 11;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
@@ -787,6 +787,8 @@ h1 {
 
 .files-container {
     width: 100%;
+    position: relative;
+    z-index: 1;
 }
 
 /* 일반 모드에서 숨김 처리 */
