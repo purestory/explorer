@@ -421,13 +421,13 @@ app.post('/api/upload', (req, res) => {
     limits: {
       fileSize: 10 * 1024 * 1024 * 1024 // 10GB
     }
-  }).array('file', 50); // 최대 50개 파일 업로드 허용
+  }).array('file', 100); // 최대 100개 파일 업로드 허용
   
   // 2. multer로 파일과 필드를 처리
   upload(req, res, function(err) {
     if (err) {
       errorLog('파일 업로드 오류:', err);
-      return res.status(500).json({ error: '파일 업로드 중 오류가 발생했습니다.' });
+      return res.status(500).json({ error: '파일 업로드 중 오류가 발생했습니다.', message: err.message });
     }
     
     // 3. 파일과 path 필드가 모두 있는지 확인
@@ -445,6 +445,7 @@ app.post('/api/upload', (req, res) => {
       : ROOT_DIRECTORY;
     
     log(`파일 업로드 요청 경로: ${pathValue || '루트 디렉토리'}, 절대 경로: ${targetPath}`);
+    log(`업로드 파일 개수: ${req.files.length}, 경로 정보 여부: ${req.body.filepath ? '있음' : '없음'}`);
     
     // 5. 대상 디렉토리 확인 및 생성
     if (!fs.existsSync(targetPath)) {
@@ -454,15 +455,29 @@ app.post('/api/upload', (req, res) => {
         log(`업로드 대상 폴더 생성됨: ${targetPath}`);
       } catch (error) {
         errorLog(`폴더 생성 중 오류: ${targetPath}`, error);
-        return res.status(500).json({ error: '폴더 생성 중 오류가 발생했습니다.' });
+        return res.status(500).json({ error: '폴더 생성 중 오류가 발생했습니다.', message: error.message });
       }
     }
     
     // 6. 각 파일 처리
     const processedFiles = [];
+    const errors = [];
     
-    for (const file of req.files) {
+    // 파일 경로 정보가 있는지 확인
+    const hasFilepaths = req.body.filepath !== undefined;
+    // filepath 배열 준비
+    const filepaths = hasFilepaths
+      ? Array.isArray(req.body.filepath) 
+        ? req.body.filepath 
+        : [req.body.filepath]
+      : [];
+      
+    log(`파일 경로 정보: ${hasFilepaths ? filepaths.length + '개' : '없음'}`);
+    
+    for (let i = 0; i < req.files.length; i++) {
       try {
+        const file = req.files[i];
+        
         // 원본 파일명에서 한글 인코딩 처리
         const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
         
@@ -471,22 +486,15 @@ app.post('/api/upload', (req, res) => {
         let relativePath = '';
         
         // 파일 상대 경로 처리 (폴더 업로드 처리)
-        // filepath 배열로부터 상대 경로 생성
-        if (req.body.filepath) {
-          // filepath가 배열인지 확인 (여러 파일이 있는 경우)
-          const filepaths = Array.isArray(req.body.filepath) ? req.body.filepath : [req.body.filepath];
-          // 현재 파일의 인덱스와 같은 인덱스의 filepath 항목 가져오기
-          const fileIndex = req.files.indexOf(file);
-          if (fileIndex >= 0 && fileIndex < filepaths.length) {
-            relativePath = filepaths[fileIndex];
-            filePath = path.join(targetPath, relativePath);
-            
-            // 해당 디렉토리가 없으면 생성
-            if (!fs.existsSync(filePath)) {
-              fs.mkdirSync(filePath, { recursive: true });
-              fs.chmodSync(filePath, 0o777);
-              log(`폴더 업로드 - 하위 폴더 생성됨: ${filePath}`);
-            }
+        if (hasFilepaths && i < filepaths.length && filepaths[i]) {
+          relativePath = filepaths[i];
+          filePath = path.join(targetPath, relativePath);
+          
+          // 해당 디렉토리가 없으면 생성
+          if (!fs.existsSync(filePath)) {
+            fs.mkdirSync(filePath, { recursive: true });
+            fs.chmodSync(filePath, 0o777);
+            log(`폴더 업로드 - 하위 폴더 생성됨: ${filePath}`);
           }
         }
         
@@ -513,16 +521,32 @@ app.post('/api/upload', (req, res) => {
         - 저장 경로: ${destinationFile}
         - 크기: ${formatBytes(file.size)}`);
       } catch (error) {
-        errorLog(`파일 저장 중 오류: ${file.originalname}`, error);
-        // 개별 파일 오류는 기록하되 전체 업로드를 중단하지 않음
+        const errorMsg = `파일 저장 중 오류: ${req.files[i].originalname} - ${error.message}`;
+        errorLog(errorMsg, error);
+        errors.push({
+          file: req.files[i].originalname,
+          error: error.message
+        });
       }
     }
     
     // 7. 응답 전송
-    res.status(201).json({
-      message: '파일 업로드 성공',
-      files: processedFiles
-    });
+    if (processedFiles.length > 0) {
+      res.status(201).json({
+        message: '파일 업로드 성공',
+        files: processedFiles,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    } else if (errors.length > 0) {
+      res.status(500).json({
+        error: '모든 파일 업로드 실패',
+        errors: errors
+      });
+    } else {
+      res.status(400).json({
+        error: '파일 처리 실패'
+      });
+    }
   });
 });
 
