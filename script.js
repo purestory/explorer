@@ -729,6 +729,7 @@ function renderFiles(files) {
             fileItem.setAttribute('data-id', file.name);
             fileItem.setAttribute('data-name', file.name);
             fileItem.setAttribute('data-is-folder', file.isFolder);
+            fileItem.setAttribute('draggable', 'true'); // 드래그 가능하도록 속성 추가
             
             // 파일 아이콘 및 미리보기 설정
             const fileIcon = document.createElement('div');
@@ -790,6 +791,10 @@ function renderFiles(files) {
             fileItem.appendChild(fileName);
             fileItem.appendChild(renameInput);
             fileItem.appendChild(fileDetails);
+            
+            // 드래그 관련 이벤트 추가
+            fileItem.addEventListener('dragstart', (e) => handleDragStart(e, fileItem));
+            fileItem.addEventListener('dragend', handleDragEnd);
             
             // 이벤트 리스너 설정
             fileItem.addEventListener('click', (e) => {
@@ -1309,15 +1314,36 @@ function pasteItems() {
 
 // 드래그 시작 처리
 function handleDragStart(e, fileItem) {
+    // 상위 폴더는 드래그되지 않도록 방지
+    if (fileItem.getAttribute('data-parent-dir') === 'true') {
+        e.preventDefault();
+        return;
+    }
+    
     // 선택되지 않은 항목을 드래그하면 해당 항목만 선택
     if (!fileItem.classList.contains('selected')) {
         clearSelection();
         selectItem(fileItem);
     }
     
-    // 드래그 데이터 설정
+    // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
+    if (selectedItems.size > 1) {
+        // 여러 항목이 선택된 경우 모든 선택 항목의 ID를 저장
+        e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
+    } else {
+        // 단일 항목 드래그
+        e.dataTransfer.setData('text/plain', fileItem.getAttribute('data-name'));
+    }
+    
+    // 드래그 효과 설정
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', [...selectedItems].join(','));
+    
+    // 드래그 중 스타일 적용
+    setTimeout(() => {
+        document.querySelectorAll('.file-item.selected').forEach(item => {
+            item.classList.add('dragging');
+        });
+    }, 0);
     
     isDragging = true;
 }
@@ -1332,48 +1358,7 @@ function initDragAndDrop() {
     // 파일 리스트에 이벤트 위임 사용 - 동적으로 생성된 파일 항목에도 이벤트 처리
     const fileList = document.getElementById('fileList');
     
-    // 파일 드래그 이벤트 위임
-    fileList.addEventListener('dragstart', (e) => {
-        const fileItem = e.target.closest('.file-item');
-        if (!fileItem) return;
-        
-        // 상위 폴더는 드래그되지 않도록 방지
-        if (fileItem.getAttribute('data-parent-dir') === 'true') {
-            e.preventDefault();
-            return;
-        }
-        
-        // 드래그 중인 요소 식별을 위한 데이터 설정
-        const fileId = fileItem.getAttribute('data-name');
-        
-        // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
-        if (selectedItems.size > 1 && fileItem.classList.contains('selected')) {
-            // 여러 항목이 선택된 경우 모든 선택 항목의 ID를 저장
-            e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
-            e.dataTransfer.effectAllowed = 'move';
-        } else {
-            // 단일 항목 드래그
-            e.dataTransfer.setData('text/plain', fileId);
-            e.dataTransfer.effectAllowed = 'move';
-            
-            // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
-            if (!fileItem.classList.contains('selected')) {
-                clearSelection();
-                fileItem.classList.add('selected');
-                selectedItems.add(fileId);
-                updateButtonStates();
-            }
-        }
-        
-        // 드래그 중 스타일 적용
-        setTimeout(() => {
-            document.querySelectorAll('.file-item.selected').forEach(item => {
-                item.classList.add('dragging');
-            });
-        }, 0);
-    });
-    
-    // 드래그 종료 이벤트 위임
+    // 드래그 종료 이벤트 위임 (백업용)
     fileList.addEventListener('dragend', (e) => {
         // 드래그 스타일 제거
         document.querySelectorAll('.file-item.dragging').forEach(item => {
