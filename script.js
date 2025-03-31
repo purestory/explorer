@@ -1400,7 +1400,13 @@ function initDragAndDrop() {
         if (e.dataTransfer.files.length > 0) {
             // 현재 폴더에 파일 업로드
             const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
-            uploadFilesToFolder(e.dataTransfer.files, targetPath);
+            
+            // 수정: uploadFilesToFolder 함수 대신 파일 업로드 버튼과 동일한 함수를 사용하되,
+            // 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
+            const originalPath = currentPath;
+            currentPath = targetPath;
+            uploadFiles(e.dataTransfer.files);
+            currentPath = originalPath;
             return;
         }
         
@@ -1491,192 +1497,6 @@ function initDragAndDrop() {
 }
 
 // 특정 폴더에 파일 업로드
-function uploadFilesToFolder(files, targetPath) {
-    if (files.length === 0) return;
-    
-    // 업로드 UI 표시
-    progressContainer.style.display = 'block';
-    progressBar.style.width = '0%';
-    
-    // 전체 파일 크기와 현재까지 업로드된 크기를 추적
-    const totalFiles = files.length;
-    let totalSize = 0;
-    let currentFileIndex = 0;
-    
-    // 모든 파일 이름 배열 생성
-    let fileNames = [];
-    for (let i = 0; i < files.length; i++) {
-        fileNames.push(files[i].name);
-        totalSize += files[i].size;
-    }
-    
-    // 현재 처리 중인 파일 정보 업데이트
-    function updateCurrentFileInfo() {
-        let currentFileName = "";
-        if (currentFileIndex < files.length) {
-            currentFileName = files[currentFileIndex].name;
-            const fileSize = formatFileSize(files[currentFileIndex].size);
-            document.getElementById('currentFileUpload').textContent = `${currentFileName} (${fileSize}) - 총 ${formatFileSize(totalSize)}`;
-        }
-        document.getElementById('currentFileUpload').style.display = 'block';
-    }
-    
-    // 첫 번째 파일 정보 표시
-    updateCurrentFileInfo();
-    
-    // 시작 시간 기록
-    const startTime = new Date().getTime();
-    
-    // FormData에 모든 파일 추가
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-        formData.append('file', files[i]);
-    }
-    formData.append('path', targetPath);
-    
-    // AJAX 요청으로 파일 전송
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_BASE_URL}/api/upload`);
-    
-    // 업로드 완료 플래그
-    let uploadCompleted = false;
-    let lastLoaded = 0;
-    
-    xhr.upload.onprogress = (e) => {
-        // 업로드가 이미 완료된 상태라면 진행률 업데이트 중지
-        if (uploadCompleted) return;
-        
-        if (e.lengthComputable) {
-            // 현재 업로드된 양이 이전 파일의 크기를 초과하면 다음 파일로 진행
-            const currentProgress = e.loaded - lastLoaded;
-            
-            if (currentFileIndex < files.length && 
-                currentProgress >= files[currentFileIndex].size) {
-                // 이전 파일 크기 누적
-                lastLoaded += files[currentFileIndex].size;
-                // 다음 파일로 이동
-                currentFileIndex++;
-                // 현재 파일 정보 업데이트
-                updateCurrentFileInfo();
-            }
-            
-            // 전체 업로드 진행률 계산
-            const totalProgress = (e.loaded / e.total) * 100;
-            
-            // 업로드 속도 및 남은 시간 계산
-            const currentTime = new Date().getTime();
-            const elapsedTimeSeconds = (currentTime - startTime) / 1000;
-            const uploadedBytes = e.loaded;
-            const uploadSpeed = uploadedBytes / elapsedTimeSeconds; // bytes per second
-            const uploadSpeedFormatted = formatFileSize(uploadSpeed) + '/s';
-            
-            // 업로드가 거의 완료되면 진행률을 99%로 고정
-            let progressValue = totalProgress;
-            if (progressValue > 99) progressValue = 99;
-            
-            let remainingTime = (e.total - e.loaded) / uploadSpeed; // 남은 시간(초)
-            if (remainingTime < 0) remainingTime = 0;
-            
-            let timeDisplay;
-            
-            if (remainingTime < 60) {
-                timeDisplay = `${Math.round(remainingTime)}초`;
-            } else if (remainingTime < 3600) {
-                timeDisplay = `${Math.floor(remainingTime / 60)}분 ${Math.round(remainingTime % 60)}초`;
-            } else {
-                timeDisplay = `${Math.floor(remainingTime / 3600)}시간 ${Math.floor((remainingTime % 3600) / 60)}분`;
-            }
-            
-            // 진행률 표시 업데이트
-            progressBar.style.width = `${progressValue}%`;
-            
-            // 업로드 상태 메시지 업데이트
-            let progressStatusText = "";
-            if (files.length === 1) {
-                progressStatusText = `파일 업로드 중 - ${Math.round(progressValue)}% 완료 (${uploadSpeedFormatted}, 남은 시간: ${timeDisplay})`;
-            } else {
-                progressStatusText = `${currentFileIndex + 1}/${totalFiles} 파일 업로드 중 - ${Math.round(progressValue)}% 완료 (${uploadSpeedFormatted}, 남은 시간: ${timeDisplay})`;
-            }
-            uploadStatus.textContent = progressStatusText;
-            uploadStatus.style.display = 'block';
-            
-            // 현재 상태 업데이트
-            statusInfo.textContent = `파일 업로드 중 (${Math.round(progressValue)}%, ${formatFileSize(e.loaded)}/${formatFileSize(e.total)})`;
-        }
-    };
-    
-    xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4) {
-            // 업로드 완료 플래그 설정
-            uploadCompleted = true;
-            
-            if (xhr.status === 200 || xhr.status === 201) {
-                // 업로드 성공 - 프로그레스바 100%로 설정
-                progressBar.style.width = '100%';
-                
-                if (files.length === 1) {
-                    uploadStatus.textContent = '파일 업로드 완료';
-                } else {
-                    uploadStatus.textContent = `${files.length}개 파일 업로드 완료`;
-                }
-                
-                // 잠시 후 업로드 UI 숨기기
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                    document.getElementById('currentFileUpload').style.display = 'none';
-                    uploadStatus.style.display = 'none';
-                    loadFiles(currentPath); // 파일 목록 새로고침
-                }, 500);
-                
-                if (files.length === 1) {
-                    statusInfo.textContent = '파일 업로드 완료';
-                } else {
-                    statusInfo.textContent = `${files.length}개 파일 업로드 완료`;
-                }
-            } else {
-                // 오류 처리
-                let errorMsg = '업로드 실패';
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    if (response.error) {
-                        errorMsg = `업로드 실패: ${response.message || response.error}`;
-                    }
-                } catch (e) {
-                    errorMsg = `업로드 실패: ${xhr.status} ${xhr.statusText || '알 수 없는 오류'}`;
-                }
-                
-                uploadStatus.textContent = errorMsg;
-                statusInfo.textContent = errorMsg;
-                
-                // 잠시 후 업로드 UI 숨기기
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                    document.getElementById('currentFileUpload').style.display = 'none';
-                    uploadStatus.style.display = 'none';
-                }, 2000);
-            }
-        }
-    };
-    
-    xhr.onerror = () => {
-        // 업로드 완료 플래그 설정
-        uploadCompleted = true;
-        
-        uploadStatus.textContent = `파일 업로드 실패: 네트워크 오류`;
-        statusInfo.textContent = `파일 업로드 실패: 네트워크 오류`;
-        
-        // 잠시 후 업로드 UI 숨기기
-        setTimeout(() => {
-            progressContainer.style.display = 'none';
-            document.getElementById('currentFileUpload').style.display = 'none';
-            uploadStatus.style.display = 'none';
-        }, 2000);
-    };
-    
-    xhr.send(formData);
-}
-
-// 파일 업로드
 function uploadFiles(files) {
     if (files.length === 0) return;
     
