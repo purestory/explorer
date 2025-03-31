@@ -288,9 +288,9 @@ app.put('/api/files/*', (req, res) => {
   try {
     // URL 디코딩하여 한글 경로 처리
     const oldPath = decodeURIComponent(req.params[0] || '');
-    const { newName, targetPath } = req.body;
+    const { newName, targetPath, overwrite } = req.body;
     
-    log(`이름 변경 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}`);
+    log(`이름 변경 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`);
     
     if (!newName) {
       errorLog('새 이름이 제공되지 않음');
@@ -328,10 +328,23 @@ app.put('/api/files/*', (req, res) => {
       fs.chmodSync(fullTargetPath, 0o777);
     }
 
-    // 대상 경로에 이미 존재하는지 확인
+    // 대상 경로에 이미 존재하는지 확인하고 덮어쓰기 처리
     if (fs.existsSync(fullNewPath)) {
-      errorLog(`이미 존재하는 이름: ${fullNewPath}`);
-      return res.status(409).send('이미 존재하는 이름입니다.');
+      if (overwrite) {
+        // 덮어쓰기 옵션이 true면 기존 파일/폴더 삭제
+        log(`덮어쓰기 요청으로 기존 파일/폴더 삭제: ${fullNewPath}`);
+        
+        const stats = fs.statSync(fullNewPath);
+        if (stats.isDirectory()) {
+          fs.rmdirSync(fullNewPath, { recursive: true });
+        } else {
+          fs.unlinkSync(fullNewPath);
+        }
+      } else {
+        // 덮어쓰기 옵션이 없거나 false면 충돌 반환
+        errorLog(`이미 존재하는 이름: ${fullNewPath}`);
+        return res.status(409).send('이미 존재하는 이름입니다.');
+      }
     }
 
     // 이름 변경 (파일 이동)
