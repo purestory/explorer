@@ -1488,74 +1488,109 @@ function initDragAndDrop() {
             // 드롭된 폴더 경로 계산
             const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
             
-            // 확인 대화상자
+            // 첫 단계: 사용자 확인
             const itemCount = itemsToMove.length;
             const confirmMsg = `선택한 ${itemCount}개 항목을 '${targetFolder}' 폴더로 이동하시겠습니까?`;
             
-            if (confirm(confirmMsg)) {
-                showLoading();
-                statusInfo.textContent = '파일 이동 중...';
+            if (!confirm(confirmMsg)) {
+                return; // 사용자가 취소함
+            }
+            
+            showLoading();
+            statusInfo.textContent = '파일 이동 중...';
+            
+            // 충돌 확인 처리
+            const checkForConflicts = async () => {
+                const conflicts = [];
                 
-                // 정렬 이동: 충돌 처리를 위해 한 번에 하나씩 이동
-                const moveNextItem = (index = 0, overwriteAll = false, skipAll = false) => {
-                    if (index >= itemsToMove.length) {
-                        // 모든 항목 이동 완료
-                        statusInfo.textContent = `${itemCount}개 항목을 이동했습니다.`;
-                        clearSelection();
-                        loadFiles(currentPath);
-                        hideLoading();
-                        return;
+                for (const item of itemsToMove) {
+                    const sourcePath = currentPath ? `${currentPath}/${item}` : item;
+                    
+                    // 소스와 타겟이 같은 경로는 무시
+                    if (sourcePath === `${targetPath}/${item}`) {
+                        continue;
                     }
                     
-                    const item = itemsToMove[index];
-                    const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                    try {
+                        // 파일 존재 여부 확인
+                        const response = await fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(targetPath)}/${encodeURIComponent(item)}`, {
+                            method: 'HEAD'
+                        });
+                        
+                        if (response.ok) {
+                            conflicts.push(item);
+                        }
+                    } catch (error) {
+                        console.error(`확인 오류: ${item}`, error);
+                    }
+                }
+                
+                return conflicts;
+            };
+            
+            // 충돌 체크 및 이동 처리
+            checkForConflicts()
+                .then(conflicts => {
+                    // 충돌 처리
+                    let overwriteAll = false;
                     
-                    // 항목 이동 시도
-                    moveItem(sourceFullPath, targetPath, overwriteAll)
-                        .then(() => {
-                            // 성공적으로 이동된 경우 다음 항목으로
-                            moveNextItem(index + 1, overwriteAll, skipAll);
+                    if (conflicts.length > 0) {
+                        const message = conflicts.length === 1 
+                            ? `'${conflicts[0]}'이(가) 이미 대상 폴더에 존재합니다. 덮어쓰시겠습니까?`
+                            : `${conflicts.length}개 파일이 이미 대상 폴더에 존재합니다. 모두 덮어쓰시겠습니까?`;
+                        
+                        overwriteAll = confirm(message);
+                        
+                        if (!overwriteAll) {
+                            hideLoading();
+                            statusInfo.textContent = '이동이 취소되었습니다.';
+                            return;
+                        }
+                    }
+                    
+                    // 이동 처리
+                    const movePromises = itemsToMove.map(item => {
+                        const sourcePath = currentPath ? `${currentPath}/${item}` : item;
+                        
+                        // 소스와 타겟이 같은 경로인 경우 무시
+                        if (sourcePath === `${targetPath}/${item}`) {
+                            return Promise.resolve();
+                        }
+                        
+                        return moveItem(sourcePath, targetPath, overwriteAll);
+                    });
+                    
+                    // 모든 이동 처리
+                    Promise.allSettled(movePromises)
+                        .then(results => {
+                            const successCount = results.filter(r => r.status === 'fulfilled').length;
+                            const failCount = results.filter(r => r.status === 'rejected').length;
+                            
+                            let statusMessage = '';
+                            if (successCount > 0 && failCount === 0) {
+                                statusMessage = `${successCount}개 항목을 이동했습니다.`;
+                            } else if (successCount > 0 && failCount > 0) {
+                                statusMessage = `${successCount}개 항목을 이동했고, ${failCount}개 항목은 실패했습니다.`;
+                            } else {
+                                statusMessage = '이동에 실패했습니다.';
+                            }
+                            
+                            statusInfo.textContent = statusMessage;
+                            clearSelection();
+                            loadFiles(currentPath);
                         })
                         .catch(error => {
-                            // 파일 충돌 오류인 경우
-                            if (error && error.type === 'file_exists') {
-                                if (skipAll) {
-                                    // 모두 건너뛰기 선택한 경우
-                                    moveNextItem(index + 1, overwriteAll, skipAll);
-                                    return;
-                                }
-                                
-                                // 덮어쓰기 확인
-                                const actionType = confirm(`'${targetPath}' 폴더에 이미 '${error.fileName}'이(가) 존재합니다. 덮어쓰시겠습니까?`);
-                                
-                                if (actionType) {
-                                    // 덮어쓰기 확인
-                                    const overwriteAllConfirm = confirm('모든 파일 충돌에 대해 똑같이 덮어쓰기 하시겠습니까?');
-                                    moveItem(sourceFullPath, targetPath, true)
-                                        .then(() => {
-                                            moveNextItem(index + 1, overwriteAllConfirm, false);
-                                        })
-                                        .catch(err => {
-                                            alert(`이동 실패: ${err}`);
-                                            moveNextItem(index + 1, overwriteAllConfirm, false);
-                                        });
-                                } else {
-                                    // 건너뛰기 확인
-                                    const skipAllConfirm = confirm('모든 파일 충돌에 대해 똑같이 건너뛰기 하시겠습니까?');
-                                    moveNextItem(index + 1, false, skipAllConfirm);
-                                }
-                            } else {
-                                // 다른 종류의 오류
-                                console.error('Move error:', error);
-                                alert(`이동 중 오류가 발생했습니다: ${error}`);
-                                moveNextItem(index + 1, overwriteAll, skipAll);
-                            }
+                            console.error('이동 오류:', error);
+                            statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error.message || error}`;
+                        })
+                        .finally(() => {
+                            hideLoading();
                         });
-                };
-                
-                // 첫 번째 항목부터 이동 시작
-                moveNextItem();
-            }
+                }).catch(error => {
+                    console.error('충돌 확인 오류:', error);
+                    hideLoading();
+                    statusInfo.textContent = '이동 준비 중 오류가 발생했습니다.';
+                });
         }
     });
     
@@ -1842,71 +1877,58 @@ function moveItem(sourcePath, targetPath, overwrite = false) {
         
         // 소스와 타겟이 같은 경로인지 확인
         if (sourcePath === `${targetPath}/${fileName}`) {
-            reject('소스와 타겟이 동일합니다.');
+            reject({type: 'same_path', message: '소스와 타겟이 동일합니다.'});
             return;
         }
         
-        // API 요청 함수
-        const doMoveRequest = () => {
-            return fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(sourcePath)}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    newName: fileName,
-                    targetPath: targetPath,
-                    overwrite: overwrite
-                })
-            });
-        };
-        
-        // 이미 overwrite 옵션이 설정된 경우 바로 이동 요청
-        if (overwrite) {
-            doMoveRequest()
-                .then(response => {
-                    if (response.ok) {
-                        resolve();
-                    } else {
-                        return response.text().then(text => reject(text || '이동 실패'));
-                    }
-                })
-                .catch(error => {
-                    reject(error.message || '네트워크 오류');
-                });
-            return;
-        }
-        
-        // 이미 대상 폴더에 같은 이름의 파일이 있는지 확인하기 위한 API 호출
-        fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(targetPath)}/${encodeURIComponent(fileName)}`, {
-            method: 'HEAD'
-        })
-        .then(response => {
-            // 파일이 존재하지 않으면 바로 이동 요청
-            if (!response.ok) {
-                return doMoveRequest();
-            }
-            
-            // 파일이 이미 존재하는 경우, 덮어쓰기 확인을 위해 정보 전달
-            return Promise.reject({
-                type: 'file_exists',
-                fileName: fileName,
-                targetPath: targetPath
-            });
+        // API 요청
+        fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(sourcePath)}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                newName: fileName,
+                targetPath: targetPath,
+                overwrite: overwrite
+            })
         })
         .then(response => {
             if (response.ok) {
                 resolve();
-            } else {
-                return response.text().then(text => reject(text || '이동 실패'));
+                return;
             }
+            
+            // 409 Conflict: 이미 존재하는 파일
+            if (response.status === 409) {
+                return response.text().then(() => {
+                    reject({
+                        type: 'file_exists',
+                        fileName: fileName,
+                        targetPath: targetPath,
+                        message: '이미 존재하는 파일입니다.'
+                    });
+                });
+            }
+            
+            // 기타 오류
+            return response.text().then(text => {
+                reject({
+                    type: 'error',
+                    message: text || '이동 실패'
+                });
+            });
         })
         .catch(error => {
-            if (error.type === 'file_exists') {
-                // 파일 존재 오류는 상위 레벨로 전파
+            if (error.type) {
+                // 이미 형식화된 오류는 그대로 전달
                 reject(error);
             } else {
-                reject(error.message || '네트워크 오류');
+                // 기타 오류 형식화
+                reject({
+                    type: 'network_error',
+                    message: error.message || '네트워크 오류'
+                });
             }
         });
     });

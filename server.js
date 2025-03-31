@@ -302,7 +302,7 @@ app.put('/api/files/*', (req, res) => {
     // 원본이 존재하는지 확인
     if (!fs.existsSync(fullOldPath)) {
       errorLog(`파일/폴더를 찾을 수 없음: ${fullOldPath}`);
-      return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
+      return res.status(404).send(`원본 파일을 찾을 수 없습니다: ${oldPath}`);
     }
 
     // 타겟 경로가 제공되면 이동 작업으로 처리 (빈 문자열이면 루트 폴더로 이동)
@@ -313,7 +313,7 @@ app.put('/api/files/*', (req, res) => {
     const fullNewPath = path.join(fullTargetPath, newName);
       
     log(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`);
-    log(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}`);
+    log(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`);
 
     // 원본과 대상이 같은 경로인지 확인
     if (fullOldPath === fullNewPath) {
@@ -334,27 +334,42 @@ app.put('/api/files/*', (req, res) => {
         // 덮어쓰기 옵션이 true면 기존 파일/폴더 삭제
         log(`덮어쓰기 요청으로 기존 파일/폴더 삭제: ${fullNewPath}`);
         
-        const stats = fs.statSync(fullNewPath);
-        if (stats.isDirectory()) {
-          fs.rmdirSync(fullNewPath, { recursive: true });
-        } else {
-          fs.unlinkSync(fullNewPath);
+        try {
+          const stats = fs.statSync(fullNewPath);
+          if (stats.isDirectory()) {
+            fs.rmdirSync(fullNewPath, { recursive: true });
+          } else {
+            fs.unlinkSync(fullNewPath);
+          }
+        } catch (removeError) {
+          errorLog(`덮어쓰기 중 기존 파일 삭제 오류: ${fullNewPath}`, removeError);
+          return res.status(500).send(`덮어쓰기 중 오류가 발생했습니다: ${removeError.message}`);
         }
       } else {
         // 덮어쓰기 옵션이 없거나 false면 충돌 반환
         errorLog(`이미 존재하는 이름: ${fullNewPath}`);
-        return res.status(409).send('이미 존재하는 이름입니다.');
+        return res.status(409).send(`대상 경로에 같은 이름의 파일/폴더가 이미 존재합니다: ${newName}`);
       }
     }
 
     // 이름 변경 (파일 이동)
-    fs.renameSync(fullOldPath, fullNewPath);
-    log(`이름 변경 완료: ${fullOldPath} -> ${fullNewPath}`);
-    
-    res.status(200).send('이름이 변경되었습니다.');
+    try {
+      fs.renameSync(fullOldPath, fullNewPath);
+      log(`이름 변경 완료: ${fullOldPath} -> ${fullNewPath}`);
+      
+      res.status(200).send('이름이 변경되었습니다.');
+    } catch (moveError) {
+      errorLog(`이동 중 오류: ${fullOldPath} -> ${fullNewPath}`, moveError);
+      // 오류 내용 확인하여 더 구체적인 메시지 제공
+      if (moveError.code === 'EXDEV') {
+        return res.status(500).send('서로 다른 디바이스 간 이동은 지원되지 않습니다.');
+      } else {
+        return res.status(500).send(`이동 중 오류가 발생했습니다: ${moveError.message || '알 수 없는 오류'}`);
+      }
+    }
   } catch (error) {
     errorLog('이름 변경 오류:', error);
-    res.status(500).send('서버 오류가 발생했습니다.');
+    res.status(500).send(`서버 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
   }
 });
 
