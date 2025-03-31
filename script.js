@@ -1335,9 +1335,23 @@ function initDragAndDrop() {
         
         // 폴더인 경우에만 처리
         if (fileItem.getAttribute('data-is-folder') === 'true') {
-            // 자기 자신이 선택되었으면 무시
-            if (fileItem.classList.contains('selected')) return;
+            // 드래깅 중인 파일과 목적지 폴더가 동일한지 확인
+            const isDraggingSameFolder = fileItem.classList.contains('selected') && fileItem.classList.contains('dragging');
             
+            if (isDraggingSameFolder) {
+                // 자기 자신을 드래그 중이면 시각적 표시 없음
+                console.log('자기 자신을 드래그 중입니다:', fileItem.getAttribute('data-name'));
+                return;
+            }
+            
+            // 선택된 폴더가 자신이 아닌 다른 항목을 드래그하는 중이면 드롭 가능
+            if (fileItem.classList.contains('selected') && !fileItem.classList.contains('dragging')) {
+                console.log('선택된 폴더이지만 다른 항목을 드래그 중입니다');
+                fileItem.classList.add('drag-over');
+                return;
+            }
+            
+            // 일반적인 경우 - 선택되지 않은 폴더로 진입
             fileItem.classList.add('drag-over');
         }
     });
@@ -1345,6 +1359,8 @@ function initDragAndDrop() {
     // 드래그 영역 위 이벤트 위임
     fileList.addEventListener('dragover', (e) => {
         e.preventDefault(); // 드롭 허용
+        e.stopPropagation(); // 이벤트 버블링 방지
+        
         const fileItem = e.target.closest('.file-item');
         if (!fileItem) {
             // 빈 영역으로 드래그 시 활성화
@@ -1354,10 +1370,16 @@ function initDragAndDrop() {
         
         // 폴더인 경우에만 처리
         if (fileItem.getAttribute('data-is-folder') === 'true') {
-            // 자기 자신이 선택되었으면 무시
-            if (fileItem.classList.contains('selected')) return;
+            // 드래깅 중인 파일과 목적지 폴더가 동일한지 확인
+            const isDraggingSameFolder = fileItem.classList.contains('selected') && fileItem.classList.contains('dragging');
+            
+            if (isDraggingSameFolder) {
+                // 자기 자신을 드래그 중이면 스타일 적용 안함
+                return;
+            }
             
             fileItem.classList.add('drag-over');
+            e.dataTransfer.dropEffect = 'move';
         }
     });
     
@@ -1367,42 +1389,75 @@ function initDragAndDrop() {
         const fileItem = e.target.closest('.file-item');
         if (!fileItem) return;
         
-        fileItem.classList.remove('drag-over');
+        // 정확한 dragleave 확인 (자식 요소로 이동하는 경우 무시)
+        const rect = fileItem.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        // 실제로 영역을 벗어났는지 확인
+        if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
+            fileItem.classList.remove('drag-over');
+        }
     });
     
     // 드롭 이벤트 위임
     fileList.addEventListener('drop', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         
+        // 드롭존 비활성화
+        dropZone.classList.remove('active');
+        
+        // 파일 항목 찾기
         const fileItem = e.target.closest('.file-item');
+        
+        // 드롭 위치 로깅
+        console.log('드롭 이벤트 발생 위치:', e.target.className);
+        if (fileItem) {
+            console.log('드롭 대상 폴더:', fileItem.getAttribute('data-name'), 
+                      '폴더 여부:', fileItem.getAttribute('data-is-folder'));
+        } else {
+            console.log('빈 공간에 드롭됨');
+        }
+        
+        // 파일 항목이 없는 경우 (빈 공간에 드롭)
         if (!fileItem) {
-            // 파일 영역의 빈 곳에 드롭한 경우
-            dropZone.classList.remove('active');
+            // 외부 파일 업로드 처리
             if (e.dataTransfer.files.length > 0) {
                 uploadFiles(e.dataTransfer.files);
             }
             return;
         }
         
+        // 드래그 오버 스타일 제거
         fileItem.classList.remove('drag-over');
         
         // 폴더가 아닌 경우 무시
         if (fileItem.getAttribute('data-is-folder') !== 'true') {
+            console.log('폴더가 아닌 항목에 드롭되어 무시됨');
             return;
         }
         
-        // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
-        if (fileItem.classList.contains('selected')) return;
-        
+        // 드랍 대상 폴더 정보
         const targetFolder = fileItem.getAttribute('data-name');
+        const targetIsSelected = fileItem.classList.contains('selected');
+        const targetIsDragging = fileItem.classList.contains('dragging');
+        
+        console.log('대상 폴더:', targetFolder, '선택됨:', targetIsSelected, '드래깅 중:', targetIsDragging);
+        
+        // 자기 자신을 자신에게 드롭하는 경우 확인 (선택됨 + 드래깅 중)
+        if (targetIsSelected && targetIsDragging) {
+            console.log('자기 자신을 자신에게 드롭하여 무시됨');
+            return;
+        }
         
         // 외부에서 파일을 드래그한 경우 (웹 브라우저 외부 파일)
         if (e.dataTransfer.files.length > 0) {
+            console.log('외부 파일 드래그 감지:', e.dataTransfer.files.length, '개 파일');
             // 현재 폴더에 파일 업로드
             const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
             
-            // 수정: uploadFilesToFolder 함수 대신 파일 업로드 버튼과 동일한 함수를 사용하되,
-            // 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
+            // 수정: 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
             const originalPath = currentPath;
             currentPath = targetPath;
             uploadFiles(e.dataTransfer.files);
@@ -1410,44 +1465,89 @@ function initDragAndDrop() {
             return;
         }
         
-        // 선택된 모든 파일을 이동
-        if (selectedItems.size > 0) {
-            // 드롭된 폴더 경로 계산
-            const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+        // 내부 파일 이동 처리 - dataTransfer에서 데이터 가져오기
+        try {
+            const dataTransferred = e.dataTransfer.getData('text/plain');
+            console.log('이동할 데이터:', dataTransferred);
             
-            // 확인 대화상자
-            const itemCount = selectedItems.size;
-            const confirmMsg = `선택한 ${itemCount}개 항목을 '${targetFolder}' 폴더로 이동하시겠습니까?`;
+            let itemsToMove = [];
             
-            if (confirm(confirmMsg)) {
-                showLoading();
-                
-                // 선택된 모든 항목 이동
-                const movePromises = Array.from(selectedItems).map(item => {
-                    const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
-                    return moveItem(sourceFullPath, targetPath);
-                });
-                
-                Promise.all(movePromises)
-                    .then(() => {
-                        // 이동 성공
-                        statusInfo.textContent = `${itemCount}개 항목을 이동했습니다.`;
-                        
-                        // 선택 초기화
-                        clearSelection();
-                        
-                        // 목록 새로고침
-                        loadFiles(currentPath);
-                    })
-                    .catch(error => {
-                        // 이동 실패
-                        statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error}`;
-                        console.error('Move error:', error);
-                    })
-                    .finally(() => {
-                        hideLoading();
-                    });
+            try {
+                // JSON 형식으로 저장된 배열인지 확인 (다중 선택 항목)
+                const parsedData = JSON.parse(dataTransferred);
+                if (Array.isArray(parsedData)) {
+                    itemsToMove = parsedData;
+                } else {
+                    itemsToMove = [dataTransferred];
+                }
+            } catch (e) {
+                // JSON 파싱 실패 - 단일 항목 문자열
+                itemsToMove = [dataTransferred];
             }
+            
+            // 이동할 항목 로그
+            console.log('이동할 항목 목록:', itemsToMove);
+            
+            // 이동 대상이 선택된 폴더를 포함하는지 확인
+            const includesTargetFolder = itemsToMove.includes(targetFolder);
+            if (includesTargetFolder) {
+                console.log('이동 대상에 목적지 폴더가 포함되어 있어 무시됨');
+                return;
+            }
+            
+            // 선택된 모든 파일을 이동
+            if (itemsToMove.length > 0) {
+                // 드롭된 폴더 경로 계산
+                const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+                
+                // 확인 대화상자
+                const itemCount = itemsToMove.length;
+                const confirmMsg = `선택한 ${itemCount}개 항목을 '${targetFolder}' 폴더로 이동하시겠습니까?`;
+                
+                if (confirm(confirmMsg)) {
+                    showLoading();
+                    statusInfo.textContent = '파일 이동 중...';
+                    
+                    // 선택된 모든 항목 이동
+                    const movePromises = itemsToMove.map(item => {
+                        const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                        return moveItem(sourceFullPath, targetPath);
+                    });
+                    
+                    Promise.allSettled(movePromises)
+                        .then(results => {
+                            // 결과 분석
+                            const fulfilled = results.filter(result => result.status === 'fulfilled').length;
+                            const rejected = results.filter(result => result.status === 'rejected').length;
+                            
+                            // 이동 결과 메시지
+                            let resultMessage = `${fulfilled}개 항목을 이동했습니다.`;
+                            if (rejected > 0) {
+                                resultMessage += ` ${rejected}개 항목 이동 실패.`;
+                            }
+                            
+                            // 화면에 결과 표시
+                            statusInfo.textContent = resultMessage;
+                            
+                            // 선택 초기화
+                            clearSelection();
+                            
+                            // 목록 새로고침
+                            return loadFiles(currentPath);
+                        })
+                        .catch(error => {
+                            // 이동 실패
+                            statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error}`;
+                            console.error('Move error:', error);
+                        })
+                        .finally(() => {
+                            hideLoading();
+                        });
+                }
+            }
+        } catch (e) {
+            console.error('드롭 이벤트 처리 오류:', e);
+            statusInfo.textContent = `드롭 이벤트 처리 오류: ${e.message}`;
         }
     });
     
