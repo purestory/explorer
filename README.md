@@ -28,12 +28,12 @@ WebDAV(Web Distributed Authoring and Versioning) 프로토콜을 통해 파일�
 
 1. 저장소 클론:
 ```
-git clone https://github.com/purestory/webdav.git
+git clone https://github.com/purestory/webdav-explorer.git
 ```
 
 2. 필요한 패키지 설치:
 ```
-cd webdav
+cd webdav-explorer
 npm install
 ```
 
@@ -57,15 +57,17 @@ sudo nano /etc/systemd/system/webdav.service
 2. 다음 내용 작성:
 ```
 [Unit]
-Description=WebDAV File Server
+Description=WebDAV Server
 After=network.target
 
 [Service]
-User=purestory
-WorkingDirectory=/home/purestory/webdav
-ExecStart=/usr/bin/node server.js
+ExecStart=/usr/bin/node /home/purestory/webdav/server.js
 Restart=always
-RestartSec=10
+User=purestory
+Group=purestory
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=NODE_ENV=production
+WorkingDirectory=/home/purestory/webdav
 
 [Install]
 WantedBy=multi-user.target
@@ -82,8 +84,14 @@ sudo systemctl start webdav
 ```
 server {
     listen 80;
-    server_name your-domain.com;
+    server_name itsmyzone.iptime.org;
 
+    client_max_body_size 10000M;
+    client_body_timeout 600s;
+    
+    charset utf-8;
+    
+    # 기본 페이지로 로컬 Node 서버 프록시
     location / {
         proxy_pass http://localhost:3333;
         proxy_http_version 1.1;
@@ -91,31 +99,91 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 300s;
+        
+        # CORS 설정
+        add_header 'Access-Control-Allow-Origin' '*';
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS';
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
     }
-
+    
+    # WebDAV API 경로 프록시
     location /api/ {
         proxy_pass http://localhost:3333/api/;
         proxy_http_version 1.1;
-        client_max_body_size 1G;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+    
+    # WebDAV 서버 경로 프록시
+    location /webdav/ {
+        proxy_pass http://localhost:3333/webdav/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        
+        # WebDAV 메서드 지원
+        proxy_pass_request_headers on;
+        proxy_set_header Destination $http_destination;
+        proxy_set_header Overwrite $http_overwrite;
+        
+        # WebDAV 메서드 허용
+        proxy_method $request_method;
+        proxy_pass_request_body on;
+    }
+    
+    # 정적 파일 서비스
+    location /static/ {
+        alias /home/purestory/webdav/static/;
+        expires 1d;
+        add_header Cache-Control "public";
     }
 }
 ```
 
 ## 주요 설정
 
-- **최대 업로드 크기**: 1GB
+- **최대 업로드 크기**: 10GB
 - **공유 폴더 위치**: /home/purestory/webdav/share-folder
 - **로그 파일 위치**: /var/log/webdav/
+
+## 문제 해결
+
+### share-folder 디렉토리 오류
+서비스 시작 시 "share-folder 디렉토리를 찾을 수 없습니다" 오류가 발생할 경우 다음 명령어로 해결할 수 있습니다:
+```
+mkdir -p share-folder && chmod 777 share-folder
+```
+
+### 포트 사용 중 오류
+서비스 시작 시 "EADDRINUSE: address already in use :::3333" 오류가 발생할 경우 다음 명령어로 해당 포트를 사용 중인 프로세스를 확인하고 종료할 수 있습니다:
+```
+sudo lsof -i:3333
+sudo kill <PID>
+```
+
+## 서비스 상태 확인
+
+서비스 상태 확인:
+```
+systemctl status webdav
+```
+
+서비스 로그 확인:
+```
+journalctl -u webdav --since today
+```
 
 ## 개발 정보
 
 - **개발자**: purestory
-- **GitHub**: https://github.com/purestory/webdav
+- **GitHub**: https://github.com/purestory/webdav-explorer
 - **라이선스**: MIT
 
 ## 주의사항
