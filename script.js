@@ -13,6 +13,10 @@ let sortField = 'name'; // 정렬 필드: name, size, date
 let sortDirection = 'asc'; // 정렬 방향: asc, desc
 // 파일 정보 저장을 위한 맵 추가
 let fileInfoMap = new Map();
+// 업로드 함수 호출 카운터 추가
+let uploadButtonCounter = 0;
+let dragDropCounter = 0;
+let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
 
 // DOM 요소
 const fileView = document.getElementById('fileView');
@@ -1405,6 +1409,11 @@ function initDragAndDrop() {
             // 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
             const originalPath = currentPath;
             currentPath = targetPath;
+            
+            // 업로드 소스 설정 및 카운터 초기화
+            uploadSource = 'dragdrop';
+            dragDropCounter = 0;
+            
             uploadFiles(e.dataTransfer.files);
             currentPath = originalPath;
             return;
@@ -1491,6 +1500,10 @@ function initDragAndDrop() {
         // 파일 객체 가져오기
         const files = e.dataTransfer.files;
         if (files.length > 0) {
+            // 업로드 소스 설정 및 카운터 초기화
+            uploadSource = 'dragdrop';
+            dragDropCounter = 0;
+            
             uploadFiles(files);
         }
     });
@@ -1499,6 +1512,17 @@ function initDragAndDrop() {
 // 특정 폴더에 파일 업로드
 function uploadFiles(files) {
     if (files.length === 0) return;
+    
+    // 호출 카운터 증가
+    if (uploadSource === 'button') {
+        uploadButtonCounter++;
+        console.log(`버튼 업로드 호출 횟수: ${uploadButtonCounter}, 파일 수: ${files.length}`);
+        statusInfo.textContent = `버튼 업로드 호출 횟수: ${uploadButtonCounter}, 파일 수: ${files.length}`;
+    } else if (uploadSource === 'dragdrop') {
+        dragDropCounter++;
+        console.log(`드래그앤드롭 업로드 호출 횟수: ${dragDropCounter}, 파일 수: ${files.length}`);
+        statusInfo.textContent = `드래그앤드롭 업로드 호출 횟수: ${dragDropCounter}, 파일 수: ${files.length}`;
+    }
     
     // 업로드 UI 표시
     progressContainer.style.display = 'block';
@@ -1868,6 +1892,10 @@ function initFileUpload() {
         // 파일 크기 제한 알림
         const maxFileSize = 10 * 1024 * 1024 * 1024; // 10GB
         const files = e.target.files;
+        
+        // 업로드 소스 설정 및 카운터 초기화
+        uploadSource = 'button';
+        uploadButtonCounter = 0;
         
         for (let i = 0; i < files.length; i++) {
             if (files[i].size > maxFileSize) {
