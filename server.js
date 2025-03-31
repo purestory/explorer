@@ -288,9 +288,9 @@ app.put('/api/files/*', (req, res) => {
   try {
     // URL 디코딩하여 한글 경로 처리
     const oldPath = decodeURIComponent(req.params[0] || '');
-    const { newName, targetPath } = req.body;
+    const { newName, targetPath, overwrite } = req.body;
     
-    log(`이름 변경 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}`);
+    log(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`);
     
     if (!newName) {
       errorLog('새 이름이 제공되지 않음');
@@ -301,8 +301,8 @@ app.put('/api/files/*', (req, res) => {
     
     // 원본이 존재하는지 확인
     if (!fs.existsSync(fullOldPath)) {
-      errorLog(`파일/폴더를 찾을 수 없음: ${fullOldPath}`);
-      return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
+      errorLog(`원본 파일/폴더를 찾을 수 없음: ${fullOldPath}`);
+      return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPath}`);
     }
 
     // 타겟 경로가 제공되면 이동 작업으로 처리 (빈 문자열이면 루트 폴더로 이동)
@@ -313,7 +313,7 @@ app.put('/api/files/*', (req, res) => {
     const fullNewPath = path.join(fullTargetPath, newName);
       
     log(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`);
-    log(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}`);
+    log(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`);
 
     // 원본과 대상이 같은 경로인지 확인
     if (fullOldPath === fullNewPath) {
@@ -330,18 +330,47 @@ app.put('/api/files/*', (req, res) => {
 
     // 대상 경로에 이미 존재하는지 확인
     if (fs.existsSync(fullNewPath)) {
-      errorLog(`이미 존재하는 이름: ${fullNewPath}`);
-      return res.status(409).send('이미 존재하는 이름입니다.');
+      if (overwrite) {
+        // 덮어쓰기 옵션이 true면 기존 파일/폴더 삭제
+        log(`파일이 이미 존재하나 덮어쓰기 옵션 사용: ${fullNewPath}`);
+        try {
+          // 폴더인지 파일인지 확인하여 적절하게 삭제
+          const stats = fs.statSync(fullNewPath);
+          if (stats.isDirectory()) {
+            fs.rmdirSync(fullNewPath, { recursive: true });
+          } else {
+            fs.unlinkSync(fullNewPath);
+          }
+        } catch (deleteError) {
+          errorLog(`기존 파일/폴더 삭제 오류: ${fullNewPath}`, deleteError);
+          return res.status(500).send(`기존 파일 삭제 중 오류가 발생했습니다: ${deleteError.message}`);
+        }
+      } else {
+        // 덮어쓰기 옵션이 없으면 409 Conflict 반환
+        errorLog(`이미 존재하는 이름: ${fullNewPath}`);
+        return res.status(409).send('이미 존재하는 이름입니다.');
+      }
     }
 
     // 이름 변경 (파일 이동)
-    fs.renameSync(fullOldPath, fullNewPath);
-    log(`이름 변경 완료: ${fullOldPath} -> ${fullNewPath}`);
-    
-    res.status(200).send('이름이 변경되었습니다.');
+    try {
+      fs.renameSync(fullOldPath, fullNewPath);
+      log(`이동 완료: ${fullOldPath} -> ${fullNewPath}`);
+      
+      res.status(200).send('이동이 완료되었습니다.');
+    } catch (renameError) {
+      // EXDEV 오류는 서로 다른 디바이스 간 이동 시 발생
+      if (renameError.code === 'EXDEV') {
+        errorLog('서로 다른 파일 시스템 간 이동 오류 (EXDEV)', renameError);
+        return res.status(500).send('서로 다른 디바이스 간에 파일을 이동할 수 없습니다. 파일을 복사 후 원본을 삭제해주세요.');
+      }
+      
+      errorLog(`이름 변경/이동 오류: ${fullOldPath} -> ${fullNewPath}`, renameError);
+      return res.status(500).send(`이동 오류: ${renameError.message}`);
+    }
   } catch (error) {
     errorLog('이름 변경 오류:', error);
-    res.status(500).send('서버 오류가 발생했습니다.');
+    res.status(500).send(`서버 오류가 발생했습니다: ${error.message}`);
   }
 });
 
@@ -380,91 +409,81 @@ app.delete('/api/files/*', (req, res) => {
 });
 
 // 파일 업로드 API
-app.post('/api/upload', upload.array('file', 100), (req, res) => {
-  try {
-    // 1. 필요한 데이터 확인
-    const files = req.files;
-    const pathValue = req.body.path || '';
-    const isDirectoryUpload = req.body.isDirectoryUpload === 'true';
-    const relativePaths = req.body.relativePaths || []; // 폴더 업로드 경로 정보
-    
-    log(`업로드 요청: ${files.length}개 파일, 경로: ${pathValue || '루트'}, 폴더 업로드: ${isDirectoryUpload}`);
-    
-    // 2. 업로드 경로 확인 및 생성
-    const uploadDir = path.join(ROOT_DIRECTORY, pathValue);
-    
-    // 3. 대상 디렉토리가 존재하는지 확인, 없으면 생성
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-      log(`업로드 디렉토리 생성: ${uploadDir}`);
+app.post('/api/upload', (req, res) => {
+  // 요청에서 경로 정보를 추출하기 위한 부분 처리
+  const fieldName = 'path';
+  const pathStorage = { value: '' };
+  
+  // 1. 여러 파일을 처리할 수 있도록 multer의 memoryStorage를 사용하여 파일 데이터를 메모리에 저장
+  const memoryStorage = multer.memoryStorage();
+  const upload = multer({
+    storage: memoryStorage,
+    limits: {
+      fileSize: 10 * 1024 * 1024 * 1024 // 10GB
+    }
+  }).array('file', 50); // 최대 50개 파일 업로드 허용
+  
+  // 2. multer로 파일과 필드를 처리
+  upload(req, res, function(err) {
+    if (err) {
+      errorLog('파일 업로드 오류:', err);
+      return res.status(500).json({ error: '파일 업로드 중 오류가 발생했습니다.' });
     }
     
-    // 4. 처리된 파일 정보를 담을 배열
+    // 3. 파일과 path 필드가 모두 있는지 확인
+    if (!req.files || req.files.length === 0) {
+      errorLog('업로드 파일이 없습니다.');
+      return res.status(400).json({ error: '업로드 파일이 없습니다.' });
+    }
+    
+    // 요청 경로 추출 (form field에서)
+    const pathValue = req.body.path || '';
+    
+    // 4. 파일 저장 경로 결정
+    const targetPath = pathValue 
+      ? path.join(ROOT_DIRECTORY, pathValue) 
+      : ROOT_DIRECTORY;
+    
+    log(`파일 업로드 요청 경로: ${pathValue || '루트 디렉토리'}, 절대 경로: ${targetPath}`);
+    
+    // 5. 대상 디렉토리 확인 및 생성
+    if (!fs.existsSync(targetPath)) {
+      try {
+        fs.mkdirSync(targetPath, { recursive: true });
+        fs.chmodSync(targetPath, 0o777);
+        log(`업로드 대상 폴더 생성됨: ${targetPath}`);
+      } catch (error) {
+        errorLog(`폴더 생성 중 오류: ${targetPath}`, error);
+        return res.status(500).json({ error: '폴더 생성 중 오류가 발생했습니다.' });
+      }
+    }
+    
+    // 6. 각 파일 처리
     const processedFiles = [];
     
-    // 5. 각 파일 처리
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
+    for (const file of req.files) {
       try {
-        const originalName = file.originalname;
-        let relativeFilePath = '';
+        // 원본 파일명에서 한글 인코딩 처리
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        const destinationFile = path.join(targetPath, originalName);
         
-        // 폴더 업로드인 경우 상대 경로 정보 사용
-        if (isDirectoryUpload && Array.isArray(relativePaths)) {
-          relativeFilePath = relativePaths[i] || '';
-        } else if (isDirectoryUpload && typeof relativePaths === 'string') {
-          // 단일 파일 폴더 업로드의 경우
-          relativeFilePath = relativePaths;
-        }
-        
-        // 상대 경로가 있는 경우 파일을 해당 폴더에 저장
-        let targetDir = uploadDir;
-        let targetFileName = originalName;
-        
-        if (relativeFilePath) {
-          // 파일명과 경로 분리
-          const lastSlashIndex = relativeFilePath.lastIndexOf('/');
-          if (lastSlashIndex > -1) {
-            const dirPath = relativeFilePath.substring(0, lastSlashIndex);
-            targetFileName = relativeFilePath.substring(lastSlashIndex + 1);
-            targetDir = path.join(uploadDir, dirPath);
-            
-            // 대상 폴더가 없으면 생성
-            if (!fs.existsSync(targetDir)) {
-              fs.mkdirSync(targetDir, { recursive: true });
-              log(`폴더 생성: ${targetDir}`);
-            }
-          } else {
-            // 상대 경로에 슬래시가 없으면 파일명만 사용
-            targetFileName = relativeFilePath;
-          }
-        }
-        
-        // 최종 파일 경로 설정
-        const destinationFile = path.join(targetDir, targetFileName);
-        
-        // 임시 저장된 파일을 대상 경로로 이동
-        fs.renameSync(file.path, destinationFile);
-        
-        // 권한 설정
+        // 파일 시스템에 저장
+        fs.writeFileSync(destinationFile, file.buffer);
         fs.chmodSync(destinationFile, 0o666);
         
-        // 처리된 파일 정보 저장
+        // 파일 정보 저장
         processedFiles.push({
-          originalName: originalName,
-          savedName: targetFileName,
+          name: originalName,
           size: file.size,
+          path: pathValue,
           mimetype: file.mimetype,
-          fullPath: destinationFile,
-          relativePath: relativeFilePath
+          fullPath: destinationFile
         });
         
         // 디버그 정보 로깅
         log(`업로드 파일 정보: 
         - 요청 경로: ${pathValue || '루트'}
         - 파일명: ${originalName} 
-        - 상대 경로: ${relativeFilePath || '없음'}
         - 저장 경로: ${destinationFile}
         - 크기: ${formatBytes(file.size)}`);
       } catch (error) {
@@ -478,13 +497,7 @@ app.post('/api/upload', upload.array('file', 100), (req, res) => {
       message: '파일 업로드 성공',
       files: processedFiles
     });
-  } catch (error) {
-    errorLog('파일 업로드 처리 중 오류 발생:', error);
-    res.status(500).json({
-      error: '파일 업로드 중 오류가 발생했습니다.',
-      message: error.message
-    });
-  }
+  });
 });
 
 // 바이트 단위를 읽기 쉬운 형식으로 변환하는 함수
