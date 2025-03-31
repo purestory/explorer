@@ -1,23 +1,71 @@
-// 전역 변수
+// 전역 변수 및 상수 정의
 const API_BASE_URL = window.location.origin;
 let currentPath = '';
 let selectedItems = new Set();
-let clipboardItems = [];
-let clipboardOperation = ''; // 'cut' or 'copy'
+let clipboard = { items: [], operation: '' }; // cut 또는 copy
+let dragSelectActive = false;
 let isDragging = false;
 let startX, startY;
 let listView = true; // 기본값을 true로 설정 (목록 보기)
-let diskUsage = null;
-// 정렬 상태 추가
-let sortField = 'name'; // 정렬 필드: name, size, date
-let sortDirection = 'asc'; // 정렬 방향: asc, desc
-// 파일 정보 저장을 위한 맵 추가
-let fileInfoMap = new Map();
-// 업로드 함수 호출 카운터 추가
+let uploadSource = ''; // 'button' 또는 'dragdrop'
 let uploadButtonCounter = 0;
 let dragDropCounter = 0;
+let dragDropMoveCounter = 0;
+let diskUsage = null;
+let sortField = 'name';
+let sortDirection = 'asc';
+let fileInfoMap = new Map();
+let uploadInProgress = false; // 업로드 진행 중 플래그
+
+// DOM 요소 참조
+let fileList;
+let fileView;
+let statusInfo;
+let breadcrumb;
+let progressContainer;
+let progressBar;
+let uploadStatus;
+let cutBtn, pasteBtn, deleteBtn, downloadBtn, renameBtn;
+
+// 초기화 함수
+document.addEventListener('DOMContentLoaded', () => {
+    // DOM 요소 참조 초기화
+    fileList = document.getElementById('fileList');
+    fileView = document.getElementById('fileView');
+    statusInfo = document.getElementById('statusInfo');
+    breadcrumb = document.getElementById('breadcrumb');
+    progressContainer = document.getElementById('progressContainer');
+    progressBar = document.getElementById('progressBar');
+    uploadStatus = document.getElementById('uploadStatus');
+    
+    // 버튼 참조 초기화
+    cutBtn = document.getElementById('cutBtn');
+    pasteBtn = document.getElementById('pasteBtn');
+    deleteBtn = document.getElementById('deleteBtn');
+    downloadBtn = document.getElementById('downloadBtn');
+    renameBtn = document.getElementById('renameBtn');
+    
+    // 초기화 함수 호출
+    init();
+    
+    // 파일 입력 초기화를 위한 이벤트 추가
+    document.getElementById('fileInput')?.addEventListener('change', (e) => {
+        // 업로드 완료 후 입력 필드 초기화
+        setTimeout(() => {
+            e.target.value = '';
+        }, 500);
+    });
+    
+    document.getElementById('folderInput')?.addEventListener('change', (e) => {
+        // 업로드 완료 후 입력 필드 초기화
+        setTimeout(() => {
+            e.target.value = '';
+        }, 500);
+    });
+});
+
+// 전역 변수
 let dragDropMoveCounter = 0; // 드래그앤드롭 파일 이동 호출 카운터 추가
-let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
 
 // DOM 요소
 const fileView = document.getElementById('fileView');
@@ -62,14 +110,14 @@ function updateButtonStates() {
     downloadBtn.disabled = selectedCount === 0;
     
     // 붙여넣기 버튼은 클립보드에 항목이 있을 때만 활성화
-    pasteBtn.disabled = clipboardItems.length === 0;
+    pasteBtn.disabled = clipboard.items.length === 0;
     
     // 상태바 업데이트
     selectionInfo.textContent = `${selectedCount}개 선택됨`;
     
     // 컨텍스트 메뉴 항목 업데이트
     document.getElementById('ctxRename').style.display = selectedCount === 1 ? 'flex' : 'none';
-    document.getElementById('ctxPaste').style.display = clipboardItems.length > 0 ? 'flex' : 'none';
+    document.getElementById('ctxPaste').style.display = clipboard.items.length > 0 ? 'flex' : 'none';
     document.getElementById('ctxCut').style.display = selectedCount > 0 ? 'flex' : 'none';
     document.getElementById('ctxDelete').style.display = selectedCount > 0 ? 'flex' : 'none';
     document.getElementById('ctxDownload').style.display = selectedCount > 0 ? 'flex' : 'none';
@@ -196,7 +244,7 @@ function initContextMenu() {
             document.querySelectorAll('.context-menu-item').forEach(item => {
                 item.style.display = 'none';
             });
-            document.getElementById('ctxPaste').style.display = clipboardItems.length > 0 ? 'flex' : 'none';
+            document.getElementById('ctxPaste').style.display = clipboard.items.length > 0 ? 'flex' : 'none';
             document.getElementById('ctxNewFolder').style.display = 'flex'; // 새 폴더 항목 표시
             
             // 컨텍스트 메뉴가 화면 밖으로 나가는지 확인
@@ -431,7 +479,7 @@ function initShortcuts() {
         }
         
         // Ctrl+V: 붙여넣기
-        if (e.key === 'v' && (e.ctrlKey || e.metaKey) && clipboardItems.length > 0) {
+        if (e.key === 'v' && (e.ctrlKey || e.metaKey) && clipboard.items.length > 0) {
             e.preventDefault();
             pasteItems();
         }
@@ -1203,7 +1251,7 @@ function cutSelectedItems() {
         item.classList.remove('cut');
     });
     
-    clipboardItems = [];
+    clipboard.items = [];
     
     // 상위 폴더(..)는 제외
     const itemsToProcess = new Set([...selectedItems].filter(itemId => itemId !== '..'));
@@ -1216,7 +1264,7 @@ function cutSelectedItems() {
     // 현재 선택된 항목을 클립보드에 복사
     itemsToProcess.forEach(itemId => {
         const element = document.querySelector(`.file-item[data-id="${itemId}"]`);
-        clipboardItems.push({
+        clipboard.items.push({
             name: itemId,
             isFolder: element.getAttribute('data-is-folder') === 'true',
             originalPath: currentPath
@@ -1226,24 +1274,25 @@ function cutSelectedItems() {
         element.classList.add('cut');
     });
     
-    clipboardOperation = 'cut';
+    clipboard.operation = 'cut';
     pasteBtn.disabled = false;
     
     document.getElementById('ctxPaste').style.display = 'flex';
     
-    statusInfo.textContent = `${clipboardItems.length}개 항목 잘라내기`;
+    statusInfo.textContent = `${clipboard.items.length}개 항목 잘라내기`;
     
     // 디버그 로그
-    console.log('잘라내기 항목:', clipboardItems);
+    console.log('잘라내기 항목:', clipboard.items);
 }
 
 // 항목 붙여넣기
 function pasteItems() {
-    if (clipboardItems.length === 0) return;
+    if (clipboard.items.length === 0) return;
     
     const promises = [];
     showLoading();
     statusInfo.textContent = '붙여넣기 중...';
+    
     
     clipboardItems.forEach(item => {
         // 소스 경로 (원본 파일 경로)
@@ -1525,7 +1574,7 @@ function initDragAndDrop() {
         if (!fileItem) {
             console.log('빈 공간에 드롭됨');
             // 외부 파일 업로드 처리
-            if (e.dataTransfer.files.length > 0) {
+            if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
                 handleExternalFileDrop(e);
             }
             return;
@@ -1555,8 +1604,8 @@ function initDragAndDrop() {
         
             // 내부 파일 이동 처리
             handleInternalFileDrop(e, fileItem);
-        } else if (e.dataTransfer.files.length > 0) {
-            console.log('외부 파일 드래그 감지됨');
+        } else if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            console.log('외부 파일/폴더 드래그 감지됨');
             // 외부 파일 업로드를 지정 폴더로 처리
             handleExternalFileDrop(e, fileItem);
         }
@@ -1740,32 +1789,204 @@ function handleExternalFileDrop(e, targetFolderItem = null) {
         return;
     }
     
-    // 파일 객체 가져오기
-    const files = e.dataTransfer.files;
-    if (files.length === 0) return;
-    
     // 업로드 소스 설정 및 카운터 초기화
     uploadSource = 'dragdrop';
     dragDropCounter = 0;
     
-    // 타겟 폴더가 지정된 경우
-    if (targetFolderItem) {
-        const targetFolder = targetFolderItem.getAttribute('data-name');
-        console.log('외부 파일 드래그 감지:', files.length, '개 파일, 대상 폴더:', targetFolder);
+    // 파일 및 폴더 수집을 위한 배열
+    const filesToUpload = [];
+    
+    // WebkitDirectory API를 사용하여 폴더 처리
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+        console.log('WebkitDirectory API로 파일/폴더 읽기 시도');
         
-        // 현재 폴더에 파일 업로드
-        const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+        const items = e.dataTransfer.items;
+        let entriesProcessed = 0;
+        const totalItems = items.length;
         
-        // 수정: 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
-        const originalPath = currentPath;
-        currentPath = targetPath;
+        // 진행 상황 표시
+        statusInfo.textContent = '파일 및 폴더 스캔 중...';
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        document.getElementById('currentFileUpload').textContent = '폴더 내용 스캔 중...';
+        document.getElementById('currentFileUpload').style.display = 'block';
         
-        uploadFiles(files);
-        currentPath = originalPath;
+        // 타겟 경로 설정
+        let targetPath = currentPath;
+        if (targetFolderItem) {
+            const targetFolder = targetFolderItem.getAttribute('data-name');
+            targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+        }
+        
+        // 모든 항목을 처리한 후 업로드 시작을 위한 카운터
+        let processedItems = 0;
+        
+        // 모든 항목을 읽은 후 업로드 시작 함수
+        const startUpload = () => {
+            if (filesToUpload.length === 0) {
+                statusInfo.textContent = '업로드할 파일이 없습니다.';
+                progressContainer.style.display = 'none';
+                document.getElementById('currentFileUpload').style.display = 'none';
+                return;
+            }
+            
+            console.log(`총 ${filesToUpload.length}개 파일 업로드 준비 완료, 대상 경로: ${targetPath}`);
+            
+            // 원래 경로 저장 후 타겟 경로로 변경
+            const originalPath = currentPath;
+            currentPath = targetPath;
+            
+            // 수집된 파일 업로드
+            uploadFiles(filesToUpload);
+            
+            // 원래 경로로 복원
+            currentPath = originalPath;
+        };
+        
+        // 각 항목에 대해 재귀적으로 파일 처리
+        const processEntry = (entry, relativePath = '') => {
+            if (entry.isFile) {
+                // 파일인 경우 File 객체로 변환하여 배열에 추가
+                entry.file(file => {
+                    // 상대 경로 정보를 파일 객체에 추가
+                    file.relativePath = relativePath;
+                    filesToUpload.push(file);
+                    
+                    // 진행 상황 업데이트
+                    processedItems++;
+                    const progress = Math.min((processedItems / totalItems) * 100, 99);
+                    progressBar.style.width = `${progress}%`;
+                    document.getElementById('currentFileUpload').textContent = 
+                        `파일 스캔 중: ${processedItems}개 (${file.name})`;
+                    
+                    // 모든 항목 처리 완료 확인
+                    if (processedItems === totalItems) {
+                        startUpload();
+                    }
+                }, error => {
+                    console.error('파일 처리 오류:', error);
+                    processedItems++;
+                    
+                    // 오류가 있어도 계속 진행
+                    if (processedItems === totalItems) {
+                        startUpload();
+                    }
+                });
+            } else if (entry.isDirectory) {
+                // 폴더인 경우 내부 항목을 재귀적으로 처리
+                const dirReader = entry.createReader();
+                const readEntries = () => {
+                    dirReader.readEntries(entries => {
+                        if (entries.length > 0) {
+                            // 현재 폴더 내의
+                            entries.forEach(subEntry => {
+                                const newPath = relativePath ? 
+                                    `${relativePath}/${subEntry.name}` : subEntry.name;
+                                processEntry(subEntry, newPath);
+                            });
+                            
+                            // 더 읽을 항목이 있는지 확인
+                            readEntries();
+                        } else {
+                            // 해당 폴더의 모든 항목 읽기 완료
+                            processedItems++;
+                            const progress = Math.min((processedItems / totalItems) * 100, 99);
+                            progressBar.style.width = `${progress}%`;
+                            document.getElementById('currentFileUpload').textContent = 
+                                `폴더 스캔 중: ${processedItems}/${totalItems} (${entry.name})`;
+                            
+                            // 모든 항목 처리 완료 확인
+                            if (processedItems === totalItems) {
+                                startUpload();
+                            }
+                        }
+                    }, error => {
+                        console.error('폴더 읽기 오류:', error);
+                        processedItems++;
+                        
+                        // 오류가 있어도 계속 진행
+                        if (processedItems === totalItems) {
+                            startUpload();
+                        }
+                    });
+                };
+                
+                // 폴더 내용 읽기 시작
+                readEntries();
+            }
+        };
+        
+        // 각 최상위 항목 처리
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            
+            // webkitGetAsEntry API를 지원하는지 확인
+            if (item.webkitGetAsEntry) {
+                const entry = item.webkitGetAsEntry();
+                if (entry) {
+                    totalItems++; // 처리할 항목 수 추가
+                    processEntry(entry);
+                }
+            } else {
+                // webkitGetAsEntry를 지원하지 않는 경우 일반 파일로 처리
+                const file = item.getAsFile();
+                if (file) {
+                    filesToUpload.push(file);
+                    processedItems++;
+                }
+            }
+        }
+        
+        // 모든 최상위 항목 처리 시작 후 진행 상황 확인
+        if (totalItems === 0) {
+            // 처리할 항목이 없는 경우 일반 파일 업로드로 진행
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                console.log('일반 파일 드래그 감지:', files.length, '개 파일');
+                
+                // 타겟 폴더가 지정된 경우
+                if (targetFolderItem) {
+                    const targetFolder = targetFolderItem.getAttribute('data-name');
+                    const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+                    
+                    // 수정: 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
+                    const originalPath = currentPath;
+                    currentPath = targetPath;
+                    
+                    uploadFiles(files);
+                    currentPath = originalPath;
+                } else {
+                    // 현재 위치에 업로드
+                    uploadFiles(files);
+                }
+            } else {
+                statusInfo.textContent = '업로드할 파일이 없습니다.';
+                progressContainer.style.display = 'none';
+                document.getElementById('currentFileUpload').style.display = 'none';
+            }
+        }
     } else {
-        // 현재 위치에 업로드
-        console.log('외부 파일 드래그 감지:', files.length, '개 파일, 현재 경로에 업로드');
-        uploadFiles(files);
+        // DataTransfer.items API를 지원하지 않는 경우 일반 파일 업로드
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            console.log('일반 파일 드래그 감지:', files.length, '개 파일');
+            
+            // 타겟 폴더가 지정된 경우
+            if (targetFolderItem) {
+                const targetFolder = targetFolderItem.getAttribute('data-name');
+                const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+                
+                // 수정: 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
+                const originalPath = currentPath;
+                currentPath = targetPath;
+                
+                uploadFiles(files);
+                currentPath = originalPath;
+            } else {
+                // 현재 위치에 업로드
+                uploadFiles(files);
+            }
+        }
     }
 }
 
@@ -1785,10 +2006,13 @@ function uploadFiles(files) {
     }
     
     // 진행 중 업로드가 있으면 종료 처리
-    if (progressContainer.style.display === 'block') {
+    if (progressContainer.style.display === 'block' && uploadInProgress) {
         console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
         return;
     }
+    
+    // 업로드 상태 설정
+    uploadInProgress = true;
     
     // 업로드 UI 표시
     progressContainer.style.display = 'block';
@@ -1828,156 +2052,31 @@ function uploadFiles(files) {
     
     // FormData에 모든 파일 추가
     const formData = new FormData();
+    
+    // 폴더 구조를 유지하기 위한 처리
     for (let i = 0; i < files.length; i++) {
-        formData.append('file', files[i]);
+        const file = files[i];
+        // 상대 경로 정보가 있는지 확인 (폴더 업로드의 경우)
+        if (file.relativePath) {
+            // 파일의 상대 경로 정보가 있는 경우 (폴더 업로드)
+            formData.append('file', file);
+            formData.append('relativePaths', file.relativePath);
+        } else {
+            // 일반 파일 업로드
+            formData.append('file', file);
+        }
     }
+    
+    // 현재 경로 추가
     formData.append('path', currentPath);
+    // 폴더 업로드 플래그 추가
+    formData.append('isDirectoryUpload', 'true');
     
     // AJAX 요청으로 파일 전송
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API_BASE_URL}/api/upload`);
     
-    // 업로드 완료 플래그
-    let uploadCompleted = false;
-    let lastLoaded = 0;
-    let currentFileStartOffset = 0;
-    
-    xhr.upload.onprogress = (e) => {
-        // 업로드가 이미 완료된 상태라면 진행률 업데이트 중지
-        if (uploadCompleted) return;
-        
-        if (e.lengthComputable) {
-            // 현재 업로드된 양이 이전 파일의 크기를 초과하면 다음 파일로 진행
-            const currentProgress = e.loaded - lastLoaded;
-            
-            if (currentFileIndex < files.length && 
-                currentProgress >= files[currentFileIndex].size) {
-                // 이전 파일 크기 누적
-                lastLoaded += files[currentFileIndex].size;
-                // 다음 파일로 이동
-                currentFileIndex++;
-                // 현재 파일 정보 업데이트
-                updateCurrentFileInfo();
-            }
-            
-            // 전체 업로드 진행률 계산
-            const totalProgress = (e.loaded / e.total) * 100;
-            
-            // 업로드 속도 및 남은 시간 계산
-            const currentTime = new Date().getTime();
-            const elapsedTimeSeconds = (currentTime - startTime) / 1000;
-            const uploadedBytes = e.loaded;
-            const uploadSpeed = uploadedBytes / elapsedTimeSeconds; // bytes per second
-            const uploadSpeedFormatted = formatFileSize(uploadSpeed) + '/s';
-            
-            // 업로드가 거의 완료되면 진행률을 99%로 고정
-            let progressValue = totalProgress;
-            if (progressValue > 99) progressValue = 99;
-            
-            let remainingTime = (e.total - e.loaded) / uploadSpeed; // 남은 시간(초)
-            if (remainingTime < 0) remainingTime = 0;
-            
-            let timeDisplay;
-            
-            if (remainingTime < 60) {
-                timeDisplay = `${Math.round(remainingTime)}초`;
-            } else if (remainingTime < 3600) {
-                timeDisplay = `${Math.floor(remainingTime / 60)}분 ${Math.round(remainingTime % 60)}초`;
-            } else {
-                timeDisplay = `${Math.floor(remainingTime / 3600)}시간 ${Math.floor((remainingTime % 3600) / 60)}분`;
-            }
-            
-            // 진행률 표시 업데이트
-            progressBar.style.width = `${progressValue}%`;
-            
-            // 업로드 상태 메시지 업데이트
-            let progressStatusText = "";
-            if (files.length === 1) {
-                progressStatusText = `파일 업로드 중 - ${Math.round(progressValue)}% 완료 (${uploadSpeedFormatted}, 남은 시간: ${timeDisplay})`;
-            } else {
-                progressStatusText = `${currentFileIndex + 1}/${totalFiles} 파일 업로드 중 - ${Math.round(progressValue)}% 완료 (${uploadSpeedFormatted}, 남은 시간: ${timeDisplay})`;
-            }
-            uploadStatus.textContent = progressStatusText;
-            uploadStatus.style.display = 'block';
-            
-            // 현재 상태 업데이트
-            statusInfo.textContent = `파일 업로드 중 (${Math.round(progressValue)}%, ${formatFileSize(e.loaded)}/${formatFileSize(e.total)})`;
-        }
-    };
-    
-    xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4) {
-            // 업로드 완료 플래그 설정
-            uploadCompleted = true;
-            
-            // 로딩 상태 초기화
-            lastLoaded = 0;
-            currentFileIndex = 0;
-            
-            if (xhr.status === 200 || xhr.status === 201) {
-                // 업로드 성공 - 프로그레스바 100%로 설정
-                progressBar.style.width = '100%';
-                
-                if (files.length === 1) {
-                    uploadStatus.textContent = '파일 업로드 완료';
-                } else {
-                    uploadStatus.textContent = `${files.length}개 파일 업로드 완료`;
-                }
-                
-                // 업로드 UI 즉시 숨기기 (지연시간 단축)
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                    document.getElementById('currentFileUpload').style.display = 'none';
-                    uploadStatus.style.display = 'none';
-                    loadFiles(currentPath); // 파일 목록 새로고침
-                }, 200);
-                
-                if (files.length === 1) {
-                    statusInfo.textContent = '파일 업로드 완료';
-                } else {
-                    statusInfo.textContent = `${files.length}개 파일 업로드 완료`;
-                }
-            } else {
-                // 오류 처리
-                let errorMsg = '업로드 실패';
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    if (response.error) {
-                        errorMsg = `업로드 실패: ${response.message || response.error}`;
-                    }
-                } catch (e) {
-                    errorMsg = `업로드 실패: ${xhr.status} ${xhr.statusText || '알 수 없는 오류'}`;
-                }
-                
-                uploadStatus.textContent = errorMsg;
-                statusInfo.textContent = errorMsg;
-                
-                // 잠시 후 업로드 UI 숨기기
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                    document.getElementById('currentFileUpload').style.display = 'none';
-                    uploadStatus.style.display = 'none';
-                }, 2000);
-            }
-        }
-    };
-    
-    xhr.onerror = () => {
-        // 업로드 완료 플래그 설정
-        uploadCompleted = true;
-        
-        uploadStatus.textContent = `파일 업로드 실패: 네트워크 오류`;
-        statusInfo.textContent = `파일 업로드 실패: 네트워크 오류`;
-        
-        // 잠시 후 업로드 UI 숨기기
-        setTimeout(() => {
-            progressContainer.style.display = 'none';
-            document.getElementById('currentFileUpload').style.display = 'none';
-            uploadStatus.style.display = 'none';
-        }, 2000);
-    };
-    
-    xhr.send(formData);
+    // ... existing code ...
 }
 
 // 파일/폴더 이동 함수
@@ -2192,30 +2291,72 @@ function initRenaming() {
     });
 }
 
-// 파일 업로드 기능 초기화
+// 파일 업로드 초기화
 function initFileUpload() {
-    fileUploadInput.addEventListener('change', (e) => {
-        // 파일 크기 제한 알림
-        const maxFileSize = 10 * 1024 * 1024 * 1024; // 10GB
-        const files = e.target.files;
-        
-        // 업로드 소스 설정 및 카운터 초기화
-        uploadSource = 'button';
-        uploadButtonCounter = 0;
-        
-        for (let i = 0; i < files.length; i++) {
-            if (files[i].size > maxFileSize) {
-                alert(`파일 크기가 너무 큽니다: ${files[i].name} (${formatFileSize(files[i].size)})
-최대 파일 크기: 10GB`);
-                // 파일 입력 초기화
-                e.target.value = '';
-                return;
-            }
+    const fileInput = document.getElementById('fileInput');
+    const uploadButton = document.getElementById('uploadButton');
+    
+    // 업로드 버튼 클릭 시 파일 선택 창 열기
+    uploadButton.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    // 폴더 업로드 버튼 추가
+    const uploadFolderButton = document.createElement('button');
+    uploadFolderButton.id = 'uploadFolderButton';
+    uploadFolderButton.className = 'btn btn-info';
+    uploadFolderButton.innerHTML = '<i class="fas fa-folder-plus"></i> 폴더 업로드';
+    
+    // 버튼을 업로드 버튼 옆에 추가
+    uploadButton.insertAdjacentElement('afterend', uploadFolderButton);
+    
+    // 폴더 업로드용 input 요소 생성
+    const folderInput = document.createElement('input');
+    folderInput.type = 'file';
+    folderInput.id = 'folderInput';
+    folderInput.multiple = true;
+    folderInput.webkitdirectory = true;
+    folderInput.directory = true;
+    folderInput.style.display = 'none';
+    document.body.appendChild(folderInput);
+    
+    // 폴더 업로드 버튼 클릭 시 폴더 선택 창 열기
+    uploadFolderButton.addEventListener('click', () => {
+        folderInput.click();
+    });
+    
+    // 일반 파일 업로드 처리
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            uploadSource = 'button';
+            uploadButtonCounter = 0;
+            uploadFiles(e.target.files);
         }
-        
-        uploadFiles(e.target.files);
-        // 파일 입력 초기화
-        e.target.value = '';
+    });
+    
+    // 폴더 업로드 처리
+    folderInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            uploadSource = 'button';
+            uploadButtonCounter = 0;
+            
+            // 폴더 내의 파일들을 가져와서 uploadFiles 함수로 전달
+            const files = e.target.files;
+            console.log(`폴더 업로드: ${files.length}개 파일 선택됨`);
+            
+            // 폴더 내의 모든 파일을 가져와서 상대 경로 구성
+            const filesToUpload = [];
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const relativePath = file.webkitRelativePath;
+                if (relativePath) {
+                    file.relativePath = relativePath;
+                }
+                filesToUpload.push(file);
+            }
+            
+            uploadFiles(filesToUpload);
+        }
     });
 }
 
