@@ -39,16 +39,20 @@
             
             <div class="file-actions">
                 <div class="action-buttons">
-                    <button id="createFolderBtn" class="btn btn-info"><i class="fas fa-folder-plus"></i> 새 폴더</button>
+                    <button id="createFolder" class="btn btn-primary"><i class="fas fa-folder-plus"></i> 새 폴더</button>
                     <div class="upload-form">
-                        <button id="uploadButton" class="btn btn-primary"><i class="fas fa-upload"></i> 파일 업로드</button>
-                        <input type="file" id="fileInput" multiple style="display: none;">
+                        <button class="btn btn-success"><i class="fas fa-upload"></i> 파일 업로드</button>
+                        <input type="file" id="fileUpload" multiple>
                     </div>
-                    <button id="compressBtn" class="btn btn-secondary"><i class="fas fa-file-archive"></i> 압축</button>
-                    <button id="downloadBtn" class="btn btn-success"><i class="fas fa-download"></i> 다운로드</button>
-                    <button id="deleteBtn" class="btn btn-danger"><i class="fas fa-trash-alt"></i> 삭제</button>
-                    <button id="cutBtn" class="btn btn-warning"><i class="fas fa-cut"></i> 잘라내기</button>
-                    <button id="pasteBtn" class="btn btn-warning" disabled><i class="fas fa-paste"></i> 붙여넣기</button>
+                    <div class="upload-form">
+                        <button class="btn btn-success"><i class="fas fa-folder-upload"></i> 폴더 업로드</button>
+                        <input type="file" id="folderUpload" webkitdirectory directory multiple>
+                    </div>
+                    <button id="cutBtn" class="btn btn-secondary" disabled><i class="fas fa-cut"></i> 잘라내기</button>
+                    <button id="pasteBtn" class="btn btn-secondary" disabled><i class="fas fa-paste"></i> 붙여넣기</button>
+                    <button id="renameBtn" class="btn btn-secondary" disabled><i class="fas fa-edit"></i> 이름 변경</button>
+                    <button id="downloadBtn" class="btn btn-info" disabled><i class="fas fa-download"></i> 다운로드</button>
+                    <button id="deleteBtn" class="btn btn-danger" disabled><i class="fas fa-trash-alt"></i> 삭제</button>
                 </div>
                 
                 <div class="search-box">

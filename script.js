@@ -1564,11 +1564,11 @@ function initDragAndDrop() {
         // 내부 드래그인 경우만 선택 항목 확인
         if (isInternalDrag(e)) {
             console.log('내부 파일 드래그 감지됨');
-        // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
+            // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
             if (fileItem.classList.contains('selected')) {
                 console.log('폴더가 선택된 상태에서는 자기자신에게 드롭하여 무시됨');
-            return;
-        }
+                return;
+            }
         
             // 내부 파일 이동 처리
             handleInternalFileDrop(e, fileItem);
@@ -1668,6 +1668,45 @@ function initDragAndDrop() {
         dropZone.classList.remove('active');
         
         // 외부 파일 업로드 처리
+        if (e.dataTransfer.files.length > 0) {
+            handleExternalFileDrop(e);
+        }
+    });
+    
+    // 드롭존 드롭 이벤트
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('active');
+        
+        // DataTransfer 객체에서 항목 검사
+        const items = e.dataTransfer.items;
+        
+        // 폴더 여부 확인
+        if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+            const entries = [];
+            let hasFolders = false;
+            
+            // 항목들을 모두 확인
+            for (let i = 0; i < items.length; i++) {
+                const entry = items[i].webkitGetAsEntry();
+                if (entry) {
+                    entries.push(entry);
+                    if (entry.isDirectory) {
+                        hasFolders = true;
+                    }
+                }
+            }
+            
+            if (hasFolders) {
+                console.log('폴더 드래그앤드롭 감지: 폴더 업로드 시작');
+                statusInfo.textContent = '폴더 업로드 시작...';
+                processEntries(entries);
+                return;
+            }
+        }
+        
+        // 폴더가 없거나 지원되지 않는 브라우저인 경우 기존 파일 업로드 사용
         if (e.dataTransfer.files.length > 0) {
             handleExternalFileDrop(e);
         }
@@ -1858,8 +1897,23 @@ function uploadFiles(files) {
     // FormData에 모든 파일 추가
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
-        formData.append('file', files[i]);
+        const file = files[i];
+        formData.append('file', file);
+        
+        // 폴더 구조가 있는 경우 상대 경로 정보 추가
+        if (file.webkitRelativePath) {
+            // 폴더 업로드인 경우 파일의 상대 경로 정보를 포함
+            const dirPath = file.webkitRelativePath.split('/');
+            // 마지막 요소는 파일 이름이므로 제외
+            dirPath.pop();
+            // 상위 폴더 경로 정보 추가
+            if (dirPath.length > 0) {
+                formData.append('filepath', dirPath.join('/'));
+            }
+        }
     }
+    
+    // 현재 경로 정보 추가
     formData.append('path', currentPath);
     
     // AJAX 요청으로 파일 전송
@@ -2202,6 +2256,7 @@ function initRenaming() {
 
 // 파일 업로드 기능 초기화
 function initFileUpload() {
+    // 파일 업로드 처리
     fileUploadInput.addEventListener('change', (e) => {
         // 파일 크기 제한 알림
         const maxFileSize = 10 * 1024 * 1024 * 1024; // 10GB
@@ -2225,6 +2280,40 @@ function initFileUpload() {
         // 파일 입력 초기화
         e.target.value = '';
     });
+    
+    // 폴더 업로드 처리
+    const folderUploadInput = document.getElementById('folderUpload');
+    if (folderUploadInput) {
+        folderUploadInput.addEventListener('change', (e) => {
+            const maxFileSize = 10 * 1024 * 1024 * 1024; // 10GB
+            const files = e.target.files;
+            
+            // 업로드 소스 설정 및 카운터 초기화
+            uploadSource = 'button';
+            uploadButtonCounter = 0;
+            
+            // 파일 크기 체크
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].size > maxFileSize) {
+                    alert(`파일 크기가 너무 큽니다: ${files[i].name} (${formatFileSize(files[i].size)})
+최대 파일 크기: 10GB`);
+                    // 파일 입력 초기화
+                    e.target.value = '';
+                    return;
+                }
+            }
+            
+            // 폴더 업로드 시작
+            if (files.length > 0) {
+                console.log(`폴더 업로드: ${files.length}개 파일`);
+                statusInfo.textContent = `폴더 업로드: ${files.length}개 파일`;
+                uploadFiles(files);
+            }
+            
+            // 파일 입력 초기화
+            e.target.value = '';
+        });
+    }
 }
 
 // 잘라내기/붙여넣기 기능 초기화
@@ -2745,5 +2834,84 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
             statusInfo.textContent = `이동 준비 중 오류: ${error}`;
             console.error('Move preparation error:', error);
             return Promise.reject(error);
+    });
+}
+
+// 폴더 항목 재귀적 처리 함수
+function processEntries(entries) {
+    const allFiles = [];
+    let pendingEntries = entries.length;
+    
+    if (pendingEntries === 0) {
+        uploadFiles(allFiles);
+        return;
+    }
+    
+    showLoading();
+    
+    const processEntry = (entry) => {
+        if (entry.isFile) {
+            // 파일인 경우 업로드 목록에 추가
+            entry.file(file => {
+                // 경로 정보를 보존하기 위해 webkitRelativePath 속성 설정
+                if (entry.fullPath) {
+                    Object.defineProperty(file, 'webkitRelativePath', {
+                        value: entry.fullPath.substring(1) // 첫 번째 '/'는 제외
+                    });
+                }
+                
+                allFiles.push(file);
+                pendingEntries--;
+                
+                if (pendingEntries === 0) {
+                    // 모든 항목 처리 완료
+                    console.log(`총 ${allFiles.length}개 파일 처리 완료, 업로드 시작`);
+                    statusInfo.textContent = `총 ${allFiles.length}개 파일 처리 완료, 업로드 시작...`;
+                    uploadFiles(allFiles);
+                    hideLoading();
+                }
+            }, error => {
+                console.error('파일 처리 오류:', error);
+                pendingEntries--;
+                if (pendingEntries === 0) {
+                    hideLoading();
+                    uploadFiles(allFiles);
+                }
+            });
+        } else if (entry.isDirectory) {
+            // 디렉토리인 경우 내용 읽기
+            const reader = entry.createReader();
+            reader.readEntries(entries => {
+                pendingEntries--; // 현재 디렉토리는 처리 완료
+                
+                if (entries.length > 0) {
+                    // 새 항목 추가
+                    pendingEntries += entries.length;
+                    entries.forEach(childEntry => {
+                        processEntry(childEntry);
+                    });
+                }
+                
+                // 모든 처리가 완료되었는지 확인
+                if (pendingEntries === 0) {
+                    console.log(`총 ${allFiles.length}개 파일 처리 완료, 업로드 시작`);
+                    statusInfo.textContent = `총 ${allFiles.length}개 파일 처리 완료, 업로드 시작...`;
+                    uploadFiles(allFiles);
+                    hideLoading();
+                }
+            }, error => {
+                console.error('폴더 읽기 오류:', error);
+                pendingEntries--;
+                if (pendingEntries === 0) {
+                    hideLoading();
+                    uploadFiles(allFiles);
+                }
+            });
+        }
+    };
+    
+    // 모든 항목 처리 시작
+    entries.forEach(entry => {
+        processEntry(entry);
     });
 }

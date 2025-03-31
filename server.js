@@ -465,7 +465,32 @@ app.post('/api/upload', (req, res) => {
       try {
         // 원본 파일명에서 한글 인코딩 처리
         const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-        const destinationFile = path.join(targetPath, originalName);
+        
+        // 폴더 구조 처리
+        let filePath = targetPath;
+        let relativePath = '';
+        
+        // 파일 상대 경로 처리 (폴더 업로드 처리)
+        // filepath 배열로부터 상대 경로 생성
+        if (req.body.filepath) {
+          // filepath가 배열인지 확인 (여러 파일이 있는 경우)
+          const filepaths = Array.isArray(req.body.filepath) ? req.body.filepath : [req.body.filepath];
+          // 현재 파일의 인덱스와 같은 인덱스의 filepath 항목 가져오기
+          const fileIndex = req.files.indexOf(file);
+          if (fileIndex >= 0 && fileIndex < filepaths.length) {
+            relativePath = filepaths[fileIndex];
+            filePath = path.join(targetPath, relativePath);
+            
+            // 해당 디렉토리가 없으면 생성
+            if (!fs.existsSync(filePath)) {
+              fs.mkdirSync(filePath, { recursive: true });
+              fs.chmodSync(filePath, 0o777);
+              log(`폴더 업로드 - 하위 폴더 생성됨: ${filePath}`);
+            }
+          }
+        }
+        
+        const destinationFile = path.join(filePath, originalName);
         
         // 파일 시스템에 저장
         fs.writeFileSync(destinationFile, file.buffer);
@@ -475,7 +500,7 @@ app.post('/api/upload', (req, res) => {
         processedFiles.push({
           name: originalName,
           size: file.size,
-          path: pathValue,
+          path: path.join(pathValue, relativePath).replace(/\\/g, '/'),
           mimetype: file.mimetype,
           fullPath: destinationFile
         });
@@ -483,6 +508,7 @@ app.post('/api/upload', (req, res) => {
         // 디버그 정보 로깅
         log(`업로드 파일 정보: 
         - 요청 경로: ${pathValue || '루트'}
+        - 상대 경로: ${relativePath || '없음'}
         - 파일명: ${originalName} 
         - 저장 경로: ${destinationFile}
         - 크기: ${formatBytes(file.size)}`);
