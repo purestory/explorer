@@ -948,6 +948,8 @@ function updateBreadcrumb(path) {
     breadcrumb.querySelectorAll('span').forEach(span => {
         span.addEventListener('click', () => {
             currentPath = span.getAttribute('data-path');
+            // 히스토리 상태 업데이트 추가
+            updateHistoryState(currentPath);
             loadFiles(currentPath);
             
             // 선택 초기화
