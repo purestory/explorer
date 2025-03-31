@@ -86,14 +86,17 @@ function clearSelection() {
 
 // 항목 선택
 function selectItem(item, addToSelection = false) {
-    const itemId = item.getAttribute('data-id');
+    // 상위 폴더(..)는 선택 불가능하도록 처리
+    if (item.getAttribute('data-parent-dir') === 'true') {
+        return;
+    }
     
     if (!addToSelection) {
         clearSelection();
     }
     
     item.classList.add('selected');
-    selectedItems.add(itemId);
+    selectedItems.add(item.getAttribute('data-name'));
     updateButtonStates();
 }
 
@@ -681,6 +684,7 @@ function renderFiles(files) {
         parentItem.setAttribute('data-id', '..');
         parentItem.setAttribute('data-name', '..');
         parentItem.setAttribute('data-is-folder', 'true');
+        parentItem.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시를 위한 속성 추가
         
         // 아이콘 생성
         const parentIcon = document.createElement('div');
@@ -791,6 +795,20 @@ function renderFiles(files) {
             fileItem.addEventListener('click', (e) => {
                 if (e.target.classList.contains('rename-input')) return;
                 
+                // 상위 폴더(..)는 선택되지 않도록 처리
+                if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                    if (e.target.closest('.file-item').clickTimer) {
+                        clearTimeout(e.target.closest('.file-item').clickTimer);
+                        e.target.closest('.file-item').clickTimer = null;
+                        navigateToParentFolder();
+                    } else {
+                        e.target.closest('.file-item').clickTimer = setTimeout(() => {
+                            e.target.closest('.file-item').clickTimer = null;
+                        }, 400);
+                    }
+                    return;
+                }
+                
                 if (e.ctrlKey) {
                     // Ctrl 키를 누른 상태로 클릭: 다중 선택
                     if (fileItem.classList.contains('selected')) {
@@ -802,7 +820,7 @@ function renderFiles(files) {
                     }
                 } else if (e.shiftKey && selectedItems.size > 0) {
                     // Shift 키를 누른 상태로 클릭: 범위 선택
-                    const items = Array.from(document.querySelectorAll('.file-item'));
+                    const items = Array.from(document.querySelectorAll('.file-item:not([data-parent-dir="true"])'));
                     const firstSelected = items.findIndex(item => item.classList.contains('selected'));
                     const currentIndex = items.indexOf(fileItem);
                     
@@ -1076,10 +1094,14 @@ function downloadFile(fileName) {
 
 // 모든 항목 선택
 function selectAllItems() {
-    document.querySelectorAll('.file-item').forEach(item => {
+    clearSelection();
+    
+    // 상위 폴더(..)를 제외한 모든 항목 선택
+    document.querySelectorAll('.file-item:not([data-parent-dir="true"])').forEach(item => {
         item.classList.add('selected');
-        selectedItems.add(item.getAttribute('data-id'));
+        selectedItems.add(item.getAttribute('data-name'));
     });
+    
     updateButtonStates();
 }
 
@@ -1119,15 +1141,24 @@ function showRenameDialog() {
 function deleteSelectedItems() {
     if (selectedItems.size === 0) return;
     
-    const itemsText = selectedItems.size > 1 
-        ? `${selectedItems.size}개 항목` 
-        : document.querySelector('.file-item.selected').getAttribute('data-name');
+    // 선택항목에서 상위 디렉토리(..) 제거
+    const itemsToDelete = new Set(selectedItems);
+    itemsToDelete.delete('..');
+    
+    if (itemsToDelete.size === 0) {
+        alert('삭제할 항목이 없습니다. 상위 폴더는 삭제할 수 없습니다.');
+        return;
+    }
+    
+    const itemsText = itemsToDelete.size > 1 
+        ? `${itemsToDelete.size}개 항목` 
+        : document.querySelector(`.file-item.selected[data-name="${[...itemsToDelete][0]}"]`).getAttribute('data-name');
     
     if (confirm(`정말 ${itemsText}을(를) 삭제하시겠습니까?`)) {
         // 선택된 모든 항목 삭제
         const promises = [];
         
-        selectedItems.forEach(itemId => {
+        itemsToDelete.forEach(itemId => {
             const path = currentPath ? `${currentPath}/${itemId}` : itemId;
             // 경로에 한글이 포함된 경우를 위해 인코딩 처리
             const encodedPath = encodeURIComponent(path);
@@ -1172,8 +1203,16 @@ function cutSelectedItems() {
     
     clipboardItems = [];
     
+    // 상위 폴더(..)는 제외
+    const itemsToProcess = new Set([...selectedItems].filter(itemId => itemId !== '..'));
+    
+    if (itemsToProcess.size === 0) {
+        alert('잘라낼 항목이 없습니다. 상위 폴더는 잘라낼 수 없습니다.');
+        return;
+    }
+    
     // 현재 선택된 항목을 클립보드에 복사
-    selectedItems.forEach(itemId => {
+    itemsToProcess.forEach(itemId => {
         const element = document.querySelector(`.file-item[data-id="${itemId}"]`);
         clipboardItems.push({
             name: itemId,
@@ -1297,6 +1336,12 @@ function initDragAndDrop() {
     fileList.addEventListener('dragstart', (e) => {
         const fileItem = e.target.closest('.file-item');
         if (!fileItem) return;
+        
+        // 상위 폴더는 드래그되지 않도록 방지
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            e.preventDefault();
+            return;
+        }
         
         // 드래그 중인 요소 식별을 위한 데이터 설정
         const fileId = fileItem.getAttribute('data-name');
@@ -2054,9 +2099,17 @@ function downloadSelectedItems() {
 function moveItems(itemIds) {
     if (!Array.isArray(itemIds) || itemIds.length === 0) return;
     
+    // 상위 폴더(..)는 제외
+    const itemsToMove = itemIds.filter(id => id !== '..');
+    
+    if (itemsToMove.length === 0) {
+        alert('이동할 항목이 없습니다. 상위 폴더는 이동할 수 없습니다.');
+        return;
+    }
+    
     // 클립보드에 추가
     clipboardItems = [];
-    itemIds.forEach(id => {
+    itemsToMove.forEach(id => {
         const element = document.querySelector(`.file-item[data-id="${id}"]`);
         if (element) {
             clipboardItems.push({

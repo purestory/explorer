@@ -852,14 +852,32 @@ h1 {
 }
 
 .file-item.parent-dir {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #eee;
-}
-
-.file-item.parent-dir .file-icon {
-    color: #6c757d;
+    background-color: rgba(240, 240, 240, 0.5);
+    border-bottom: 1px solid #e0e0e0;
 }
 
 .file-item.parent-dir:hover {
-    background-color: #e9ecef;
+    background-color: rgba(230, 230, 230, 0.8);
+}
+
+.file-item.parent-dir .file-icon {
+    color: #555;
+}
+
+/* 상위 폴더는 선택 스타일 적용되지 않도록 */
+.file-item.parent-dir.selected,
+.file-item.parent-dir:hover.selected,
+.file-item[data-parent-dir="true"].selected,
+.file-item[data-parent-dir="true"]:active {
+    background-color: rgba(230, 230, 230, 0.8) !important;
+    box-shadow: none !important;
+    border-color: #e0e0e0 !important;
+    pointer-events: auto;
+}
+
+/* 상위 폴더는 드래그 표시 적용되지 않도록 */
+.file-item.parent-dir.dragging,
+.file-item[data-parent-dir="true"].dragging {
+    opacity: 1 !important;
+    border: 1px solid #e0e0e0 !important;
 }
