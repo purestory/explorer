@@ -626,8 +626,29 @@ h1 {
     box-shadow: 0 0 20px rgba(0, 123, 255, 0.6);
     transform: scale(1.05);
     transition: all 0.2s ease;
-    z-index: 15;
+    z-index: 20;
     animation: folderPulse 1.5s infinite;
+    position: relative;
+}
+
+/* 외부 파일을 폴더에 드래그할 때 특별한 효과 */
+.file-item[data-is-folder="true"].drag-over::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(33, 150, 243, 0.15);
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+/* 외부 파일을 폴더에 드래그할 때 아이콘 색상 변경 */
+.file-item[data-is-folder="true"].drag-over .file-icon {
+    color: #0056b3;
+    transform: scale(1.2);
+    transition: all 0.2s ease;
 }
 
 @keyframes folderPulse {
