@@ -1438,6 +1438,11 @@ function initDragAndDrop() {
         const fileItem = e.target.closest('.file-item');
         if (!fileItem) return;
         
+        // 상위 폴더인 경우 드래그 오버 스타일 적용하지 않음
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            return;
+        }
+        
         // 폴더인 경우에만 처리하고 시각적 표시
         if (fileItem.getAttribute('data-is-folder') === 'true') {
             // 내부 드래그인 경우 선택된 폴더에 대한 드래그 무시
@@ -1464,6 +1469,12 @@ function initDragAndDrop() {
             // if (!isInternalDrag(e) && e.dataTransfer.types.includes('Files')) {
             //     dropZone.classList.add('active');
             // }
+            return;
+        }
+        
+        // 상위 폴더인 경우 드래그 오버 처리하지 않음
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
             return;
         }
         
@@ -1531,6 +1542,12 @@ function initDragAndDrop() {
             return;
         }
         
+        // 상위 폴더에 드롭되는 경우 차단
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            console.log('상위 폴더에 드롭되어 무시됨');
+            return;
+        }
+        
         // 드롭된 파일 항목 정보 로깅
         console.log('드롭 대상 폴더:', fileItem.getAttribute('data-name'), 
                   '폴더 여부:', fileItem.getAttribute('data-is-folder'));
@@ -1578,6 +1595,11 @@ function initDragAndDrop() {
             
             // 폴더에 드래그하는 경우 해당 폴더만 강조
             if (fileItem && fileItem.getAttribute('data-is-folder') === 'true') {
+                // 상위 폴더인 경우 드래그 강조 제외
+                if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                    return;
+                }
+                
                 // 전체 드롭존 비활성화
                 dropZone.classList.remove('active');
                 
@@ -1606,6 +1628,12 @@ function initDragAndDrop() {
             
             // 폴더에 드래그하는 경우 해당 폴더만 강조
             if (fileItem && fileItem.getAttribute('data-is-folder') === 'true') {
+                // 상위 폴더인 경우 드래그 강조 제외
+                if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                    e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+                    return;
+                }
+                
                 // 전체 드롭존 비활성화
                 dropZone.classList.remove('active');
                 
