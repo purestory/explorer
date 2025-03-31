@@ -1,6 +1,6 @@
 {
   "name": "webdav-server",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "WebDAV 서버 및 파일 탐색기",
   "main": "server.js",
   "scripts": {
