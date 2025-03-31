@@ -1467,14 +1467,22 @@ function initDragAndDrop() {
     window.addEventListener('dragenter', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        dropZone.classList.add('active');
+        
+        // 외부 파일인 경우에만 드롭존 활성화
+        if (e.dataTransfer.types.includes('Files')) {
+            dropZone.classList.add('active');
+        }
     });
     
     // 드래그 영역 위
     window.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        dropZone.classList.add('active');
+        
+        // 외부 파일인 경우에만 드롭존 유지
+        if (e.dataTransfer.types.includes('Files')) {
+            dropZone.classList.add('active');
+        }
     });
     
     // 드래그 영역 이탈
@@ -1497,6 +1505,13 @@ function initDragAndDrop() {
         e.stopPropagation();
         dropZone.classList.remove('active');
         
+        // 진행 중인 업로드가 있는지 확인
+        if (progressContainer.style.display === 'block') {
+            statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
+            console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
+            return;
+        }
+        
         // 파일 객체 가져오기
         const files = e.dataTransfer.files;
         if (files.length > 0) {
@@ -1513,7 +1528,7 @@ function initDragAndDrop() {
 function uploadFiles(files) {
     if (files.length === 0) return;
     
-    // 호출 카운터 증가
+    // 호출 카운터 증가 - 오직 새로운 업로드 세션에서만 증가
     if (uploadSource === 'button') {
         uploadButtonCounter++;
         console.log(`버튼 업로드 호출 횟수: ${uploadButtonCounter}, 파일 수: ${files.length}`);
@@ -1522,6 +1537,12 @@ function uploadFiles(files) {
         dragDropCounter++;
         console.log(`드래그앤드롭 업로드 호출 횟수: ${dragDropCounter}, 파일 수: ${files.length}`);
         statusInfo.textContent = `드래그앤드롭 업로드 호출 횟수: ${dragDropCounter}, 파일 수: ${files.length}`;
+    }
+    
+    // 진행 중 업로드가 있으면 종료 처리
+    if (progressContainer.style.display === 'block') {
+        console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
+        return;
     }
     
     // 업로드 UI 표시
@@ -1644,6 +1665,10 @@ function uploadFiles(files) {
             // 업로드 완료 플래그 설정
             uploadCompleted = true;
             
+            // 로딩 상태 초기화
+            lastLoaded = 0;
+            currentFileIndex = 0;
+            
             if (xhr.status === 200 || xhr.status === 201) {
                 // 업로드 성공 - 프로그레스바 100%로 설정
                 progressBar.style.width = '100%';
@@ -1654,13 +1679,13 @@ function uploadFiles(files) {
                     uploadStatus.textContent = `${files.length}개 파일 업로드 완료`;
                 }
                 
-                // 잠시 후 업로드 UI 숨기기
+                // 업로드 UI 즉시 숨기기 (지연시간 단축)
                 setTimeout(() => {
                     progressContainer.style.display = 'none';
                     document.getElementById('currentFileUpload').style.display = 'none';
                     uploadStatus.style.display = 'none';
                     loadFiles(currentPath); // 파일 목록 새로고침
-                }, 500);
+                }, 200);
                 
                 if (files.length === 1) {
                     statusInfo.textContent = '파일 업로드 완료';
