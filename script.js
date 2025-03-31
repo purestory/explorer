@@ -1460,10 +1460,10 @@ function initDragAndDrop() {
         
         // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
         if (!fileItem || e.target === fileList || e.target === fileView) {
-            // 내부 드래그인 경우에는 활성화하지 않음
-            if (!isInternalDrag(e) && e.dataTransfer.types.includes('Files')) {
-                dropZone.classList.add('active');
-            }
+            // 내부 드래그인 경우에는 활성화하지 않음 (전체 드롭존 비활성화)
+            // if (!isInternalDrag(e) && e.dataTransfer.types.includes('Files')) {
+            //     dropZone.classList.add('active');
+            // }
             return;
         }
         
@@ -1585,9 +1585,9 @@ function initDragAndDrop() {
                 fileItem.classList.add('drag-over');
                 console.log('폴더에 외부 파일 드래그 진입:', fileItem.getAttribute('data-name'));
             } else {
-                // 빈 공간이나 일반 파일에 드래그하는 경우 전체 드롭존 활성화
-                dropZone.classList.add('active');
-                console.log('외부 파일 드래그 진입 - 드롭존 활성화');
+                // 전체 드롭존 비활성화 - 폴더에만 드롭 가능하도록 함
+                // dropZone.classList.add('active');
+                // console.log('외부 파일 드래그 진입 - 드롭존 활성화');
             }
         }
     });
@@ -1613,8 +1613,8 @@ function initDragAndDrop() {
                 fileItem.classList.add('drag-over');
                 e.dataTransfer.dropEffect = 'copy';
             } else {
-                // 빈 공간이나 일반 파일에 드래그하는 경우 전체 드롭존 활성화
-                dropZone.classList.add('active');
+                // 전체 드롭존 비활성화 - 폴더에만 드롭 가능하도록 함
+                // dropZone.classList.add('active');
             }
         }
     });
