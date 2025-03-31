@@ -1345,14 +1345,24 @@ function initDragAndDrop() {
         
         // 드래그 중인 요소 식별을 위한 데이터 설정
         const fileId = fileItem.getAttribute('data-name');
-        e.dataTransfer.setData('text/plain', fileId);
         
-        // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
-        if (!fileItem.classList.contains('selected')) {
-            clearSelection();
-            fileItem.classList.add('selected');
-            selectedItems.add(fileId);
-            updateButtonStates();
+        // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
+        if (selectedItems.size > 1 && fileItem.classList.contains('selected')) {
+            // 여러 항목이 선택된 경우 모든 선택 항목의 ID를 저장
+            e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
+            e.dataTransfer.effectAllowed = 'move';
+        } else {
+            // 단일 항목 드래그
+            e.dataTransfer.setData('text/plain', fileId);
+            e.dataTransfer.effectAllowed = 'move';
+            
+            // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
+            if (!fileItem.classList.contains('selected')) {
+                clearSelection();
+                fileItem.classList.add('selected');
+                selectedItems.add(fileId);
+                updateButtonStates();
+            }
         }
         
         // 드래그 중 스타일 적용
@@ -1407,6 +1417,7 @@ function initDragAndDrop() {
             if (fileItem.classList.contains('selected')) return;
             
             fileItem.classList.add('drag-over');
+            e.dataTransfer.dropEffect = 'move';
         }
     });
     
@@ -1424,15 +1435,20 @@ function initDragAndDrop() {
         e.preventDefault();
         
         const fileItem = e.target.closest('.file-item');
+        
+        // 드롭존 비활성화
+        dropZone.classList.remove('active');
+        
+        // 파일 항목이 없는 경우 (빈 공간에 드롭)
         if (!fileItem) {
-            // 파일 영역의 빈 곳에 드롭한 경우
-            dropZone.classList.remove('active');
+            // 외부 파일 업로드 처리
             if (e.dataTransfer.files.length > 0) {
                 uploadFiles(e.dataTransfer.files);
             }
             return;
         }
         
+        // 드래그 오버 스타일 제거
         fileItem.classList.remove('drag-over');
         
         // 폴더가 아닌 경우 무시
@@ -1441,7 +1457,9 @@ function initDragAndDrop() {
         }
         
         // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
-        if (fileItem.classList.contains('selected')) return;
+        if (fileItem.classList.contains('selected')) {
+            return;
+        }
         
         const targetFolder = fileItem.getAttribute('data-name');
         
@@ -1450,8 +1468,7 @@ function initDragAndDrop() {
             // 현재 폴더에 파일 업로드
             const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
             
-            // 수정: uploadFilesToFolder 함수 대신 파일 업로드 버튼과 동일한 함수를 사용하되,
-            // 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
+            // 수정: 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
             const originalPath = currentPath;
             currentPath = targetPath;
             
@@ -1464,20 +1481,38 @@ function initDragAndDrop() {
             return;
         }
         
+        // 내부 파일 이동 처리 - dataTransfer에서 데이터 가져오기
+        const dataTransferred = e.dataTransfer.getData('text/plain');
+        let itemsToMove = [];
+        
+        try {
+            // JSON 형식으로 저장된 배열인지 확인 (다중 선택 항목)
+            const parsedData = JSON.parse(dataTransferred);
+            if (Array.isArray(parsedData)) {
+                itemsToMove = parsedData;
+            } else {
+                itemsToMove = [dataTransferred];
+            }
+        } catch (e) {
+            // JSON 파싱 실패 - 단일 항목 문자열
+            itemsToMove = [dataTransferred];
+        }
+        
         // 선택된 모든 파일을 이동
-        if (selectedItems.size > 0) {
+        if (itemsToMove.length > 0) {
             // 드롭된 폴더 경로 계산
             const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
             
             // 확인 대화상자
-            const itemCount = selectedItems.size;
+            const itemCount = itemsToMove.length;
             const confirmMsg = `선택한 ${itemCount}개 항목을 '${targetFolder}' 폴더로 이동하시겠습니까?`;
             
             if (confirm(confirmMsg)) {
                 showLoading();
+                statusInfo.textContent = '파일 이동 중...';
                 
                 // 선택된 모든 항목 이동
-                const movePromises = Array.from(selectedItems).map(item => {
+                const movePromises = itemsToMove.map(item => {
                     const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
                     return moveItem(sourceFullPath, targetPath);
                 });
@@ -1786,26 +1821,56 @@ function moveItem(sourcePath, targetPath) {
         // 파일명 추출
         const fileName = sourcePath.split('/').pop();
         
-        // API 요청
-        fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(sourcePath)}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                newName: fileName,
-                targetPath: targetPath
-            })
+        // 소스와 타겟이 같은 경로인지 확인
+        if (sourcePath === `${targetPath}/${fileName}`) {
+            reject('소스와 타겟이 동일합니다.');
+            return;
+        }
+        
+        // 이미 대상 폴더에 같은 이름의 파일이 있는지 확인하기 위한 API 호출
+        fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(targetPath)}/${encodeURIComponent(fileName)}`, {
+            method: 'HEAD'
         })
         .then(response => {
+            // 409 Conflict: 이미 존재하는 파일
+            if (response.ok) {
+                if (confirm(`'${targetPath}' 폴더에 이미 '${fileName}'이(가) 존재합니다. 덮어쓰시겠습니까?`)) {
+                    // 덮어쓰기 동의시 계속 진행
+                    return true;
+                } else {
+                    // 거부시 이동 취소
+                    reject('사용자가 덮어쓰기를 취소했습니다.');
+                    return false;
+                }
+            }
+            return true;
+        })
+        .then(shouldContinue => {
+            if (!shouldContinue) return;
+            
+            // API 요청
+            return fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(sourcePath)}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    newName: fileName,
+                    targetPath: targetPath
+                })
+            });
+        })
+        .then(response => {
+            if (!response) return; // shouldContinue가 false인 경우
+            
             if (response.ok) {
                 resolve();
             } else {
-                response.text().then(text => reject(text));
+                return response.text().then(text => reject(text || '이동 실패'));
             }
         })
         .catch(error => {
-            reject(error);
+            reject(error.message || '네트워크 오류');
         });
     });
 }
