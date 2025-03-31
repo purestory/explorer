@@ -730,6 +730,7 @@ function renderFiles(files) {
             fileItem.setAttribute('data-id', file.name);
             fileItem.setAttribute('data-name', file.name);
             fileItem.setAttribute('data-is-folder', file.isFolder);
+            fileItem.setAttribute('draggable', 'true'); // 드래그 가능하도록 설정
             
             // 파일 아이콘 및 미리보기 설정
             const fileIcon = document.createElement('div');
@@ -1310,6 +1311,8 @@ function pasteItems() {
 
 // 드래그 시작 처리
 function handleDragStart(e, fileItem) {
+    console.log('드래그 시작:', fileItem.getAttribute('data-name'));
+    
     // 선택되지 않은 항목을 드래그하면 해당 항목만 선택
     if (!fileItem.classList.contains('selected')) {
         clearSelection();
@@ -1318,16 +1321,41 @@ function handleDragStart(e, fileItem) {
     
     // 드래그 데이터 설정
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', [...selectedItems].join(','));
+    
+    // 단일 항목 또는 다중 선택 항목 드래그 처리
+    if (selectedItems.size > 1) {
+        // 여러 항목이 선택된 경우 모든 선택 항목의 ID를 저장
+        e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
+    } else {
+        // 단일 항목 드래그
+        e.dataTransfer.setData('text/plain', fileItem.getAttribute('data-name'));
+    }
     
     // 내부 파일 드래그임을 표시하는 데이터 추가
     e.dataTransfer.setData('application/webdav-internal', 'true');
+    
+    // 드래그 중 스타일 적용
+    setTimeout(() => {
+        document.querySelectorAll('.file-item.selected').forEach(item => {
+            item.classList.add('dragging');
+        });
+    }, 0);
     
     isDragging = true;
 }
 
 // 드래그 종료 처리
 function handleDragEnd() {
+    // 드래그 스타일 제거
+    document.querySelectorAll('.file-item.dragging').forEach(item => {
+        item.classList.remove('dragging');
+    });
+    
+    // 드래그 오버 스타일 제거
+    document.querySelectorAll('.file-item.drag-over').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+    
     isDragging = false;
 }
 
@@ -1336,6 +1364,12 @@ function initDragAndDrop() {
     // 파일 리스트에 이벤트 위임 사용 - 동적으로 생성된 파일 항목에도 이벤트 처리
     const fileList = document.getElementById('fileList');
     const fileView = document.getElementById('fileView');
+    const dropZone = document.getElementById('dropZone');
+    
+    if (!dropZone) {
+        console.error('드롭존 요소를 찾을 수 없습니다.');
+        return;
+    }
     
     // 파일 드래그 이벤트 위임
     fileList.addEventListener('dragstart', (e) => {
@@ -1348,8 +1382,9 @@ function initDragAndDrop() {
             return;
         }
         
-        // 드래그 중인 요소 식별을 위한 데이터 설정
+        // 드래그 중인 요소 식별
         const fileId = fileItem.getAttribute('data-name');
+        console.log('드래그 시작:', fileId);
         
         // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
         if (selectedItems.size > 1 && fileItem.classList.contains('selected')) {
@@ -1392,6 +1427,9 @@ function initDragAndDrop() {
         document.querySelectorAll('.file-item.drag-over').forEach(item => {
             item.classList.remove('drag-over');
         });
+        
+        // 드롭존 비활성화
+        dropZone.classList.remove('active');
     });
     
     // 드래그 진입 이벤트 위임 - 폴더에만 적용
@@ -1420,10 +1458,12 @@ function initDragAndDrop() {
         
         const fileItem = e.target.closest('.file-item');
         
-        // 폴더가 아닌 요소 위에 있을 때는 드롭존 활성화
-        if (!fileItem) {
-            // 빈 영역으로 드래그 시 활성화
-            dropZone.classList.add('active');
+        // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
+        if (!fileItem || e.target === fileList || e.target === fileView) {
+            // 내부 드래그인 경우에는 활성화하지 않음
+            if (!isInternalDrag(e) && e.dataTransfer.types.includes('Files')) {
+                dropZone.classList.add('active');
+            }
             return;
         }
         
@@ -1435,8 +1475,15 @@ function initDragAndDrop() {
                 return;
             }
             
+            // 폴더에 드래그 오버 스타일 적용
             fileItem.classList.add('drag-over');
-            e.dataTransfer.dropEffect = 'move';
+            
+            // 적절한 드롭 효과 설정
+            if (isInternalDrag(e)) {
+                e.dataTransfer.dropEffect = 'move'; // 내부 파일은 이동
+            } else {
+                e.dataTransfer.dropEffect = 'copy'; // 외부 파일은 복사
+            }
         }
     });
     
@@ -1470,21 +1517,20 @@ function initDragAndDrop() {
         
         // 드롭 위치 로깅
         console.log('드롭 이벤트 발생 위치:', e.target.className);
-        if (fileItem) {
-            console.log('드롭 대상 폴더:', fileItem.getAttribute('data-name'), 
-                      '폴더 여부:', fileItem.getAttribute('data-is-folder'));
-        } else {
-            console.log('빈 공간에 드롭됨');
-        }
         
         // 파일 항목이 없는 경우 (빈 공간에 드롭)
         if (!fileItem) {
+            console.log('빈 공간에 드롭됨');
             // 외부 파일 업로드 처리
             if (e.dataTransfer.files.length > 0) {
                 handleExternalFileDrop(e);
             }
             return;
         }
+        
+        // 드롭된 파일 항목 정보 로깅
+        console.log('드롭 대상 폴더:', fileItem.getAttribute('data-name'), 
+                  '폴더 여부:', fileItem.getAttribute('data-is-folder'));
         
         // 드래그 오버 스타일 제거
         fileItem.classList.remove('drag-over');
@@ -1497,6 +1543,7 @@ function initDragAndDrop() {
         
         // 내부 드래그인 경우만 선택 항목 확인
         if (isInternalDrag(e)) {
+            console.log('내부 파일 드래그 감지됨');
             // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
             if (fileItem.classList.contains('selected')) {
                 console.log('폴더가 선택된 상태에서는 자기자신에게 드롭하여 무시됨');
@@ -1506,13 +1553,13 @@ function initDragAndDrop() {
             // 내부 파일 이동 처리
             handleInternalFileDrop(e, fileItem);
         } else if (e.dataTransfer.files.length > 0) {
+            console.log('외부 파일 드래그 감지됨');
             // 외부 파일 업로드를 지정 폴더로 처리
             handleExternalFileDrop(e, fileItem);
         }
     });
     
     // 드롭존 이벤트 처리 (파일 업로드용)
-    const dropZone = document.getElementById('dropZone');
     
     // 드래그 영역 진입
     window.addEventListener('dragenter', (e) => {
@@ -1520,8 +1567,9 @@ function initDragAndDrop() {
         e.stopPropagation();
         
         // 외부 파일인 경우에만 드롭존 활성화
-        if (e.dataTransfer.types.includes('Files')) {
+        if (e.dataTransfer.types.includes('Files') && !isInternalDrag(e)) {
             dropZone.classList.add('active');
+            console.log('외부 파일 드래그 진입 - 드롭존 활성화');
         }
     });
     
@@ -1531,7 +1579,7 @@ function initDragAndDrop() {
         e.stopPropagation();
         
         // 외부 파일인 경우에만 드롭존 유지
-        if (e.dataTransfer.types.includes('Files')) {
+        if (e.dataTransfer.types.includes('Files') && !isInternalDrag(e)) {
             dropZone.classList.add('active');
         }
     });
@@ -1571,7 +1619,7 @@ function initDragAndDrop() {
 
 // 내부 드래그인지 확인하는 함수
 function isInternalDrag(e) {
-    return e.dataTransfer.types.includes('application/webdav-internal');
+    return e.dataTransfer.types && e.dataTransfer.types.includes('application/webdav-internal');
 }
 
 // 내부 파일 드롭 처리 함수
@@ -1596,15 +1644,20 @@ function handleInternalFileDrop(e, targetFolderItem) {
             const parsedData = JSON.parse(dataTransferred);
             if (Array.isArray(parsedData)) {
                 itemsToMove = parsedData;
+                console.log('JSON 배열 형식의 데이터 파싱 성공:', itemsToMove);
             } else {
                 itemsToMove = [dataTransferred];
+                console.log('JSON 객체 형식의 데이터:', itemsToMove);
             }
         } catch (e) {
             // JSON 파싱 실패 - 단일 항목 문자열
+            console.log('일반 텍스트 데이터:', dataTransferred);
             if (dataTransferred.includes(',')) {
                 itemsToMove = dataTransferred.split(',');
+                console.log('쉼표로 구분된 데이터 파싱:', itemsToMove);
             } else {
                 itemsToMove = [dataTransferred];
+                console.log('단일 항목 데이터:', itemsToMove);
             }
         }
         
@@ -1627,6 +1680,10 @@ function handleInternalFileDrop(e, targetFolderItem) {
             if (confirm(confirmMsg)) {
                 // 새로운 moveToFolder 함수 사용
                 moveToFolder(itemsToMove, targetFolder)
+                .then(() => {
+                    console.log('파일 이동 성공');
+                    statusInfo.textContent = `${itemCount}개 항목을 '${targetFolder}' 폴더로 이동했습니다.`;
+                })
                 .catch(error => {
                     console.error('파일 이동 과정 오류:', error);
                     statusInfo.textContent = `파일 이동 과정 오류: ${error}`;
