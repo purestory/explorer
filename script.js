@@ -1371,6 +1371,12 @@ function initDragAndDrop() {
         return;
     }
     
+    // 전역 상태 변수
+    window.isMovingFiles = false;  // 파일 이동 중 상태
+    window.lastDropTime = 0;      // 마지막 드롭 시간
+    window.lastDragOverTime = 0;  // 마지막 드래그 오버 시간
+    window.preventNextDrop = false; // 다음 드롭 이벤트 방지 플래그
+    
     // 파일 드래그 이벤트 위임
     fileList.addEventListener('dragstart', (e) => {
         const fileItem = e.target.closest('.file-item');
@@ -1378,6 +1384,13 @@ function initDragAndDrop() {
         
         // 상위 폴더는 드래그되지 않도록 방지
         if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            e.preventDefault();
+            return;
+        }
+        
+        // 이미 이동 작업이 진행 중이면 드래그 방지
+        if (window.isMovingFiles) {
+            console.log('이미 파일 이동 작업이 진행 중이어서 새 드래그를 방지합니다.');
             e.preventDefault();
             return;
         }
@@ -1408,6 +1421,9 @@ function initDragAndDrop() {
         // 내부 파일 드래그임을 표시하는 데이터 추가
         e.dataTransfer.setData('application/webdav-internal', 'true');
         
+        // 드래그 이벤트 상태 초기화
+        window.preventNextDrop = false;
+        
         // 드래그 중 스타일 적용
         setTimeout(() => {
             document.querySelectorAll('.file-item.selected').forEach(item => {
@@ -1432,9 +1448,13 @@ function initDragAndDrop() {
         dropZone.classList.remove('active');
     });
     
-    // 드래그 진입 이벤트 위임 - 폴더에만 적용
+    // 드래그 진입 이벤트 - 폴더에만 적용
     fileList.addEventListener('dragenter', (e) => {
         e.preventDefault();
+        
+        // 이미 이동 작업이 진행 중이면 무시
+        if (window.isMovingFiles) return;
+        
         const fileItem = e.target.closest('.file-item');
         if (!fileItem) return;
         
@@ -1446,50 +1466,72 @@ function initDragAndDrop() {
                 return;
             }
             
-            console.log('드래그 진입:', fileItem.getAttribute('data-name'));
-            fileItem.classList.add('drag-over');
+            // 이미 스타일이 적용된 경우 중복 로깅 방지
+            if (!fileItem.classList.contains('drag-over')) {
+                console.log('드래그 진입:', fileItem.getAttribute('data-name'));
+                fileItem.classList.add('drag-over');
+            }
         }
     });
     
-    // 드래그 영역 위 이벤트 위임
+    // 드래그 영역 위 이벤트 위임 - 디바운싱 적용
+    let dragOverDebounceTimer = null;
+    
     fileList.addEventListener('dragover', (e) => {
         e.preventDefault(); // 드롭 허용
         e.stopPropagation(); // 이벤트 버블링 방지
         
-        const fileItem = e.target.closest('.file-item');
-        
-        // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
-        if (!fileItem || e.target === fileList || e.target === fileView) {
-            // 내부 드래그인 경우에는 활성화하지 않음
-            if (!isInternalDrag(e) && e.dataTransfer.types.includes('Files')) {
-                dropZone.classList.add('active');
-            }
+        // 이미 이동 작업이 진행 중이면 무시
+        if (window.isMovingFiles) {
+            e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
             return;
         }
         
-        // 폴더인 경우에만 처리
-        if (fileItem.getAttribute('data-is-folder') === 'true') {
-            // 내부 드래그인 경우 선택된 폴더에 대한 드래그 무시
-            if (isInternalDrag(e) && fileItem.classList.contains('selected')) {
-                e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+        // 드래그 오버 디바운싱 - 너무 빈번한 이벤트 처리 방지
+        if (dragOverDebounceTimer) {
+            clearTimeout(dragOverDebounceTimer);
+        }
+        
+        dragOverDebounceTimer = setTimeout(() => {
+            const fileItem = e.target.closest('.file-item');
+            
+            // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
+            if (!fileItem || e.target === fileList || e.target === fileView) {
+                // 내부 드래그인 경우에는 활성화하지 않음
+                if (!isInternalDrag(e) && e.dataTransfer.types.includes('Files')) {
+                    dropZone.classList.add('active');
+                }
                 return;
             }
             
-            // 폴더에 드래그 오버 스타일 적용
-            fileItem.classList.add('drag-over');
-            
-            // 적절한 드롭 효과 설정
-            if (isInternalDrag(e)) {
-                e.dataTransfer.dropEffect = 'move'; // 내부 파일은 이동
-            } else {
-                e.dataTransfer.dropEffect = 'copy'; // 외부 파일은 복사
+            // 폴더인 경우에만 처리
+            if (fileItem.getAttribute('data-is-folder') === 'true') {
+                // 내부 드래그인 경우 선택된 폴더에 대한 드래그 무시
+                if (isInternalDrag(e) && fileItem.classList.contains('selected')) {
+                    e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+                    return;
+                }
+                
+                // 폴더에 드래그 오버 스타일 적용
+                fileItem.classList.add('drag-over');
+                
+                // 적절한 드롭 효과 설정
+                if (isInternalDrag(e)) {
+                    e.dataTransfer.dropEffect = 'move'; // 내부 파일은 이동
+                } else {
+                    e.dataTransfer.dropEffect = 'copy'; // 외부 파일은 복사
+                }
             }
-        }
+        }, 50); // 50ms 디바운싱
     });
     
     // 드래그 영역 벗어날 때 이벤트 위임
     fileList.addEventListener('dragleave', (e) => {
         e.preventDefault();
+        
+        // 이미 이동 작업이 진행 중이면 무시
+        if (window.isMovingFiles) return;
+        
         const fileItem = e.target.closest('.file-item');
         if (!fileItem) return;
         
@@ -1511,6 +1553,25 @@ function initDragAndDrop() {
         
         // 드롭존 비활성화
         dropZone.classList.remove('active');
+        
+        // 이미 이동 작업이 진행 중이면 무시
+        if (window.isMovingFiles) {
+            console.log('이미 파일 이동 작업이 진행 중입니다. 드롭 이벤트를 무시합니다.');
+            return;
+        }
+        
+        // 중복 드롭 방지
+        if (window.preventNextDrop) {
+            console.log('중복 드롭 방지: 현재 이벤트가 무시됩니다.');
+            window.preventNextDrop = false;
+            return;
+        }
+        
+        // 드롭 이후 중복 이벤트 발생 방지 - 300ms 동안 추가 드롭 이벤트 무시
+        window.preventNextDrop = true;
+        setTimeout(() => {
+            window.preventNextDrop = false;
+        }, 300);
         
         // 파일 항목 찾기
         const fileItem = e.target.closest('.file-item');
@@ -1534,6 +1595,9 @@ function initDragAndDrop() {
         
         // 드래그 오버 스타일 제거
         fileItem.classList.remove('drag-over');
+        document.querySelectorAll('.file-item.drag-over').forEach(item => {
+            item.classList.remove('drag-over');
+        });
         
         // 폴더가 아닌 경우 무시
         if (fileItem.getAttribute('data-is-folder') !== 'true') {
@@ -1550,7 +1614,7 @@ function initDragAndDrop() {
                 return;
             }
             
-            // 내부 파일 이동 처리
+            // 내부 파일 이동 처리 - 하나의 이벤트 처리만 허용
             handleInternalFileDrop(e, fileItem);
         } else if (e.dataTransfer.files.length > 0) {
             console.log('외부 파일 드래그 감지됨');
@@ -1624,6 +1688,12 @@ function isInternalDrag(e) {
 
 // 내부 파일 드롭 처리 함수
 function handleInternalFileDrop(e, targetFolderItem) {
+    // 이미 파일 이동 작업이 진행 중인지 확인
+    if (window.isMovingFiles) {
+        console.log('이미 파일 이동 작업이 진행 중입니다. 요청을 무시합니다.');
+        return;
+    }
+    
     // 호출 카운터 증가 - 내부 파일 이동 추적
     dragDropMoveCounter++;
     console.log(`드래그앤드롭 파일 이동 호출 횟수: ${dragDropMoveCounter}`);
@@ -1631,6 +1701,13 @@ function handleInternalFileDrop(e, targetFolderItem) {
     
     const targetFolder = targetFolderItem.getAttribute('data-name');
     console.log('대상 폴더:', targetFolder);
+    
+    // 중복 호출 방지를 위한 디바운싱 처리 - 함수 레벨에서 적용
+    if (window.lastDropTime && (Date.now() - window.lastDropTime < 500)) {
+        console.log('중복 드롭 이벤트 감지, 무시합니다. 간격:', Date.now() - window.lastDropTime);
+        return;
+    }
+    window.lastDropTime = Date.now();
     
     // 내부 파일 이동 처리 - dataTransfer에서 데이터 가져오기
     try {
@@ -1666,33 +1743,36 @@ function handleInternalFileDrop(e, targetFolderItem) {
         
         // 선택된 모든 파일을 이동
         if (itemsToMove.length > 0) {
-            // 중복 호출 방지를 위한 디바운싱 처리
-            if (window.lastDropTime && (Date.now() - window.lastDropTime < 100)) {
-                console.log('중복 드롭 이벤트 감지, 무시합니다.');
-                return;
-            }
-            window.lastDropTime = Date.now();
-            
             // 확인 대화상자
             const itemCount = itemsToMove.length;
             const confirmMsg = `선택한 ${itemCount}개 항목을 '${targetFolder}' 폴더로 이동하시겠습니까?`;
             
+            // 사용자 컨펌 후 이동 진행
             if (confirm(confirmMsg)) {
-                // 새로운 moveToFolder 함수 사용
+                // 이동 작업 상태 설정 - 중복 호출 방지
+                window.isMovingFiles = true;
+                
+                // moveToFolder 함수는 Promise를 반환하므로 then/catch 체인으로 처리
                 moveToFolder(itemsToMove, targetFolder)
-                .then(() => {
-                    console.log('파일 이동 성공');
-                    statusInfo.textContent = `${itemCount}개 항목을 '${targetFolder}' 폴더로 이동했습니다.`;
-                })
-                .catch(error => {
-                    console.error('파일 이동 과정 오류:', error);
-                    statusInfo.textContent = `파일 이동 과정 오류: ${error}`;
-                });
+                    .then((result) => {
+                        console.log('파일 이동 성공:', result);
+                        statusInfo.textContent = `${itemCount}개 항목을 '${targetFolder}' 폴더로 이동했습니다.`;
+                    })
+                    .catch(error => {
+                        console.error('파일 이동 과정 오류:', error);
+                        statusInfo.textContent = `파일 이동 과정 오류: ${error}`;
+                    })
+                    .finally(() => {
+                        // 이동 작업 상태 초기화 - 항상 실행되도록 finally에 배치
+                        window.isMovingFiles = false;
+                    });
             }
         }
     } catch (e) {
         console.error('드롭 이벤트 처리 오류:', e);
         statusInfo.textContent = `드롭 이벤트 처리 오류: ${e.message}`;
+        // 에러 발생 시에도 이동 상태 초기화
+        window.isMovingFiles = false;
     }
 }
 
@@ -2683,7 +2763,14 @@ function moveToFolder(itemsToMove, targetFolder) {
                     clearSelection();
                     
                     // 목록 새로고침
-                    return loadFiles(currentPath);
+                    return loadFiles(currentPath).then(() => {
+                        return {
+                            fulfilled,
+                            rejected,
+                            skipped: skipItems.length,
+                            message: resultMessage
+                        };
+                    });
                 })
                 .catch(error => {
                     // 이동 실패
@@ -2692,15 +2779,13 @@ function moveToFolder(itemsToMove, targetFolder) {
                     return Promise.reject(error);
                 })
                 .finally(() => {
-                    // 이동 상태 초기화 및 로딩 숨김
-                    window.isMovingFiles = false;
+                    // 이동 상태 초기화 및 로딩 숨김 (호출자에서도 처리하지만 안전을 위해 중복 설정)
                     hideLoading();
                 });
         })
         .catch(error => {
-            window.isMovingFiles = false;
             statusInfo.textContent = `이동 준비 중 오류: ${error}`;
             console.error('Move preparation error:', error);
             return Promise.reject(error);
-    });
+        });
 }
