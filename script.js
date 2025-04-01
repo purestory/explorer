@@ -1925,9 +1925,18 @@ function uploadFiles(files) {
         }
     }
     
+    // 현재 원본 URL 출력
+    console.log('현재 위치:', window.location.href);
+    console.log('API_BASE_URL:', API_BASE_URL);
+    
     // XMLHttpRequest 사용
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload');
+    
+    // API_BASE_URL을 사용하여 업로드 경로 설정
+    const uploadUrl = `${API_BASE_URL}/api/upload`;
+    console.log('업로드 URL:', uploadUrl);
+    
+    xhr.open('POST', uploadUrl);
     
     // 업로드 진행 이벤트
     xhr.upload.addEventListener('progress', function(e) {
@@ -1946,7 +1955,7 @@ function uploadFiles(files) {
             
             // 폴더 크기 업데이트
             const sizeRequest = new XMLHttpRequest();
-            sizeRequest.open('GET', `/api/folderSize?path=${encodeURIComponent(currentPath || '')}`);
+            sizeRequest.open('GET', `${API_BASE_URL}/api/folderSize?path=${encodeURIComponent(currentPath || '')}`);
             sizeRequest.send();
             
             try {
@@ -1983,10 +1992,11 @@ function uploadFiles(files) {
     };
     
     // 오류 이벤트
-    xhr.onerror = function() {
+    xhr.onerror = function(error) {
         hideProgress();
         showMessage('네트워크 오류가 발생했습니다.');
         console.error('업로드 중 네트워크 오류 발생');
+        console.error('오류 정보:', error);
     };
     
     // 요청 전송
