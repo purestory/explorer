@@ -78,17 +78,9 @@ server.setFileSystem('/', fileSystem);
 
 // CORS 설정
 app.use((req, res, next) => {
-  // 모든 요청에 대한 CORS 허용
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Credentials', 'false');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Destination, Overwrite, X-File-Size, X-File-Name, X-File-Type, Cache-Control, Pragma');
-  res.header('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
-  res.header('Access-Control-Max-Age', '86400');  // 24시간 캐싱
-  
-  // URL 및 경로 로깅 - 디버깅용
-  const origin = req.headers.origin || 'unknown';
-  log(`CORS 요청 - 메소드: ${req.method}, URL: ${req.url}, 출처: ${origin}`);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Destination, Overwrite');
   
   // OPTIONS 요청 처리
   if (req.method === 'OPTIONS') {
@@ -418,184 +410,124 @@ app.delete('/api/files/*', (req, res) => {
 
 // 파일 업로드 API
 app.post('/api/upload', (req, res) => {
-  try {
-    log(`파일 업로드 요청 받음 - URL: ${req.url}, 메소드: ${req.method}`);
-    
-    // 요청 헤더 로깅
-    log(`업로드 요청 헤더: ${JSON.stringify(req.headers)}`);
-    
-    // 요청에서 파일 및 경로 정보를 처리하기 위한 업로드 설정
-    const upload = multer({
-      storage: multer.memoryStorage(),
-      limits: {
-        files: 100, // 최대 100개 파일 허용
-        fileSize: 10 * 1024 * 1024 * 1024 // 10GB
+  // 1. multer 설정을 any()로 변경하여 모든 파일과 필드를 받음
+  const upload = multer({
+    storage: multer.memoryStorage(), // 파일을 메모리에 저장
+    limits: {
+      fileSize: 10 * 1024 * 1024 * 1024 // 10GB
+    }
+  }).any(); // 모든 필드 이름의 파일을 req.files 배열로 받음
+
+  // 2. multer 미들웨어 실행
+  upload(req, res, function(err) {
+    if (err) {
+      errorLog('파일 업로드 처리 오류 (multer):', err);
+      // Multer 오류 처리 (예: 파일 크기 초과)
+      if (err instanceof multer.MulterError) {
+          return res.status(400).json({ error: `파일 업로드 오류: ${err.message}` });
       }
-    }).fields([
-      { name: 'files', maxCount: 100 },
-      { name: 'filePaths', maxCount: 100 }
-    ]);
+      return res.status(500).json({ error: '파일 업로드 중 서버 오류가 발생했습니다.' });
+    }
 
-    // Multer로 업로드 처리
-    upload(req, res, function(err) {
-      if (err) {
-        errorLog('파일 업로드 오류:', err);
-        return res.status(500).json({ 
-          error: '파일 업로드 중 오류가 발생했습니다.', 
-          message: err.message,
-          errorCount: 1,
-          successCount: 0
-        });
-      }
+    // 3. 필수 데이터 확인 (파일 및 파일 정보)
+    if (!req.files || req.files.length === 0) {
+      errorLog('업로드 요청에 파일이 없습니다.');
+      return res.status(400).json({ error: '업로드할 파일이 없습니다.' });
+    }
+    if (!req.body.fileInfo) {
+      errorLog('업로드 요청에 파일 정보(fileInfo)가 없습니다.');
+      return res.status(400).json({ error: '파일 정보가 누락되었습니다.' });
+    }
 
-      // 파일 데이터 확인
-      log(`업로드 요청 처리: files=${req.files ? JSON.stringify(Object.keys(req.files)) : 'undefined'}, body=${JSON.stringify(req.body)}`);
-      
-      // 파일 필드 확인
-      if (!req.files || !req.files.files || req.files.files.length === 0) {
-        errorLog('업로드 파일이 없습니다.');
-        return res.status(400).json({ 
-          error: '업로드 파일이 없습니다.',
-          errorCount: 0,
-          successCount: 0
-        });
-      }
+    // 4. 데이터 파싱 및 경로 설정
+    const baseUploadPath = req.body.path || ''; // 클라이언트가 지정한 기본 업로드 경로
+    const rootUploadDir = path.join(ROOT_DIRECTORY, baseUploadPath);
+    let fileInfoArray;
 
-      // 요청 경로 추출
-      const pathValue = req.body.path || '';
-      const targetPath = pathValue 
-        ? path.join(ROOT_DIRECTORY, pathValue) 
-        : ROOT_DIRECTORY;
+    try {
+      fileInfoArray = JSON.parse(req.body.fileInfo);
+      log(`파일 정보 수신: ${fileInfoArray.length}개 항목`);
+    } catch (parseError) {
+      errorLog('fileInfo JSON 파싱 오류:', parseError);
+      return res.status(400).json({ error: '잘못된 파일 정보 형식입니다.' });
+    }
 
-      // 폴더 구조 여부 확인
-      const hasFolderStructure = req.body.hasFolderStructure === 'true';
-      
-      log(`파일 업로드 요청: 경로=${pathValue || '루트'}, 폴더구조=${hasFolderStructure ? '있음' : '없음'}, 파일수=${req.files.files.length}개`);
-      
-      // 처리 결과 추적 변수
-      const successFiles = [];
-      const errorFiles = [];
-      const createdDirs = new Set(); // 중복 폴더 생성 방지
+    log(`기본 업로드 경로: ${baseUploadPath || '루트 디렉토리'}, 절대 경로: ${rootUploadDir}`);
 
-      // 파일 경로 정보 배열
-      const filePaths = req.files.filePaths ? Array.from(req.files.filePaths).map(f => f.buffer.toString()) : [];
-      
-      if (hasFolderStructure && req.files.filePaths) {
-        log(`폴더 업로드 모드: ${filePaths.length}개 경로 정보 수신됨`);
-        // 경로 정보 샘플 로깅 (최대 3개)
-        const pathSamples = filePaths.filter(p => p).slice(0, 3);
-        if (pathSamples.length > 0) {
-          log(`경로 샘플: ${pathSamples.join(', ')}${filePaths.length > 3 ? ' ...' : ''}`);
+    // 5. 각 파일 처리 및 저장
+    const processedFiles = [];
+    const errors = [];
+
+    // req.files 배열과 fileInfoArray 매핑 (순서가 같다고 가정)
+    // 클라이언트에서 file_${index} 와 fileInfo 순서를 일치시킴
+    req.files.forEach((file, index) => {
+        // fileInfoArray 에서 현재 파일과 매칭되는 정보 찾기
+        // 클라이언트에서 보낸 file_${index} 의 index를 사용하거나, 순서를 신뢰
+        const fileInfo = fileInfoArray.find(info => info.index === index || info.originalName === Buffer.from(file.originalname, 'latin1').toString('utf8'));
+
+        if (!fileInfo || !fileInfo.relativePath) {
+            const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+            errorLog(`파일 정보 불일치 또는 상대 경로 누락: ${originalName} (index: ${index})`);
+            errors.push(`파일 ${originalName}의 정보를 찾을 수 없거나 상대 경로가 없습니다.`);
+            return; // 다음 파일로 이동
         }
-      }
 
-      // 대상 폴더 생성
-      if (!fs.existsSync(targetPath)) {
         try {
-          fs.mkdirSync(targetPath, { recursive: true });
-          fs.chmodSync(targetPath, 0o777);
-          log(`대상 폴더 생성: ${targetPath}`);
-        } catch (dirError) {
-          errorLog(`대상 폴더 생성 실패: ${targetPath}`, dirError);
-          return res.status(500).json({ 
-            error: '폴더 생성 중 오류가 발생했습니다.', 
-            message: dirError.message,
-            errorCount: req.files.files.length,
-            successCount: 0
-          });
-        }
-      }
+            const relativeFilePath = fileInfo.relativePath;
+            // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 상대 경로)
+            const destinationPath = path.join(rootUploadDir, relativeFilePath);
+            // 저장될 디렉토리 경로 추출
+            const destinationDir = path.dirname(destinationPath);
 
-      // 각 파일 처리
-      for (let i = 0; i < req.files.files.length; i++) {
-        try {
-          const file = req.files.files[i];
-          // 원본 파일명 (한글 인코딩 처리)
-          const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-          
-          // 파일 저장 경로 결정
-          let fileRelativePath = '';
-          
-          // 폴더 구조가 있는 경우 경로 처리
-          if (hasFolderStructure && i < filePaths.length && filePaths[i]) {
-            fileRelativePath = filePaths[i];
-            // 경로에서 파일명 제거 (마지막 부분)
-            const pathParts = fileRelativePath.split('/');
-            pathParts.pop(); // 파일명 제거
-            fileRelativePath = pathParts.join('/');
-            
-            if (fileRelativePath) {
-              log(`파일 ${i+1}/${req.files.files.length} 경로: ${fileRelativePath}`);
-              
-              // 전체 경로 구성
-              const fullDirPath = path.join(targetPath, fileRelativePath);
-              
-              // 이미 생성한 폴더가 아닌 경우만 생성
-              if (!createdDirs.has(fullDirPath)) {
-                createdDirs.add(fullDirPath);
-                
-                // 디렉토리 생성
-                if (!fs.existsSync(fullDirPath)) {
-                  fs.mkdirSync(fullDirPath, { recursive: true });
-                  fs.chmodSync(fullDirPath, 0o777);
-                  log(`경로 생성: ${fullDirPath}`);
-                }
-              }
+            // 디렉토리 생성 (필요한 경우)
+            if (!fs.existsSync(destinationDir)) {
+                fs.mkdirSync(destinationDir, { recursive: true });
+                fs.chmodSync(destinationDir, 0o777); // 생성된 디렉토리 권한 설정
+                log(`하위 디렉토리 생성됨: ${destinationDir}`);
             }
-          }
-          
-          // 최종 파일 저장 경로 결정
-          const fullSavePath = fileRelativePath 
-            ? path.join(targetPath, fileRelativePath, originalName) 
-            : path.join(targetPath, originalName);
-          
-          // 파일 저장
-          fs.writeFileSync(fullSavePath, file.buffer);
-          fs.chmodSync(fullSavePath, 0o666);
-          
-          // 성공 목록에 추가
-          successFiles.push({
-            name: originalName,
-            size: file.size,
-            path: fileRelativePath 
-              ? path.join(pathValue, fileRelativePath).replace(/\\/g, '/') 
-              : pathValue,
-            mimetype: file.mimetype
-          });
-          
-          log(`파일 업로드 성공(${i+1}/${req.files.files.length}): ${originalName} (${formatBytes(file.size)})`);
-        } catch (fileError) {
-          const fileName = req.files.files[i].originalname;
-          errorLog(`파일 저장 실패: ${fileName}`, fileError);
-          errorFiles.push({
-            name: fileName,
-            error: fileError.message
-          });
-        }
-      }
 
-      // 결과 응답
-      log(`업로드 결과: 성공=${successFiles.length}개, 실패=${errorFiles.length}개, 총=${req.files.files.length}개`);
-      
-      res.status(successFiles.length > 0 ? 200 : 500).json({
-        message: successFiles.length > 0 
-          ? `${successFiles.length}개 파일 업로드 완료` 
-          : '모든 파일 업로드 실패',
-        successCount: successFiles.length,
-        errorCount: errorFiles.length,
-        files: successFiles,
-        errors: errorFiles.length > 0 ? errorFiles : undefined
+            // 파일 시스템에 저장 (메모리 버퍼 사용)
+            fs.writeFileSync(destinationPath, file.buffer);
+            fs.chmodSync(destinationPath, 0o666); // 저장된 파일 권한 설정
+
+            // 처리된 파일 정보 저장
+            const savedFileName = path.basename(destinationPath);
+            processedFiles.push({
+                name: savedFileName,
+                originalName: fileInfo.originalName, // 원본 파일명도 기록
+                relativePath: relativeFilePath,
+                size: file.size,
+                path: baseUploadPath, // 기본 업로드 경로
+                mimetype: file.mimetype,
+                fullPath: destinationPath
+            });
+
+            log(`파일 저장 완료: ${destinationPath} (크기: ${formatBytes(file.size)})`);
+
+        } catch (writeError) {
+            errorLog(`파일 저장 중 오류: ${fileInfo.relativePath}`, writeError);
+            errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`);
+        }
+    });
+
+    // 6. 최종 응답 전송
+    if (errors.length > 0) {
+      // 일부 오류 발생
+      log(`파일 업로드 중 ${errors.length}개의 오류 발생`);
+      res.status(207).json({ // Multi-Status 응답
+        message: `일부 파일 업로드 중 오류 발생 (${processedFiles.length}개 성공, ${errors.length}개 실패)`,
+        processedFiles: processedFiles,
+        errors: errors
       });
-    });
-  } catch (error) {
-    errorLog('파일 업로드 처리 오류:', error);
-    res.status(500).json({ 
-      error: '파일 업로드 처리 중 오류가 발생했습니다.', 
-      message: error.message,
-      errorCount: 1,
-      successCount: 0
-    });
-  }
+    } else {
+      // 모든 파일 성공
+      log(`${processedFiles.length}개 파일 업로드 성공`);
+      res.status(201).json({
+        message: '파일 업로드 성공',
+        files: processedFiles
+      });
+    }
+  });
 });
 
 // 바이트 단위를 읽기 쉬운 형식으로 변환하는 함수
