@@ -1931,105 +1931,97 @@ function uploadFiles(files) {
     console.log('현재 위치:', window.location.href);
     console.log('API_BASE_URL:', API_BASE_URL);
     
-    // XMLHttpRequest 사용
-    const xhr = new XMLHttpRequest();
+    // 업로드 주소 결정 - 여러 방법 시도
+    let uploadUrls = [];
     
-    // 업로드 주소 만들기 - API 경로에 문제가 있을 수 있으므로 수정
-    let uploadUrl;
+    // 1. 기본 API URL 사용
+    uploadUrls.push(`${API_BASE_URL}/api/upload`); 
     
-    // window.location.pathname에 /webdav-explorer가 포함되어 있으면 해당 경로 추가
-    if (window.location.pathname.includes('/webdav-explorer')) {
-        uploadUrl = `${window.location.origin}/webdav-explorer/api/upload`;
-    } else {
-        uploadUrl = `${API_BASE_URL}/api/upload`;
-    }
+    // 2. 상대 경로 시도
+    uploadUrls.push('/api/upload');
     
-    console.log('업로드 URL:', uploadUrl);
+    // 3. 현재 문서 기준 상대 경로
+    const currentPath = window.location.pathname;
+    const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+    uploadUrls.push(`${basePath}api/upload`);
     
-    xhr.open('POST', uploadUrl);
+    // 4. 원본 URL에서 경로만 제거한 버전
+    uploadUrls.push(`${window.location.origin}/api/upload`);
     
-    // 업로드 진행 이벤트
-    xhr.upload.addEventListener('progress', function(e) {
-        if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            updateProgressBar(percent);
-            statusInfo.textContent = `업로드 중... ${percent}%`;
-        }
-    });
+    console.log('시도할 업로드 URL 목록:', uploadUrls);
     
-    // 완료 이벤트
-    xhr.onload = function() {
-        if (xhr.status >= 200 && xhr.status < 300) {
+    // 첫 번째 URL 시도
+    tryUpload(uploadUrls, 0, formData);
+    
+    // 재귀적으로 다른 URL을 시도하는 함수
+    function tryUpload(urls, index, formData) {
+        if (index >= urls.length) {
+            // 모든 URL을 시도했지만 실패
             hideProgress();
-            refreshFileList(); // 파일 목록 새로고침
-            
-            // 폴더 크기 업데이트
-            const sizeRequest = new XMLHttpRequest();
-            sizeRequest.open('GET', `${API_BASE_URL}/api/folderSize?path=${encodeURIComponent(currentPath || '')}`);
-            sizeRequest.send();
-            
-            try {
-                const response = JSON.parse(xhr.responseText);
+            showMessage('모든 업로드 시도가 실패했습니다. 서버 설정을 확인하세요.');
+            return;
+        }
+        
+        const currentUrl = urls[index];
+        console.log(`업로드 URL 시도 (${index + 1}/${urls.length}): ${currentUrl}`);
+        
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', currentUrl);
+        
+        // 업로드 진행 이벤트
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                updateProgressBar(percent);
+                statusInfo.textContent = `업로드 중... ${percent}%`;
+            }
+        });
+        
+        // 완료 이벤트
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                console.log(`업로드 성공 (URL: ${currentUrl})`);
+                hideProgress();
+                refreshFileList();
                 
-                // 업로드 결과 메시지 표시
-                if (response.successCount > 0) {
-                    if (response.errorCount > 0) {
-                        showMessage(`${response.successCount}개 파일 업로드 성공, ${response.errorCount}개 실패`);
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.successCount > 0) {
+                        if (response.errorCount > 0) {
+                            showMessage(`${response.successCount}개 파일 업로드 성공, ${response.errorCount}개 실패`);
+                        } else {
+                            showMessage(`${response.successCount}개 파일 업로드 완료`);
+                        }
                     } else {
-                        showMessage(`${response.successCount}개 파일 업로드 완료`);
+                        showMessage('파일 업로드 실패: ' + (response.message || '알 수 없는 오류'));
                     }
-                } else {
-                    showMessage('파일 업로드 실패: ' + (response.message || '알 수 없는 오류'));
+                } catch (e) {
+                    console.error('응답 파싱 오류:', e);
+                    showMessage('응답 처리 중 오류가 발생했습니다.');
                 }
-            } catch (e) {
-                console.error('응답 파싱 오류:', e);
-                showMessage('응답 처리 중 오류가 발생했습니다.');
+            } else {
+                console.log(`업로드 실패 (URL: ${currentUrl}) - 상태: ${xhr.status}`);
+                // 다음 URL 시도
+                tryUpload(urls, index + 1, formData);
             }
-        } else {
-            hideProgress();
-            let errorMsg = '업로드 중 오류가 발생했습니다.';
-            
-            try {
-                const response = JSON.parse(xhr.responseText);
-                errorMsg = response.message || errorMsg;
-            } catch (e) {
-                console.error('응답 파싱 오류:', e);
-            }
-            
-            showMessage('오류: ' + errorMsg);
-            console.error('업로드 오류:', xhr.status, xhr.statusText);
-        }
-    };
-    
-    // 오류 이벤트
-    xhr.onerror = function(error) {
-        hideProgress();
-        showMessage('네트워크 오류가 발생했습니다. 브라우저 콘솔을 확인하세요.');
-        console.error('업로드 중 네트워크 오류 발생');
-        console.error('오류 정보:', error);
+        };
         
-        // 디버깅용 추가 정보
-        console.error('현재 URL:', window.location.href);
-        console.error('API 기본 URL:', API_BASE_URL);
-        console.error('시도한 업로드 URL:', uploadUrl);
+        // 오류 이벤트
+        xhr.onerror = function(error) {
+            console.error(`업로드 네트워크 오류 (URL: ${currentUrl})`, error);
+            // 다음 URL 시도
+            tryUpload(urls, index + 1, formData);
+        };
         
-        // 오류의 특성을 사용자에게 표시
-        if (error && error.target && error.target.status === 0) {
-            showMessage('CORS 관련 오류 발생: 서버 접근이 거부되었습니다.');
-        }
-    };
-    
-    // 요청 전송 전 디버깅 메시지
-    console.log('업로드 요청 전송 시작...');
-    
-    try {
         // 요청 전송
-        xhr.send(formData);
-        console.log('업로드 요청 전송 완료');
-    } catch (error) {
-        console.error('업로드 요청 전송 중 오류 발생:', error);
-        hideProgress();
-        showMessage('업로드 요청 전송 실패: ' + (error.message || '알 수 없는 오류'));
+        try {
+            xhr.send(formData);
+            console.log(`업로드 요청 전송 완료 (URL: ${currentUrl})`);
+        } catch (error) {
+            console.error(`업로드 요청 전송 중 오류 (URL: ${currentUrl}):`, error);
+            // 다음 URL 시도
+            tryUpload(urls, index + 1, formData);
+        }
     }
 }
 

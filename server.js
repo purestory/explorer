@@ -78,9 +78,15 @@ server.setFileSystem('/', fileSystem);
 
 // CORS 설정
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  // 요청 출처 확인 및 설정
+  const origin = req.headers.origin || '*';
+  res.header('Access-Control-Allow-Origin', origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Destination, Overwrite');
+  
+  // URL 및 경로 로깅 - 디버깅용
+  log(`CORS 요청 - 메소드: ${req.method}, URL: ${req.url}, 출처: ${origin}`);
   
   // OPTIONS 요청 처리
   if (req.method === 'OPTIONS') {
