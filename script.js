@@ -1909,8 +1909,10 @@ function uploadFiles(files) {
     showProgress();
     let formData = new FormData();
     
-    // 업로드 경로 설정
-    formData.append('path', currentPath || '');
+    // 업로드 경로 설정 - 전역 변수 참조 수정
+    // 전역 변수 currentPath가 초기화되어 있지 않은 경우를 대비해 함수 스코프 내에서 currentFolder 변수 사용
+    const uploadPath = typeof currentPath !== 'undefined' ? currentPath : '';
+    formData.append('path', uploadPath);
     formData.append('hasFolderStructure', hasFolderStructure);
     
     // 파일 처리 및 폴더 경로 보존
@@ -1930,6 +1932,7 @@ function uploadFiles(files) {
     // 현재 원본 URL 출력
     console.log('현재 위치:', window.location.href);
     console.log('API_BASE_URL:', API_BASE_URL);
+    console.log('업로드 경로:', uploadPath);
     
     // 업로드 주소 결정 - 여러 방법 시도
     let uploadUrls = [];
@@ -1941,8 +1944,8 @@ function uploadFiles(files) {
     uploadUrls.push('/api/upload');
     
     // 3. 현재 문서 기준 상대 경로
-    const currentPath = window.location.pathname;
-    const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+    const currentDocPath = window.location.pathname;
+    const basePath = currentDocPath.substring(0, currentDocPath.lastIndexOf('/') + 1);
     uploadUrls.push(`${basePath}api/upload`);
     
     // 4. 원본 URL에서 경로만 제거한 버전
