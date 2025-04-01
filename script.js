@@ -1852,30 +1852,33 @@ function handleExternalFileDrop(e, targetFolderItem = null) {
     uploadSource = 'dragdrop';
     dragDropCounter = 0;
     
+    // 현재 경로 미리 저장 (함수 내에서 일관성 유지)
+    const uploadToPath = typeof currentPath !== 'undefined' ? currentPath : '';
+    
     // 타겟 폴더가 지정된 경우
     if (targetFolderItem) {
         const targetFolder = targetFolderItem.getAttribute('data-name');
         console.log('외부 파일 드래그 감지:', files.length, '개 파일, 대상 폴더:', targetFolder);
         
         // 현재 폴더에 파일 업로드
-        const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+        const targetPath = uploadToPath ? `${uploadToPath}/${targetFolder}` : targetFolder;
+        console.log('업로드 대상 경로:', targetPath);
         
-        // 수정: 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
-        const originalPath = currentPath;
-        currentPath = targetPath;
-        
-        uploadFiles(files);
-        currentPath = originalPath;
+        // 업로드 함수 호출 (임시 경로 전달)
+        uploadFiles(files, targetPath);
     } else {
         // 현재 위치에 업로드
         console.log('외부 파일 드래그 감지:', files.length, '개 파일, 현재 경로에 업로드');
-        uploadFiles(files);
+        console.log('업로드 대상 경로:', uploadToPath);
+        
+        // 업로드 함수 호출 (경로 명시적 전달)
+        uploadFiles(files, uploadToPath);
     }
 }
 
 // 특정 폴더에 파일 업로드
-function uploadFiles(files) {
-    console.log(`uploadFiles 함수 호출됨: ${files.length}개 파일`);
+function uploadFiles(files, targetPath) {
+    console.log(`uploadFiles 함수 호출됨: ${files.length}개 파일, 대상 경로: ${targetPath}`);
     
     if (!files || files.length === 0) {
         alert('업로드할 파일이 없습니다.');
@@ -1907,11 +1910,11 @@ function uploadFiles(files) {
     }
     
     showProgress();
+    showLoading();
     let formData = new FormData();
     
-    // 업로드 경로 설정 - 전역 변수 참조 수정
-    // 전역 변수 currentPath가 초기화되어 있지 않은 경우를 대비해 함수 스코프 내에서 currentFolder 변수 사용
-    const uploadPath = typeof currentPath !== 'undefined' ? currentPath : '';
+    // 업로드 경로 설정 - 매개변수로 전달된 targetPath 사용
+    const uploadPath = targetPath || '';
     formData.append('path', uploadPath);
     formData.append('hasFolderStructure', hasFolderStructure);
     
@@ -1961,6 +1964,7 @@ function uploadFiles(files) {
         if (index >= urls.length) {
             // 모든 URL을 시도했지만 실패
             hideProgress();
+            hideLoading();
             showMessage('모든 업로드 시도가 실패했습니다. 서버 설정을 확인하세요.');
             return;
         }
@@ -1970,6 +1974,9 @@ function uploadFiles(files) {
         
         const xhr = new XMLHttpRequest();
         xhr.open('POST', currentUrl);
+        
+        // CORS 설정 추가
+        xhr.withCredentials = true;
         
         // 업로드 진행 이벤트
         xhr.upload.addEventListener('progress', function(e) {
@@ -1985,6 +1992,7 @@ function uploadFiles(files) {
             if (xhr.status >= 200 && xhr.status < 300) {
                 console.log(`업로드 성공 (URL: ${currentUrl})`);
                 hideProgress();
+                hideLoading();
                 refreshFileList();
                 
                 try {
@@ -2017,14 +2025,8 @@ function uploadFiles(files) {
         };
         
         // 요청 전송
-        try {
-            xhr.send(formData);
-            console.log(`업로드 요청 전송 완료 (URL: ${currentUrl})`);
-        } catch (error) {
-            console.error(`업로드 요청 전송 중 오류 (URL: ${currentUrl}):`, error);
-            // 다음 URL 시도
-            tryUpload(urls, index + 1, formData);
-        }
+        console.log(`업로드 요청 전송 완료 (URL: ${currentUrl})`);
+        xhr.send(formData);
     }
 }
 

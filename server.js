@@ -83,7 +83,8 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', origin);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Destination, Overwrite');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Destination, Overwrite, X-File-Size, X-File-Name, X-File-Type');
+  res.header('Access-Control-Expose-Headers', 'Content-Disposition');
   
   // URL 및 경로 로깅 - 디버깅용
   log(`CORS 요청 - 메소드: ${req.method}, URL: ${req.url}, 출처: ${origin}`);
