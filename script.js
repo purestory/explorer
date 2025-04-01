@@ -19,6 +19,9 @@ let dragDropCounter = 0;
 let dragDropMoveCounter = 0; // 드래그앤드롭 파일 이동 호출 카운터 추가
 let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
 
+// 글로벌 변수 정의
+const maxAllowedFiles = 100; // 한 번에 업로드할 수 있는 최대 파일 수
+
 // DOM 요소
 const fileView = document.getElementById('fileView');
 const breadcrumb = document.getElementById('breadcrumb');
@@ -2754,6 +2757,11 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
 function processEntries(entries) {
     console.log(`processEntries 시작: ${entries.length}개 항목 처리`);
     
+    // 입력 항목 로깅
+    entries.forEach((entry, index) => {
+        console.log(`입력 항목[${index}]: ${entry.name} - ${entry.isDirectory ? '폴더' : '파일'}`);
+    });
+    
     // 결과 저장 배열
     const allFiles = [];
     let pendingEntries = entries.length;
@@ -2768,31 +2776,48 @@ function processEntries(entries) {
             console.log(`모든 항목 처리 완료: 총 ${allFiles.length}개 파일 발견`);
             
             if (allFiles.length > 0) {
+                // 파일 정보 로깅
+                console.log('처리된 파일 목록:');
+                allFiles.slice(0, 5).forEach((file, idx) => {
+                    console.log(`- 파일[${idx}]: ${file.name}, 경로: ${file.webkitRelativePath || '(경로 없음)'}`);
+                });
+                if (allFiles.length > 5) {
+                    console.log(`... 외 ${allFiles.length - 5}개 파일`);
+                }
+                
                 // 파일이 있으면 업로드 시작
                 uploadFiles(allFiles);
             } else {
                 statusInfo.textContent = '업로드할 파일이 없습니다.';
+                console.log('처리된 파일이 없어 업로드를 건너뜁니다.');
             }
         }
     }
     
     // 재귀적으로 항목을 처리하는 함수
     function processEntry(entry, path = '') {
+        console.log(`[processEntry] 처리 중: ${entry.name}, 타입: ${entry.isDirectory ? '폴더' : '파일'}, 경로: ${path}`);
+        
         if (entry.isFile) {
             // 파일 항목 처리
             entry.file(function(file) {
                 // 경로 정보 추가
                 if (path) {
-                    // webkitRelativePath 속성 설정 (폴더 구조 정보 유지)
-                    Object.defineProperty(file, 'webkitRelativePath', {
-                        value: path ? `${path}/${file.name}` : file.name,
-                        writable: false
-                    });
-                    console.log(`파일 경로 설정: ${file.name} -> ${file.webkitRelativePath}`);
+                    try {
+                        // webkitRelativePath 속성 설정 (폴더 구조 정보 유지)
+                        Object.defineProperty(file, 'webkitRelativePath', {
+                            value: path ? `${path}/${file.name}` : file.name,
+                            writable: false
+                        });
+                        console.log(`파일 경로 설정 성공: ${file.name} -> ${file.webkitRelativePath}`);
+                    } catch (err) {
+                        console.warn(`파일 경로 설정 실패: ${file.name}, 오류:`, err);
+                    }
                 }
                 
                 // 파일 목록에 추가
                 allFiles.push(file);
+                console.log(`파일 추가됨: ${file.name}, 현재 총 ${allFiles.length}개 파일`);
                 checkComplete();
             }, function(error) {
                 console.error(`파일 처리 오류: ${entry.name}`, error);
@@ -2806,12 +2831,19 @@ function processEntries(entries) {
             const reader = entry.createReader();
             const dirPath = path ? `${path}/${entry.name}` : entry.name;
             
+            console.log(`디렉토리 경로 설정: ${dirPath}`);
+            
             // 모든 디렉토리 항목을 재귀적으로 읽는 함수
             function readAllEntries(reader, dirPath) {
+                console.log(`[readAllEntries] 디렉토리 읽기 시작: ${dirPath}`);
+                
                 reader.readEntries(function(entries) {
+                    console.log(`[readAllEntries] ${dirPath}에서 ${entries.length}개 항목 읽음`);
+                    
                     if (entries.length > 0) {
                         // 항목이 있으면 카운터 증가
                         pendingEntries += entries.length - 1; // 현재 항목 제외
+                        console.log(`pendingEntries 업데이트: ${pendingEntries}`);
                         
                         // 각 항목 처리
                         for (let i = 0; i < entries.length; i++) {
@@ -2823,6 +2855,7 @@ function processEntries(entries) {
                         readAllEntries(reader, dirPath);
                     } else {
                         // 더 이상 항목이 없으면 완료
+                        console.log(`[readAllEntries] ${dirPath} 디렉토리 읽기 완료`);
                         checkComplete();
                     }
                 }, function(error) {
@@ -2937,23 +2970,33 @@ dropZone.addEventListener('drop', function(e) {
         let entries = [];
         let hasDirectory = false;
         
-        // 각 항목을 확인
-        for (let i = 0; i < items.length; i++) {
-            const entry = items[i].webkitGetAsEntry();
-            if (entry) {
-                entries.push(entry);
-                if (entry.isDirectory) {
-                    hasDirectory = true;
-                    console.log(`폴더 감지됨: ${entry.name}`);
+        try {
+            // 각 항목을 확인
+            for (let i = 0; i < items.length; i++) {
+                const entry = items[i].webkitGetAsEntry();
+                console.log(`항목 ${i+1} 처리: ${entry ? (entry.name + (entry.isDirectory ? ' (폴더)' : ' (파일)')) : '항목 없음'}`);
+                
+                if (entry) {
+                    entries.push(entry);
+                    if (entry.isDirectory) {
+                        hasDirectory = true;
+                        console.log(`폴더 감지됨: ${entry.name}`);
+                    }
                 }
             }
-        }
-        
-        console.log(`총 ${entries.length}개 항목 드롭됨, 폴더 포함: ${hasDirectory ? '예' : '아니오'}`);
-        
-        if (entries.length > 0) {
-            // 아이템 목록이 있는 경우 처리 시작
-            processEntries(entries);
+            
+            console.log(`총 ${entries.length}개 항목 드롭됨, 폴더 포함: ${hasDirectory ? '예' : '아니오'}`);
+            
+            if (entries.length > 0) {
+                // 아이템 목록이 있는 경우 처리 시작
+                console.log('processEntries 함수 호출 시작');
+                processEntries(entries);
+            } else {
+                console.log('처리할 항목이 없습니다.');
+            }
+        } catch (error) {
+            console.error('항목 처리 중 오류 발생:', error);
+            alert(`폴더 처리 중 오류가 발생했습니다: ${error.message}`);
         }
     } else {
         // 일반 파일 모드로 처리
