@@ -1,5 +1,7 @@
 // 전역 변수
-const API_BASE_URL = window.location.origin;
+const API_BASE_URL = window.location.pathname.includes('/webdav-explorer') 
+    ? `${window.location.origin}/webdav-explorer` 
+    : window.location.origin;
 let currentPath = '';
 let selectedItems = new Set();
 let clipboardItems = [];
@@ -1932,8 +1934,16 @@ function uploadFiles(files) {
     // XMLHttpRequest 사용
     const xhr = new XMLHttpRequest();
     
-    // API_BASE_URL을 사용하여 업로드 경로 설정
-    const uploadUrl = `${API_BASE_URL}/api/upload`;
+    // 업로드 주소 만들기 - API 경로에 문제가 있을 수 있으므로 수정
+    let uploadUrl;
+    
+    // window.location.pathname에 /webdav-explorer가 포함되어 있으면 해당 경로 추가
+    if (window.location.pathname.includes('/webdav-explorer')) {
+        uploadUrl = `${window.location.origin}/webdav-explorer/api/upload`;
+    } else {
+        uploadUrl = `${API_BASE_URL}/api/upload`;
+    }
+    
     console.log('업로드 URL:', uploadUrl);
     
     xhr.open('POST', uploadUrl);
@@ -1994,13 +2004,33 @@ function uploadFiles(files) {
     // 오류 이벤트
     xhr.onerror = function(error) {
         hideProgress();
-        showMessage('네트워크 오류가 발생했습니다.');
+        showMessage('네트워크 오류가 발생했습니다. 브라우저 콘솔을 확인하세요.');
         console.error('업로드 중 네트워크 오류 발생');
         console.error('오류 정보:', error);
+        
+        // 디버깅용 추가 정보
+        console.error('현재 URL:', window.location.href);
+        console.error('API 기본 URL:', API_BASE_URL);
+        console.error('시도한 업로드 URL:', uploadUrl);
+        
+        // 오류의 특성을 사용자에게 표시
+        if (error && error.target && error.target.status === 0) {
+            showMessage('CORS 관련 오류 발생: 서버 접근이 거부되었습니다.');
+        }
     };
     
-    // 요청 전송
-    xhr.send(formData);
+    // 요청 전송 전 디버깅 메시지
+    console.log('업로드 요청 전송 시작...');
+    
+    try {
+        // 요청 전송
+        xhr.send(formData);
+        console.log('업로드 요청 전송 완료');
+    } catch (error) {
+        console.error('업로드 요청 전송 중 오류 발생:', error);
+        hideProgress();
+        showMessage('업로드 요청 전송 실패: ' + (error.message || '알 수 없는 오류'));
+    }
 }
 
 // 파일/폴더 이동 함수
