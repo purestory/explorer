@@ -1940,19 +1940,20 @@ function uploadFiles(files, targetPath) {
     // 업로드 주소 결정 - 여러 방법 시도
     let uploadUrls = [];
     
-    // 1. 기본 API URL 사용
-    uploadUrls.push(`${API_BASE_URL}/api/upload`); 
-    
-    // 2. 상대 경로 시도
+    // 1. 상대 경로 시도 (가장 안정적인 경우가 많음)
     uploadUrls.push('/api/upload');
     
-    // 3. 현재 문서 기준 상대 경로
+    // 2. 현재 문서 기준 상대 경로
     const currentDocPath = window.location.pathname;
     const basePath = currentDocPath.substring(0, currentDocPath.lastIndexOf('/') + 1);
     uploadUrls.push(`${basePath}api/upload`);
     
+    // 3. 기본 API URL 사용
+    uploadUrls.push(`${API_BASE_URL}/api/upload`); 
+    
     // 4. 원본 URL에서 경로만 제거한 버전
     uploadUrls.push(`${window.location.origin}/api/upload`);
+    
     
     console.log('시도할 업로드 URL 목록:', uploadUrls);
     
@@ -1975,8 +1976,8 @@ function uploadFiles(files, targetPath) {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', currentUrl);
         
-        // CORS 설정 추가
-        xhr.withCredentials = true;
+        // CORS 설정 수정 - credentials 제거
+        xhr.withCredentials = false;
         
         // 업로드 진행 이벤트
         xhr.upload.addEventListener('progress', function(e) {
