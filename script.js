@@ -1361,66 +1361,383 @@ function handleDragEnd() {
 
 // 드래그 앤 드롭 초기화
 function initDragAndDrop() {
-    const dropZone = document.getElementById('file-list');
-    const statusInfo = document.getElementById('statusInfo') || document.createElement('div');
+    // 파일 리스트에 이벤트 위임 사용 - 동적으로 생성된 파일 항목에도 이벤트 처리
+    const fileList = document.getElementById('fileList');
+    const fileView = document.getElementById('fileView');
+    const dropZone = document.getElementById('dropZone');
     
-    // 드래그 이벤트 처리
-    dropZone.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.classList.add('dragover');
+    if (!dropZone) {
+        console.error('드롭존 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 파일 드래그 이벤트 위임
+    fileList.addEventListener('dragstart', (e) => {
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) return;
+        
+        // 상위 폴더는 드래그되지 않도록 방지
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            e.preventDefault();
+            return;
+        }
+        
+        // 드래그 중인 요소 식별
+        const fileId = fileItem.getAttribute('data-name');
+        console.log('드래그 시작:', fileId);
+        
+        // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
+        if (selectedItems.size > 1 && fileItem.classList.contains('selected')) {
+            // 여러 항목이 선택된 경우 모든 선택 항목의 ID를 저장
+            e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
+            e.dataTransfer.effectAllowed = 'move';
+        } else {
+            // 단일 항목 드래그
+        e.dataTransfer.setData('text/plain', fileId);
+            e.dataTransfer.effectAllowed = 'move';
+        
+        // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
+        if (!fileItem.classList.contains('selected')) {
+            clearSelection();
+            fileItem.classList.add('selected');
+            selectedItems.add(fileId);
+            updateButtonStates();
+            }
+        }
+        
+        // 내부 파일 드래그임을 표시하는 데이터 추가
+        e.dataTransfer.setData('application/webdav-internal', 'true');
+        
+        // 드래그 중 스타일 적용
+        setTimeout(() => {
+            document.querySelectorAll('.file-item.selected').forEach(item => {
+                item.classList.add('dragging');
+            });
+        }, 0);
     });
     
-    dropZone.addEventListener('dragleave', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.classList.remove('dragover');
+    // 드래그 종료 이벤트 위임
+    fileList.addEventListener('dragend', (e) => {
+        // 드래그 스타일 제거
+        document.querySelectorAll('.file-item.dragging').forEach(item => {
+            item.classList.remove('dragging');
+        });
+        
+        // 드래그 오버 스타일 제거
+        document.querySelectorAll('.file-item.drag-over').forEach(item => {
+            item.classList.remove('drag-over');
+        });
+        
+        // 드롭존 비활성화
+        dropZone.classList.remove('active');
     });
     
-    // 드롭 이벤트 처리
-    dropZone.addEventListener('drop', function(e) {
+    // 드래그 진입 이벤트 위임 - 폴더에만 적용
+    fileList.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) return;
+        
+        // 상위 폴더인 경우 드래그 오버 스타일 적용하지 않음
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            return;
+        }
+        
+        // 폴더인 경우에만 처리하고 시각적 표시
+        if (fileItem.getAttribute('data-is-folder') === 'true') {
+            // 내부 드래그인 경우 선택된 폴더에 대한 드래그 무시
+            if (isInternalDrag(e) && fileItem.classList.contains('selected')) {
+                console.log('자기 자신이나 하위 폴더에 드래그 불가: ', fileItem.getAttribute('data-name'));
+                return;
+            }
+            
+            console.log('드래그 진입:', fileItem.getAttribute('data-name'));
+            fileItem.classList.add('drag-over');
+        }
+    });
+    
+    // 드래그 영역 위 이벤트 위임
+    fileList.addEventListener('dragover', (e) => {
+        e.preventDefault(); // 드롭 허용
+        e.stopPropagation(); // 이벤트 버블링 방지
+        
+        const fileItem = e.target.closest('.file-item');
+        
+        // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
+        if (!fileItem || e.target === fileList || e.target === fileView) {
+            // 내부 드래그인 경우에는 활성화하지 않음 (전체 드롭존 비활성화)
+            // if (!isInternalDrag(e) && e.dataTransfer.types.includes('Files')) {
+            //     dropZone.classList.add('active');
+            // }
+            return;
+        }
+        
+        // 상위 폴더인 경우 드래그 오버 처리하지 않음
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+            return;
+        }
+        
+        // 폴더인 경우에만 처리
+        if (fileItem.getAttribute('data-is-folder') === 'true') {
+            // 내부 드래그인 경우 선택된 폴더에 대한 드래그 무시
+            if (isInternalDrag(e) && fileItem.classList.contains('selected')) {
+                e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+                return;
+            }
+            
+            // 드롭존 비활성화 - 폴더에 드래그할 때는 전체 드롭존이 아닌 폴더 자체에 표시
+            dropZone.classList.remove('active');
+            
+            // 폴더에 드래그 오버 스타일 적용
+            fileItem.classList.add('drag-over');
+            
+            // 적절한 드롭 효과 설정
+            if (isInternalDrag(e)) {
+                e.dataTransfer.dropEffect = 'move'; // 내부 파일은 이동
+            } else {
+                e.dataTransfer.dropEffect = 'copy'; // 외부 파일은 복사
+            }
+        }
+    });
+    
+    // 드래그 영역 벗어날 때 이벤트 위임
+    fileList.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) return;
+        
+        // 정확한 dragleave 확인 (자식 요소로 이동하는 경우 무시)
+        const rect = fileItem.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        // 실제로 영역을 벗어났는지 확인
+        if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
+        fileItem.classList.remove('drag-over');
+        }
+    });
+    
+    // 드롭 이벤트 위임
+    fileList.addEventListener('drop', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.classList.remove('dragover');
         
-        console.log('드롭 이벤트 발생 위치:', e.currentTarget.id);
+        // 드롭존 비활성화
+        dropZone.classList.remove('active');
         
-        // 이미 업로드 중인지 확인
-        if (window.isFileUploading) {
-            showMessage("이미 파일 업로드가 진행 중입니다. 완료 후 다시 시도해주세요.", "warning");
+        // 파일 항목 찾기
+        const fileItem = e.target.closest('.file-item');
+        
+        // 드롭 위치 로깅
+        console.log('드롭 이벤트 발생 위치:', e.target.className);
+        
+        // 파일 항목이 없는 경우 (빈 공간에 드롭)
+        if (!fileItem) {
+            console.log('빈 공간에 드롭됨');
+            // 외부 파일 업로드 처리
+            if (e.dataTransfer.files.length > 0) {
+                handleExternalFileDrop(e);
+            }
+            return;
+        }
+        
+        // 상위 폴더에 드롭되는 경우 차단
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            console.log('상위 폴더에 드롭되어 무시됨');
+            return;
+        }
+        
+        // 드롭된 파일 항목 정보 로깅
+        console.log('드롭 대상 폴더:', fileItem.getAttribute('data-name'), 
+                  '폴더 여부:', fileItem.getAttribute('data-is-folder'));
+        
+        // 드래그 오버 스타일 제거
+        fileItem.classList.remove('drag-over');
+        
+        // 폴더가 아닌 경우 무시
+        if (fileItem.getAttribute('data-is-folder') !== 'true') {
+            console.log('폴더가 아닌 항목에 드롭되어 무시됨');
+            return;
+        }
+        
+        // 내부 드래그인 경우만 선택 항목 확인
+        if (isInternalDrag(e)) {
+            console.log('내부 파일 드래그 감지됨');
+            // 선택된 항목들이 자기 자신을 포함하고 있으면 무시
+            if (fileItem.classList.contains('selected')) {
+                console.log('폴더가 선택된 상태에서는 자기자신에게 드롭하여 무시됨');
+                return;
+            }
+        
+            // 내부 파일 이동 처리
+            handleInternalFileDrop(e, fileItem);
+        } else if (e.dataTransfer.files.length > 0) {
+            console.log('외부 파일 드래그 감지됨');
+            // 외부 파일 업로드를 지정 폴더로 처리
+            handleExternalFileDrop(e, fileItem);
+        }
+    });
+    
+    // 드롭존 이벤트 처리 (파일 업로드용)
+    
+    // 드래그 영역 진입
+    window.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 외부 파일인지 확인
+        const isExternalFile = e.dataTransfer.types.includes('Files') && !isInternalDrag(e);
+        
+        if (isExternalFile) {
+            // 폴더 항목 확인
+            const fileItem = e.target.closest('.file-item');
+            
+            // 폴더에 드래그하는 경우 해당 폴더만 강조
+            if (fileItem && fileItem.getAttribute('data-is-folder') === 'true') {
+                // 상위 폴더인 경우 드래그 강조 제외
+                if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                    return;
+                }
+                
+                // 전체 드롭존 비활성화
+                dropZone.classList.remove('active');
+                
+                // 특정 폴더 강조
+                fileItem.classList.add('drag-over');
+                console.log('폴더에 외부 파일 드래그 진입:', fileItem.getAttribute('data-name'));
+            } else {
+                // 전체 드롭존 비활성화 - 폴더에만 드롭 가능하도록 함
+                // dropZone.classList.add('active');
+                // console.log('외부 파일 드래그 진입 - 드롭존 활성화');
+            }
+        }
+    });
+    
+    // 드래그 영역 위
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 외부 파일인지 확인
+        const isExternalFile = e.dataTransfer.types.includes('Files') && !isInternalDrag(e);
+        
+        if (isExternalFile) {
+            // 폴더 항목 확인
+            const fileItem = e.target.closest('.file-item');
+            
+            // 폴더에 드래그하는 경우 해당 폴더만 강조
+            if (fileItem && fileItem.getAttribute('data-is-folder') === 'true') {
+                // 상위 폴더인 경우 드래그 강조 제외
+                if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                    e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+                    return;
+                }
+                
+                // 전체 드롭존 비활성화
+                dropZone.classList.remove('active');
+                
+                // 특정 폴더 강조
+                fileItem.classList.add('drag-over');
+                e.dataTransfer.dropEffect = 'copy';
+            } else {
+                // 전체 드롭존 비활성화 - 폴더에만 드롭 가능하도록 함
+                // dropZone.classList.add('active');
+            }
+        }
+    });
+    
+    // 드래그 영역 이탈
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = dropZone.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        // 실제로 영역을 벗어났는지 확인
+        if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
+            dropZone.classList.remove('active');
+        }
+    });
+    
+    // 드롭 이벤트
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('active');
+        
+        // 외부 파일 업로드 처리
+        if (e.dataTransfer.files.length > 0) {
+            handleExternalFileDrop(e);
+        }
+    });
+    
+    // 드롭존 드롭 이벤트
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('active');
+        
+        // 이미 진행 중인 업로드가 있는지 확인
+        if (progressContainer.style.display === 'block') {
+            statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
+            console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
             return;
         }
         
         try {
-            // 내부 파일 드래그인지 외부 파일 드래그인지 확인
-            if (isInternalDrag(e)) {
-                // 내부 파일 이동 처리
-                const targetElement = e.target.closest('.file-item');
-                if (targetElement && targetElement.classList.contains('folder')) {
-                    console.log('폴더에 내부 파일 드롭됨:', targetElement.dataset.name);
-                    handleInternalFileDrop(e, targetElement);
-                } else {
-                    console.log('빈 공간에 드롭됨');
-                    // 현재 경로가 루트가 아니면 상위 폴더로 이동으로 처리할 수 있음
-                    if (currentPath) {
-                        handleInternalFileDrop(e, null);
+            // DataTransfer 객체에서 항목 검사
+            if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+                const entries = [];
+                let hasDirectory = false;
+                
+                // 항목 검사하여 폴더 여부 확인
+                for (let i = 0; i < e.dataTransfer.items.length; i++) {
+                    const item = e.dataTransfer.items[i];
+                    
+                    // webkitGetAsEntry 지원 확인
+                    if (item.webkitGetAsEntry) {
+                        const entry = item.webkitGetAsEntry();
+                        if (entry) {
+                            entries.push(entry);
+                            if (entry.isDirectory) {
+                                hasDirectory = true;
+                                console.log(`폴더 감지: ${entry.name}`);
+                            }
+                        }
                     }
                 }
-            } else {
-                // 외부 파일 업로드 처리
-                const targetElement = e.target.closest('.file-item');
-                if (targetElement && targetElement.classList.contains('folder')) {
-                    console.log('폴더에 외부 파일 드래그 진입:', targetElement.dataset.name);
-                    handleExternalFileDrop(e, targetElement);
-                } else {
-                    console.log('빈 공간에 외부 파일 드롭됨');
-                    handleExternalFileDrop(e);
+                
+                // 폴더가 하나라도 있으면 폴더 처리 로직으로 진행
+                if (hasDirectory) {
+                    console.log(`폴더 드롭: ${entries.length}개 항목 (폴더 포함)`);
+                    statusInfo.textContent = '폴더 업로드 시작...';
+                    
+                    // 업로드 소스 설정
+                    uploadSource = 'dragdrop';
+                    
+                    // 항목 재귀 처리 시작
+                    processEntries(entries);
+                    return;
                 }
             }
+            
+            // 폴더가 없는 경우 일반 파일 업로드 처리
+            if (e.dataTransfer.files.length > 0) {
+                console.log(`일반 파일 드롭: ${e.dataTransfer.files.length}개 파일`);
+                handleExternalFileDrop(e);
+            }
         } catch (error) {
-            console.error('드롭 처리 중 오류 발생:', error);
-            showMessage("파일 처리 중 오류가 발생했습니다.", "error");
+            console.error('드롭 이벤트 처리 오류:', error);
+            statusInfo.textContent = `드롭 이벤트 처리 오류: ${error.message}`;
         }
+    });
+    
+    // 개발 모드에서 폴더 항목 CSS 선택자 유효성 확인
+    console.log('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
+    document.querySelectorAll('.file-item[data-is-folder="true"]').forEach(folder => {
+        console.log('폴더 항목:', folder.getAttribute('data-name'));
     });
 }
 
@@ -1506,196 +1823,157 @@ function handleInternalFileDrop(e, targetFolderItem) {
 
 // 외부 파일 드롭 처리 함수
 function handleExternalFileDrop(e, targetFolderItem = null) {
-    // 이미 업로드 중인지 확인
-    if (window.isFileUploading) {
-        showMessage("이미 파일 업로드가 진행 중입니다. 완료 후 다시 시도해주세요.", "warning");
+    // 진행 중인 업로드가 있는지 확인
+    if (progressContainer.style.display === 'block') {
+        statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
+        console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
         return;
     }
     
-    // 드롭한 파일들을 수집
-    const items = e.dataTransfer.items;
+    // 파일 객체 가져오기
     const files = e.dataTransfer.files;
+    if (files.length === 0) return;
     
-    // 업로드 경로 설정 - 폴더에 드롭한 경우 해당 폴더 경로, 아니면 현재 경로
-    const uploadPath = targetFolderItem 
-        ? (currentPath ? `${currentPath}/${targetFolderItem.dataset.name}` : targetFolderItem.dataset.name)
-        : currentPath;
-    
-    // 폴더 여부 확인 (DataTransferItemList API 지원 확인)
-    if (items && items.length > 0 && items[0].webkitGetAsEntry) {
-        console.log(`외부 파일 드래그 감지: ${items.length} 개 항목, ${uploadPath || '/'} 경로에 업로드`);
-        
-        // webkitGetAsEntry API를 사용하여 폴더인지 확인
-        const entries = [];
-        let hasDirectory = false;
-        
-        for (let i = 0; i < items.length; i++) {
-            const entry = items[i].webkitGetAsEntry();
-            if (entry) {
-                entries.push(entry);
-                if (entry.isDirectory) {
-                    hasDirectory = true;
-                    console.log(`폴더 감지됨: ${entry.name}`);
-                }
-            }
-        }
-        
-        // 폴더가 포함된 경우 특수 처리
-        if (hasDirectory) {
-            console.log(`폴더 업로드 모드로 처리: ${entries.length}개 항목`);
-            processEntries(entries); // 폴더와 파일을 재귀적으로 처리
-            return;
+    // 파일 타입 확인 및 로깅
+    console.log('드래그된 파일 타입 확인:');
+    for (let i = 0; i < Math.min(files.length, 5); i++) {
+        console.log(`파일 ${i+1}: ${files[i].name}, 타입: ${files[i].type}, 크기: ${formatFileSize(files[i].size)}`);
+        if (files[i].webkitRelativePath) {
+            console.log(`  - 경로 정보: ${files[i].webkitRelativePath}`);
         }
     }
     
-    // 일반 파일만 있는 경우 (또는 API 미지원 시)
-    if (files && files.length > 0) {
-        console.log(`외부 파일 드래그 감지: ${files.length} 개 파일, ${uploadPath || '/'} 경로에 업로드`);
-        uploadFiles(Array.from(files), uploadPath);
+    // 업로드 소스 설정 및 카운터 초기화
+    uploadSource = 'dragdrop';
+    dragDropCounter = 0;
+    
+    // 타겟 폴더가 지정된 경우
+    if (targetFolderItem) {
+        const targetFolder = targetFolderItem.getAttribute('data-name');
+        console.log('외부 파일 드래그 감지:', files.length, '개 파일, 대상 폴더:', targetFolder);
+        
+        // 현재 폴더에 파일 업로드
+        const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+        
+        // 수정: 현재 경로를 임시로 변경하여 업로드 후 원래 경로로 복원
+        const originalPath = currentPath;
+        currentPath = targetPath;
+        
+        uploadFiles(files);
+        currentPath = originalPath;
     } else {
-        showMessage("업로드할 파일이 없습니다.", "warning");
+        // 현재 위치에 업로드
+        console.log('외부 파일 드래그 감지:', files.length, '개 파일, 현재 경로에 업로드');
+        uploadFiles(files);
     }
 }
 
 // 특정 폴더에 파일 업로드
-function uploadFiles(files, path) {
-    if (files.length === 0) {
-        removeProgressBar();
-        showMessage('업로드할 파일이 없습니다.', 'error');
+function uploadFiles(files) {
+    console.log(`uploadFiles 함수 호출됨: ${files.length}개 파일`);
+    
+    if (!files || files.length === 0) {
+        alert('업로드할 파일이 없습니다.');
         return;
     }
     
-    // UI 업데이트 - 업로드 시작
-    showMessage(`${files.length}개 파일 업로드 중...`, 'info');
-    showProgressBar(0);
-    updateUploadStatus(true);
+    // FileList를 배열로 변환
+    const filesArray = Array.from(files);
     
-    const formData = new FormData();
+    // 파일 객체 유형 로깅
+    console.log('files 객체 유형:', Object.prototype.toString.call(files));
+    console.log('filesArray 객체 유형:', Object.prototype.toString.call(filesArray));
     
-    // 업로드 경로 추가
-    if (path && path !== '/') {
-        formData.append('path', path);
-    }
-    
-    // 폴더 경로 정보 배열
-    const filePaths = [];
-    
-    // 파일 추가 및 경로 정보 수집
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        // 파일 이름과 경로 로깅
-        console.log(`업로드 파일[${i}]: ${file.name}`);
-        
-        // webkitRelativePath가 있으면 폴더 업로드임
-        let relativePath = '';
-        if (file.webkitRelativePath) {
-            relativePath = file.webkitRelativePath;
-            console.log(`파일 경로[${i}]: ${relativePath}`);
+    // 폴더 구조 확인 (webkitRelativePath 속성 사용)
+    const hasFolderStructure = filesArray.some(file => {
+        const hasPath = file.webkitRelativePath && file.webkitRelativePath.includes('/');
+        if (hasPath) {
+            console.log(`폴더 구조 발견: ${file.name}, 경로: ${file.webkitRelativePath}`);
         }
-        
-        // 파일 추가
-        formData.append('files', file);
-        
-        // 경로 정보 추가 (폴더 구조 유지)
-        filePaths.push(relativePath);
-    }
-    
-    // 파일 경로 정보 추가 (폴더 구조 보존용)
-    if (filePaths.length > 0 && filePaths.some(path => path)) {
-        console.log('폴더 구조 정보 포함:', filePaths);
-        filePaths.forEach(filePath => {
-            formData.append('filepaths', filePath);
-        });
-    }
-    
-    // 업로드 요청 설정
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload');
-    
-    // 진행률 이벤트 처리
-    xhr.upload.addEventListener('progress', function(event) {
-        if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            updateProgressBar(percent);
-        }
+        return hasPath;
     });
     
-    // 요청 완료 이벤트 처리
-    xhr.onload = function() {
-        // 업로드 상태 초기화
-        updateUploadStatus(false);
-        
-        if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-                const response = JSON.parse(xhr.responseText);
-                
-                // 성공 메시지 표시
-                showMessage(response.message || `${files.length}개 파일 업로드 완료!`, 'success');
-                console.log('업로드 성공 응답:', response);
-                
-                // 파일 목록 새로고침
-                refreshFileList();
-            } catch (e) {
-                console.error('응답 파싱 오류:', e);
-                showMessage('업로드 완료되었으나 응답 처리 중 오류가 발생했습니다.', 'warning');
-            }
-        } else if (xhr.status === 207) {
-            // 부분 성공 (일부 파일 실패)
-            try {
-                const response = JSON.parse(xhr.responseText);
-                showMessage(response.message || `일부 파일 업로드 실패: ${response.failed}개 오류`, 'warning');
-                console.warn('일부 파일 업로드 실패:', response.errors);
-                
-                // 파일 목록 새로고침
-                refreshFileList();
-            } catch (e) {
-                console.error('응답 파싱 오류:', e);
-                showMessage('일부 파일 업로드에 실패했습니다.', 'warning');
-            }
-        } else {
-            // 오류 처리
-            try {
-                const response = JSON.parse(xhr.responseText);
-                const errorMsg = response.error || `업로드 실패 (${xhr.status})`;
-                showMessage(errorMsg, 'error');
-                console.error('업로드 오류:', response);
-            } catch (e) {
-                showMessage(`업로드 오류: ${xhr.status} ${xhr.statusText}`, 'error');
-                console.error('업로드 오류 응답:', xhr.responseText);
-            }
-        }
-        
-        // 프로그레스 바 제거
-        removeProgressBar();
-    };
+    console.log('폴더 구조 포함 여부:', hasFolderStructure);
     
-    // 네트워크 오류 처리
-    xhr.onerror = function() {
-        updateUploadStatus(false);
-        removeProgressBar();
-        showMessage('네트워크 오류로 업로드에 실패했습니다.', 'error');
-        console.error('네트워크 오류:', xhr);
-    };
-    
-    // 전송 취소 처리
-    xhr.onabort = function() {
-        updateUploadStatus(false);
-        removeProgressBar();
-        showMessage('업로드가 취소되었습니다.', 'warning');
-        console.warn('업로드 취소됨');
-    };
-    
-    // 요청 전송
-    try {
-        console.log(`총 ${files.length}개 파일 업로드 요청 시작`);
-        xhr.send(formData);
-    } catch (e) {
-        updateUploadStatus(false);
-        removeProgressBar();
-        showMessage('업로드 요청 전송 중 오류가 발생했습니다.', 'error');
-        console.error('전송 오류:', e);
+    // 최대 업로드 파일 수 확인
+    if (files.length > maxAllowedFiles) {
+        alert(`최대 ${maxAllowedFiles}개의 파일만 한 번에 업로드할 수 있습니다.`);
+        return;
     }
+    
+    showProgress();
+    let formData = new FormData();
+    
+    // 업로드 경로 설정
+    formData.append('path', currentPath || '');
+    formData.append('hasFolderStructure', hasFolderStructure);
+    
+    // 파일 처리 및 폴더 경로 보존
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        formData.append('files', file);
+        
+        // 폴더 구조가 있는 경우 상대 경로 정보 추가
+        if (file.webkitRelativePath) {
+            formData.append('filePaths', file.webkitRelativePath);
+            console.log(`파일 ${i+1} 경로 정보: ${file.webkitRelativePath}`);
+        } else {
+            formData.append('filePaths', '');
+        }
+    }
+    
+    // 업로드 진행률 계산 변수
+    let totalProgress = 0;
+    
+    // AJAX 요청으로 파일 업로드
+    $.ajax({
+        url: '/api/upload',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        xhr: function() {
+            const xhr = new window.XMLHttpRequest();
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    updateProgressBar(percent);
+                    statusInfo.textContent = `업로드 중... ${percent}%`;
+                }
+            }, false);
+            return xhr;
+        },
+        success: function(response) {
+            hideProgress();
+            refreshFileList(); // 파일 목록 새로고침
+            updateFolderSize(); // 폴더 크기 업데이트
+            
+            // 업로드 결과 메시지 표시
+            if (response.successCount > 0) {
+                if (response.errorCount > 0) {
+                    showMessage(`${response.successCount}개 파일 업로드 성공, ${response.errorCount}개 실패`);
+                } else {
+                    showMessage(`${response.successCount}개 파일 업로드 완료`);
+                }
+            } else {
+                showMessage('파일 업로드 실패: ' + (response.message || '알 수 없는 오류'));
+            }
+        },
+        error: function(xhr, status, error) {
+            hideProgress();
+            let errorMsg = '업로드 중 오류가 발생했습니다.';
+            
+            try {
+                const response = JSON.parse(xhr.responseText);
+                errorMsg = response.message || errorMsg;
+            } catch (e) {
+                console.error('응답 파싱 오류:', e);
+            }
+            
+            showMessage('오류: ' + errorMsg);
+            console.error('업로드 오류:', error, xhr.responseText);
+        }
+    });
 }
 
 // 파일/폴더 이동 함수
@@ -2474,260 +2752,215 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
 
 // 폴더 항목 재귀적 처리 함수
 function processEntries(entries) {
-    // 모든 파일을 저장할 배열
+    console.log(`processEntries 시작: ${entries.length}개 항목 처리`);
+    
+    // 결과 저장 배열
     const allFiles = [];
-    
-    // 대기 중인 항목 수 (폴더 내 파일들을 포함한 총 처리해야 할 항목 수)
     let pendingEntries = entries.length;
+    let processedEntries = 0;
     
-    // 상태 정보 요소
-    const statusInfo = document.getElementById('statusInfo') || document.createElement('div');
-    statusInfo.textContent = `${entries.length}개 항목 처리 중...`;
-    
-    console.log(`처리 시작: ${entries.length}개 항목, 타입: ${entries[0] ? (entries[0].isDirectory ? '폴더' : '파일') : '알 수 없음'}`);
-    
-    // 모든 항목 읽기 (재귀적)
-    function readAllEntries(reader, callback) {
-        let results = [];
-        
-        function readNext() {
-            reader.readEntries(function(entries) {
-                if (entries.length > 0) {
-                    // 항목이 있으면 결과에 추가하고 다음 항목 읽기
-                    results = results.concat(Array.from(entries));
-                    readNext();
-                } else {
-                    // 모든 항목을 다 읽었으면 콜백 호출
-                    callback(results);
-                }
-            }, function(error) {
-                console.error('디렉토리 읽기 오류:', error);
-                callback(results); // 오류가 있어도 지금까지 읽은 항목 반환
-            });
-        }
-        
-        // 첫 번째 항목부터 읽기 시작
-        readNext();
-    }
-    
-    // 처리 완료 확인 함수
+    // 모든 항목 처리 완료 확인 함수
     function checkComplete() {
-        pendingEntries--;
-        if (pendingEntries <= 0) {
-            finishProcessing();
+        processedEntries++;
+        console.log(`항목 처리 진행 상황: ${processedEntries}/${pendingEntries}`);
+        
+        if (processedEntries >= pendingEntries) {
+            console.log(`모든 항목 처리 완료: 총 ${allFiles.length}개 파일 발견`);
+            
+            if (allFiles.length > 0) {
+                // 파일이 있으면 업로드 시작
+                uploadFiles(allFiles);
+            } else {
+                statusInfo.textContent = '업로드할 파일이 없습니다.';
+            }
         }
     }
     
-    // 모든 처리가 완료되면 호출되는 함수
-    function finishProcessing() {
-        console.log(`총 ${allFiles.length}개 파일 발견됨`);
-        statusInfo.textContent = `${allFiles.length}개 파일 처리 완료`;
-        
-        if (allFiles.length > 0) {
-            // 현재 경로에 파일 업로드
-            uploadFiles(allFiles, currentPath);
-        } else {
-            showMessage('업로드할 파일이 없습니다.', 'warning');
-        }
-    }
-    
-    // 개별 항목 처리 함수
-    function processEntry(entry) {
-        if (!entry) {
-            console.error('처리할 수 없는 항목:', entry);
-            checkComplete();
-            return;
-        }
-        
-        console.log(`항목 처리: ${entry.fullPath}, 타입: ${entry.isFile ? '파일' : '폴더'}`);
-        
+    // 재귀적으로 항목을 처리하는 함수
+    function processEntry(entry, path = '') {
         if (entry.isFile) {
-            // 파일 처리
+            // 파일 항목 처리
             entry.file(function(file) {
-                try {
-                    // 파일 가공 및 처리
-                    // WebkitRelativePath 속성을 entry.fullPath로 설정
-                    const relativePath = entry.fullPath.substring(1); // 첫 번째 '/'는 제외
-                    
-                    // 디버그 로깅
-                    console.log(`File: ${file.name}`);
-                    console.log(`Path: ${relativePath}`);
-                    
-                    // File 객체에 webkitRelativePath 속성 추가
+                // 경로 정보 추가
+                if (path) {
+                    // webkitRelativePath 속성 설정 (폴더 구조 정보 유지)
                     Object.defineProperty(file, 'webkitRelativePath', {
-                        writable: true,
-                        value: relativePath
+                        value: path ? `${path}/${file.name}` : file.name,
+                        writable: false
                     });
-                    
-                    // 디버그 확인
-                    console.log(`속성 설정 확인: ${file.webkitRelativePath}`);
-                    
-                    allFiles.push(file);
-                    statusInfo.textContent = `${allFiles.length}개 파일 발견, ${pendingEntries}개 항목 남음...`;
-                    checkComplete();
-                } catch (e) {
-                    console.error('파일 객체 처리 오류:', e);
-                    checkComplete();
+                    console.log(`파일 경로 설정: ${file.name} -> ${file.webkitRelativePath}`);
                 }
+                
+                // 파일 목록에 추가
+                allFiles.push(file);
+                checkComplete();
             }, function(error) {
-                console.error('파일 읽기 오류:', error);
+                console.error(`파일 처리 오류: ${entry.name}`, error);
                 checkComplete();
             });
         } else if (entry.isDirectory) {
-            // 폴더 처리
-            console.log(`폴더 읽기: ${entry.fullPath}`);
+            // 디렉토리 항목 처리
+            console.log(`폴더 처리 중: ${entry.name}, 현재 경로: ${path}`);
             
-            try {
-                const reader = entry.createReader();
-                
-                // 폴더의 모든 항목을 한 번에 읽기
-                readAllEntries(reader, function(entries) {
-                    console.log(`폴더 ${entry.fullPath}에서 ${entries.length}개 항목 발견`);
-                    
-                    // 하위 항목이 있으면 처리 대기 항목에 추가
+            // 디렉토리 읽기 위한 reader 생성
+            const reader = entry.createReader();
+            const dirPath = path ? `${path}/${entry.name}` : entry.name;
+            
+            // 모든 디렉토리 항목을 재귀적으로 읽는 함수
+            function readAllEntries(reader, dirPath) {
+                reader.readEntries(function(entries) {
                     if (entries.length > 0) {
-                        pendingEntries += entries.length;
-                        statusInfo.textContent = `폴더 '${entry.name}' 스캔 중... ${pendingEntries}개 항목 남음`;
+                        // 항목이 있으면 카운터 증가
+                        pendingEntries += entries.length - 1; // 현재 항목 제외
                         
-                        // 각 하위 항목 처리
-                        entries.forEach(function(childEntry) {
-                            processEntry(childEntry);
-                        });
+                        // 각 항목 처리
+                        for (let i = 0; i < entries.length; i++) {
+                            // 재귀 호출로 하위 항목 처리
+                            processEntry(entries[i], dirPath);
+                        }
+                        
+                        // 추가 항목이 있을 수 있으므로 다시 읽기 시도
+                        readAllEntries(reader, dirPath);
+                    } else {
+                        // 더 이상 항목이 없으면 완료
+                        checkComplete();
                     }
-                    
-                    // 현재 폴더 처리 완료
+                }, function(error) {
+                    console.error(`디렉토리 읽기 오류: ${dirPath}`, error);
                     checkComplete();
                 });
-            } catch (e) {
-                console.error('폴더 처리 오류:', e);
-                checkComplete();
             }
+            
+            // 디렉토리 내용 읽기 시작
+            readAllEntries(reader, dirPath);
         } else {
-            // 알 수 없는 유형
-            console.warn('알 수 없는 항목 유형:', entry);
+            // 처리할 수 없는 항목
+            console.warn(`처리할 수 없는 항목: ${entry.name}`);
             checkComplete();
         }
     }
     
-    // 모든 최상위 항목 처리 시작
-    entries.forEach(processEntry);
+    // 각 항목에 대해 처리 시작
+    for (let i = 0; i < entries.length; i++) {
+        processEntry(entries[i]);
+    }
 }
 
-// 사용자에게 메시지 표시 함수
-function showMessage(message, type = 'info') {
-    // 기존 메시지 요소가 있는지 확인
-    let messageElement = document.getElementById('status-message');
-    
-    // 없으면 새로 생성
-    if (!messageElement) {
-        messageElement = document.createElement('div');
-        messageElement.id = 'status-message';
-        document.body.appendChild(messageElement);
-        
-        // 스타일 설정
-        messageElement.style.position = 'fixed';
-        messageElement.style.bottom = '20px';
-        messageElement.style.right = '20px';
-        messageElement.style.padding = '10px 15px';
-        messageElement.style.borderRadius = '4px';
-        messageElement.style.maxWidth = '300px';
-        messageElement.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-        messageElement.style.zIndex = '9999';
-        messageElement.style.transition = 'opacity 0.3s';
+// 진행 상태 표시 함수
+function showProgress() {
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    statusInfo.textContent = '업로드 준비 중...';
+    document.getElementById('currentFileUpload').style.display = 'none';
+    uploadStatus.style.display = 'none';
+}
+
+// 진행 상태 숨기기 함수
+function hideProgress() {
+    setTimeout(() => {
+        progressContainer.style.display = 'none';
+        document.getElementById('currentFileUpload').style.display = 'none';
+        uploadStatus.style.display = 'none';
+    }, 500);
+}
+
+// 진행 바 업데이트 함수
+function updateProgressBar(percent) {
+    progressBar.style.width = `${percent}%`;
+    uploadStatus.textContent = `파일 업로드 중... ${percent}%`;
+    uploadStatus.style.display = 'block';
+}
+
+// 파일 목록 새로고침 함수
+function refreshFileList() {
+    loadFiles(currentPath);
+}
+
+// 폴더 크기 업데이트 함수
+function updateFolderSize() {
+    // 현재 경로가 루트가 아닌 경우 상위 폴더 크기도 업데이트
+    if (currentPath) {
+        // 상위 경로 계산
+        const pathParts = currentPath.split('/');
+        if (pathParts.length > 1) {
+            pathParts.pop(); // 마지막 요소(현재 폴더) 제거
+            const parentPath = pathParts.join('/');
+            // 상위 폴더 크기 업데이트 요청
+            $.get(`${API_BASE_URL}/api/folderSize?path=${encodeURIComponent(parentPath || '')}`);
+        }
     }
     
-    // 타입에 따른 스타일 설정
-    switch (type) {
-        case 'success':
-            messageElement.style.backgroundColor = '#4caf50';
-            messageElement.style.color = 'white';
-            break;
-        case 'error':
-            messageElement.style.backgroundColor = '#f44336';
-            messageElement.style.color = 'white';
-            break;
-        case 'warning':
-            messageElement.style.backgroundColor = '#ff9800';
-            messageElement.style.color = 'white';
-            break;
-        default: // info
-            messageElement.style.backgroundColor = '#2196f3';
-            messageElement.style.color = 'white';
-    }
-    
-    // 메시지 설정
-    messageElement.textContent = message;
-    messageElement.style.opacity = '1';
-    
-    // 일정 시간 후 사라지게 함
-    clearTimeout(messageElement.timeoutId);
-    messageElement.timeoutId = setTimeout(() => {
-        messageElement.style.opacity = '0';
+    // 현재 폴더 크기 업데이트 요청
+    $.get(`${API_BASE_URL}/api/folderSize?path=${encodeURIComponent(currentPath || '')}`);
+}
+
+// 메시지 표시 함수
+function showMessage(message) {
+    statusInfo.textContent = message;
+    // 3초 후 메시지 지우기
+    setTimeout(() => {
+        if (statusInfo.textContent === message) {
+            statusInfo.textContent = '';
+        }
     }, 3000);
 }
 
-// 프로그레스 바 표시/업데이트/제거 함수
-function showProgressBar(percent) {
-    // 프로그레스 바 컨테이너 생성 또는 가져오기
-    let progressContainer = document.getElementById('progress-container');
+// 외부 파일 또는 폴더를 드롭존에 드래그 앤 드롭했을 때 처리
+dropZone.addEventListener('drop', function(e) {
+    e.stopPropagation();
+    e.preventDefault();
     
-    if (!progressContainer) {
-        progressContainer = document.createElement('div');
-        progressContainer.id = 'progress-container';
-        document.body.appendChild(progressContainer);
-        
-        // 스타일 설정
-        progressContainer.style.position = 'fixed';
-        progressContainer.style.bottom = '70px';
-        progressContainer.style.right = '20px';
-        progressContainer.style.width = '300px';
-        progressContainer.style.height = '10px';
-        progressContainer.style.backgroundColor = '#e0e0e0';
-        progressContainer.style.borderRadius = '5px';
-        progressContainer.style.overflow = 'hidden';
-        progressContainer.style.zIndex = '9999';
-        
-        // 프로그레스 바 요소 생성
-        const progressBar = document.createElement('div');
-        progressBar.id = 'progress-bar';
-        progressContainer.appendChild(progressBar);
-        
-        // 프로그레스 바 스타일
-        progressBar.style.height = '100%';
-        progressBar.style.backgroundColor = '#4caf50';
-        progressBar.style.width = '0%';
-        progressBar.style.transition = 'width 0.3s';
+    // 진행 중인 업로드가 있는지 확인
+    if (progressContainer.style.display === 'block') {
+        statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
+        console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
+        return;
     }
     
-    // 프로그레스 바 업데이트
-    const progressBar = document.getElementById('progress-bar');
-    progressBar.style.width = `${percent}%`;
+    // 드래그된 아이템 확인
+    const items = e.dataTransfer.items;
+    const files = e.dataTransfer.files;
     
-    // 컨테이너 표시
-    progressContainer.style.display = 'block';
-}
-
-function updateProgressBar(percent) {
-    const progressBar = document.getElementById('progress-bar');
-    if (progressBar) {
-        progressBar.style.width = `${percent}%`;
+    console.log(`드롭된 아이템: ${items.length}개, 파일: ${files.length}개`);
+    
+    // 아이템이 없으면 종료
+    if (items.length === 0 && files.length === 0) {
+        console.log('드롭된 항목이 없습니다.');
+        return;
     }
-}
-
-function removeProgressBar() {
-    const progressContainer = document.getElementById('progress-container');
-    if (progressContainer) {
-        progressContainer.style.display = 'none';
+    
+    // 폴더 탐지를 위한 체크
+    const supportsDirectories = items.length > 0 && items[0].webkitGetAsEntry;
+    
+    if (supportsDirectories) {
+        // 아이템 모드로 처리 (폴더 지원)
+        let entries = [];
+        let hasDirectory = false;
+        
+        // 각 항목을 확인
+        for (let i = 0; i < items.length; i++) {
+            const entry = items[i].webkitGetAsEntry();
+            if (entry) {
+                entries.push(entry);
+                if (entry.isDirectory) {
+                    hasDirectory = true;
+                    console.log(`폴더 감지됨: ${entry.name}`);
+                }
+            }
+        }
+        
+        console.log(`총 ${entries.length}개 항목 드롭됨, 폴더 포함: ${hasDirectory ? '예' : '아니오'}`);
+        
+        if (entries.length > 0) {
+            // 아이템 목록이 있는 경우 처리 시작
+            processEntries(entries);
+        }
+    } else {
+        // 일반 파일 모드로 처리
+        console.log('일반 파일 모드로 처리: 폴더 감지 기능 미지원');
+        
+        if (files.length > 0) {
+            uploadFiles(files);
+        }
     }
-}
-
-// 업로드 상태 업데이트
-function updateUploadStatus(isUploading) {
-    window.isFileUploading = isUploading;
-}
-
-// 파일 목록 새로고침
-function refreshFileList() {
-    // 현재 경로의 파일 목록을 다시 불러옴
-    loadFiles(currentPath);
-}
+});
