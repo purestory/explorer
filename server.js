@@ -445,7 +445,28 @@ app.post('/api/upload', (req, res) => {
       : ROOT_DIRECTORY;
     
     log(`파일 업로드 요청 경로: ${pathValue || '루트 디렉토리'}, 절대 경로: ${targetPath}`);
-    log(`업로드 파일 개수: ${req.files.length}, 경로 정보 여부: ${req.body.filepath ? '있음' : '없음'}`);
+    
+    // 파일 경로 정보 처리 준비
+    const hasFilepaths = req.body.filepath !== undefined;
+    // 폴더 구조 정보 확인
+    let filepaths = [];
+    
+    if (hasFilepaths) {
+      // filepath 필드가 배열인지 문자열인지 확인
+      filepaths = Array.isArray(req.body.filepath) 
+        ? req.body.filepath 
+        : [req.body.filepath];
+        
+      log(`폴더 업로드 모드: ${filepaths.length}개의 경로 정보 수신됨`);
+      
+      // 경로 정보 로깅 (처음 5개만)
+      const pathSamples = filepaths.filter(p => p).slice(0, 5);
+      if (pathSamples.length > 0) {
+        log(`경로 샘플: ${pathSamples.join(', ')}${filepaths.length > 5 ? ' ...' : ''}`);
+      }
+    } else {
+      log('일반 파일 업로드 모드: 경로 정보 없음');
+    }
     
     // 5. 대상 디렉토리 확인 및 생성
     if (!fs.existsSync(targetPath)) {
@@ -462,17 +483,7 @@ app.post('/api/upload', (req, res) => {
     // 6. 각 파일 처리
     const processedFiles = [];
     const errors = [];
-    
-    // 파일 경로 정보가 있는지 확인
-    const hasFilepaths = req.body.filepath !== undefined;
-    // filepath 배열 준비
-    const filepaths = hasFilepaths
-      ? Array.isArray(req.body.filepath) 
-        ? req.body.filepath 
-        : [req.body.filepath]
-      : [];
-      
-    log(`파일 경로 정보: ${hasFilepaths ? filepaths.length + '개' : '없음'}`);
+    const createdDirs = new Set(); // 중복 폴더 생성 방지를 위한 세트
     
     for (let i = 0; i < req.files.length; i++) {
       try {
@@ -486,15 +497,24 @@ app.post('/api/upload', (req, res) => {
         let relativePath = '';
         
         // 파일 상대 경로 처리 (폴더 업로드 처리)
-        if (hasFilepaths && i < filepaths.length && filepaths[i]) {
-          relativePath = filepaths[i];
-          filePath = path.join(targetPath, relativePath);
+        if (hasFilepaths && i < filepaths.length) {
+          relativePath = filepaths[i] || '';
           
-          // 해당 디렉토리가 없으면 생성
-          if (!fs.existsSync(filePath)) {
-            fs.mkdirSync(filePath, { recursive: true });
-            fs.chmodSync(filePath, 0o777);
-            log(`폴더 업로드 - 하위 폴더 생성됨: ${filePath}`);
+          if (relativePath) {
+            // 전체 파일 경로 구성
+            filePath = path.join(targetPath, relativePath);
+            
+            // 존재하지 않는 폴더만 생성 (중복 생성 방지)
+            if (!createdDirs.has(filePath)) {
+              createdDirs.add(filePath);
+              
+              // 해당 디렉토리가 없으면 생성
+              if (!fs.existsSync(filePath)) {
+                fs.mkdirSync(filePath, { recursive: true });
+                fs.chmodSync(filePath, 0o777);
+                log(`폴더 업로드 - 하위 폴더 생성됨: ${filePath}`);
+              }
+            }
           }
         }
         
@@ -508,18 +528,13 @@ app.post('/api/upload', (req, res) => {
         processedFiles.push({
           name: originalName,
           size: file.size,
-          path: path.join(pathValue, relativePath).replace(/\\/g, '/'),
+          path: relativePath ? path.join(pathValue, relativePath).replace(/\\/g, '/') : pathValue,
           mimetype: file.mimetype,
           fullPath: destinationFile
         });
         
-        // 디버그 정보 로깅
-        log(`업로드 파일 정보: 
-        - 요청 경로: ${pathValue || '루트'}
-        - 상대 경로: ${relativePath || '없음'}
-        - 파일명: ${originalName} 
-        - 저장 경로: ${destinationFile}
-        - 크기: ${formatBytes(file.size)}`);
+        // 디버그 정보 로깅 (간략화)
+        log(`파일 업로드 성공: ${originalName} (${formatBytes(file.size)}) -> ${relativePath || '루트'}`);
       } catch (error) {
         const errorMsg = `파일 저장 중 오류: ${req.files[i].originalname} - ${error.message}`;
         errorLog(errorMsg, error);
@@ -529,6 +544,9 @@ app.post('/api/upload', (req, res) => {
         });
       }
     }
+    
+    // 업로드 결과 요약 로깅
+    log(`업로드 결과: 성공=${processedFiles.length}개, 실패=${errors.length}개, 총=${req.files.length}개`);
     
     // 7. 응답 전송
     if (processedFiles.length > 0) {
