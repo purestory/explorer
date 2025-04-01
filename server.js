@@ -78,16 +78,16 @@ server.setFileSystem('/', fileSystem);
 
 // CORS 설정
 app.use((req, res, next) => {
-  // 요청 출처 확인 및 설정
-  const origin = req.headers.origin || '*';
-  res.header('Access-Control-Allow-Origin', '*');  // 모든 도메인 허용
-  res.header('Access-Control-Allow-Credentials', 'false');  // credentials 비활성화
+  // 모든 요청에 대한 CORS 허용
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Credentials', 'false');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Destination, Overwrite, X-File-Size, X-File-Name, X-File-Type, Cache-Control, Pragma');
   res.header('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
   res.header('Access-Control-Max-Age', '86400');  // 24시간 캐싱
   
   // URL 및 경로 로깅 - 디버깅용
+  const origin = req.headers.origin || 'unknown';
   log(`CORS 요청 - 메소드: ${req.method}, URL: ${req.url}, 출처: ${origin}`);
   
   // OPTIONS 요청 처리
@@ -419,6 +419,11 @@ app.delete('/api/files/*', (req, res) => {
 // 파일 업로드 API
 app.post('/api/upload', (req, res) => {
   try {
+    log(`파일 업로드 요청 받음 - URL: ${req.url}, 메소드: ${req.method}`);
+    
+    // 요청 헤더 로깅
+    log(`업로드 요청 헤더: ${JSON.stringify(req.headers)}`);
+    
     // 요청에서 파일 및 경로 정보를 처리하기 위한 업로드 설정
     const upload = multer({
       storage: multer.memoryStorage(),
@@ -443,7 +448,10 @@ app.post('/api/upload', (req, res) => {
         });
       }
 
-      // 파일 및 경로 필드 확인
+      // 파일 데이터 확인
+      log(`업로드 요청 처리: files=${req.files ? JSON.stringify(Object.keys(req.files)) : 'undefined'}, body=${JSON.stringify(req.body)}`);
+      
+      // 파일 필드 확인
       if (!req.files || !req.files.files || req.files.files.length === 0) {
         errorLog('업로드 파일이 없습니다.');
         return res.status(400).json({ 

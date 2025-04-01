@@ -1915,46 +1915,32 @@ function uploadFiles(files, targetPath) {
     
     // 업로드 경로 설정 - 매개변수로 전달된 targetPath 사용
     const uploadPath = targetPath || '';
-    formData.append('path', uploadPath);
-    formData.append('hasFolderStructure', hasFolderStructure);
+    formData.append('path', uploadPath || '');
+    formData.append('hasFolderStructure', hasFolderStructure ? 'true' : 'false');
     
-    // 파일 처리 및 폴더 경로 보존
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+    // Array.from 사용하여 FileList를 배열로 변환
+    Array.from(files).forEach((file, i) => {
+        // 파일 추가
         formData.append('files', file);
         
-        // 폴더 구조가 있는 경우 상대 경로 정보 추가
-        if (file.webkitRelativePath) {
+        // 폴더 구조가 있는 경우 경로 정보도 추가
+        if (hasFolderStructure && file.webkitRelativePath) {
             formData.append('filePaths', file.webkitRelativePath);
-            console.log(`파일 ${i+1} 경로 정보: ${file.webkitRelativePath}`);
-        } else {
-            formData.append('filePaths', '');
         }
-    }
+    });
     
     // 현재 원본 URL 출력
     console.log('현재 위치:', window.location.href);
     console.log('API_BASE_URL:', API_BASE_URL);
     console.log('업로드 경로:', uploadPath);
     
-    // 업로드 주소 결정 - 여러 방법 시도
+    // 업로드 주소 결정 - 상대 경로만 사용
     let uploadUrls = [];
     
-    // 1. 상대 경로 시도 (가장 안정적인 경우가 많음)
+    // 상대 경로만 사용
     uploadUrls.push('/api/upload');
     
-    // 2. 현재 문서 기준 상대 경로
-    const currentDocPath = window.location.pathname;
-    const basePath = currentDocPath.substring(0, currentDocPath.lastIndexOf('/') + 1);
-    uploadUrls.push(`${basePath}api/upload`);
-    
-    // 3. 기본 API URL 사용
-    uploadUrls.push(`${API_BASE_URL}/api/upload`); 
-    
-    // 4. 원본 URL에서 경로만 제거한 버전
-    uploadUrls.push(`${window.location.origin}/api/upload`);
-    
-    
+    // 원래 URL이 잘 작동하는지 확인을 위해 로깅 
     console.log('시도할 업로드 URL 목록:', uploadUrls);
     
     // 첫 번째 URL 시도
@@ -1976,8 +1962,12 @@ function uploadFiles(files, targetPath) {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', currentUrl);
         
-        // CORS 설정 수정 - credentials 제거
+        // CORS 설정 및 헤더 추가
         xhr.withCredentials = false;
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        
+        // 콘텐츠 타입 설정은 생략 - multipart/form-data는 자동 설정됨
+        // 수동으로 Content-Type을 설정하면 boundary가 올바르게 설정되지 않을 수 있음
         
         // 업로드 진행 이벤트
         xhr.upload.addEventListener('progress', function(e) {
