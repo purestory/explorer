@@ -1521,17 +1521,30 @@ function initDragAndDrop() {
     // 드래그 영역 벗어날 때 이벤트 위임
     fileList.addEventListener('dragleave', (e) => {
         e.preventDefault();
-        const fileItem = e.target.closest('.file-item');
-        if (!fileItem) return;
+        e.stopPropagation();
         
-        // 정확한 dragleave 확인 (자식 요소로 이동하는 경우 무시)
-        const rect = fileItem.getBoundingClientRect();
+        // 파일/폴더 항목에서의 dragleave 처리
+        const fileItem = e.target.closest('.file-item');
+        if (fileItem) {
+            // 정확한 dragleave 확인 (자식 요소로 이동하는 경우 무시)
+            const rect = fileItem.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            // 실제로 영역을 벗어났는지 확인
+            if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
+                fileItem.classList.remove('drag-over');
+            }
+        }
+        
+        // 전체 드롭존 이탈 확인
+        const rect = dropZone.getBoundingClientRect();
         const x = e.clientX;
         const y = e.clientY;
         
         // 실제로 영역을 벗어났는지 확인
         if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
-        fileItem.classList.remove('drag-over');
+            dropZone.classList.remove('active');
         }
     });
     
@@ -1574,7 +1587,11 @@ function initDragAndDrop() {
         
         // 폴더가 아닌 경우 무시
         if (fileItem.getAttribute('data-is-folder') !== 'true') {
-            console.log('폴더가 아닌 항목에 드롭되어 무시됨');
+            console.log('파일 항목에 드롭됨 - 현재 폴더에 업로드합니다.');
+            // 외부 파일 업로드 처리 - 현재 폴더에 업로드
+            if (e.dataTransfer.files.length > 0) {
+                handleExternalFileDrop(e);
+            }
             return;
         }
         
@@ -1657,9 +1674,14 @@ function initDragAndDrop() {
                 // 특정 폴더 강조
                 fileItem.classList.add('drag-over');
                 e.dataTransfer.dropEffect = 'copy';
+            } else if (fileItem) {
+                // 파일 항목에 드래그할 경우 시각적 표시
+                dropZone.classList.remove('active');
+                fileItem.classList.add('drag-over');
+                e.dataTransfer.dropEffect = 'copy';
             } else {
-                // 전체 드롭존 비활성화 - 폴더에만 드롭 가능하도록 함
-                // dropZone.classList.add('active');
+                // 빈 공간 (전체 드롭존 활성화)
+                dropZone.classList.add('active');
             }
         }
     });
