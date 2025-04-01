@@ -1925,44 +1925,48 @@ function uploadFiles(files) {
         }
     }
     
-    // 업로드 진행률 계산 변수
-    let totalProgress = 0;
+    // XMLHttpRequest 사용
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload');
     
-    // AJAX 요청으로 파일 업로드
-    $.ajax({
-        url: '/api/upload',
-        type: 'POST',
-        data: formData,
-        processData: false,
-        contentType: false,
-        xhr: function() {
-            const xhr = new window.XMLHttpRequest();
-            xhr.upload.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
-                    updateProgressBar(percent);
-                    statusInfo.textContent = `업로드 중... ${percent}%`;
-                }
-            }, false);
-            return xhr;
-        },
-        success: function(response) {
+    // 업로드 진행 이벤트
+    xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            updateProgressBar(percent);
+            statusInfo.textContent = `업로드 중... ${percent}%`;
+        }
+    });
+    
+    // 완료 이벤트
+    xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
             hideProgress();
             refreshFileList(); // 파일 목록 새로고침
-            updateFolderSize(); // 폴더 크기 업데이트
             
-            // 업로드 결과 메시지 표시
-            if (response.successCount > 0) {
-                if (response.errorCount > 0) {
-                    showMessage(`${response.successCount}개 파일 업로드 성공, ${response.errorCount}개 실패`);
+            // 폴더 크기 업데이트
+            const sizeRequest = new XMLHttpRequest();
+            sizeRequest.open('GET', `/api/folderSize?path=${encodeURIComponent(currentPath || '')}`);
+            sizeRequest.send();
+            
+            try {
+                const response = JSON.parse(xhr.responseText);
+                
+                // 업로드 결과 메시지 표시
+                if (response.successCount > 0) {
+                    if (response.errorCount > 0) {
+                        showMessage(`${response.successCount}개 파일 업로드 성공, ${response.errorCount}개 실패`);
+                    } else {
+                        showMessage(`${response.successCount}개 파일 업로드 완료`);
+                    }
                 } else {
-                    showMessage(`${response.successCount}개 파일 업로드 완료`);
+                    showMessage('파일 업로드 실패: ' + (response.message || '알 수 없는 오류'));
                 }
-            } else {
-                showMessage('파일 업로드 실패: ' + (response.message || '알 수 없는 오류'));
+            } catch (e) {
+                console.error('응답 파싱 오류:', e);
+                showMessage('응답 처리 중 오류가 발생했습니다.');
             }
-        },
-        error: function(xhr, status, error) {
+        } else {
             hideProgress();
             let errorMsg = '업로드 중 오류가 발생했습니다.';
             
@@ -1974,9 +1978,19 @@ function uploadFiles(files) {
             }
             
             showMessage('오류: ' + errorMsg);
-            console.error('업로드 오류:', error, xhr.responseText);
+            console.error('업로드 오류:', xhr.status, xhr.statusText);
         }
-    });
+    };
+    
+    // 오류 이벤트
+    xhr.onerror = function() {
+        hideProgress();
+        showMessage('네트워크 오류가 발생했습니다.');
+        console.error('업로드 중 네트워크 오류 발생');
+    };
+    
+    // 요청 전송
+    xhr.send(formData);
 }
 
 // 파일/폴더 이동 함수
@@ -2919,12 +2933,16 @@ function updateFolderSize() {
             pathParts.pop(); // 마지막 요소(현재 폴더) 제거
             const parentPath = pathParts.join('/');
             // 상위 폴더 크기 업데이트 요청
-            $.get(`${API_BASE_URL}/api/folderSize?path=${encodeURIComponent(parentPath || '')}`);
+            const parentRequest = new XMLHttpRequest();
+            parentRequest.open('GET', `${API_BASE_URL}/api/folderSize?path=${encodeURIComponent(parentPath || '')}`);
+            parentRequest.send();
         }
     }
     
     // 현재 폴더 크기 업데이트 요청
-    $.get(`${API_BASE_URL}/api/folderSize?path=${encodeURIComponent(currentPath || '')}`);
+    const currentRequest = new XMLHttpRequest();
+    currentRequest.open('GET', `${API_BASE_URL}/api/folderSize?path=${encodeURIComponent(currentPath || '')}`);
+    currentRequest.send();
 }
 
 // 메시지 표시 함수
