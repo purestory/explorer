@@ -2181,9 +2181,26 @@ function initViewModes() {
 function initFolderCreation() {
     // 새 폴더 버튼
     createFolderBtn.addEventListener('click', () => {
-        folderNameInput.value = '';
+        // 현재 폴더에 존재하는 파일 목록 확인
+        const fileItems = document.querySelectorAll('.file-item');
+        const existingNames = Array.from(fileItems).map(item => item.getAttribute('data-name'));
+        
+        // 기본 폴더명 '새폴더'와 중복되지 않는 이름 찾기
+        let defaultName = '새폴더';
+        let counter = 1;
+        
+        while (existingNames.includes(defaultName)) {
+            defaultName = `새폴더(${counter})`;
+            counter++;
+        }
+        
+        // 기본 폴더명 설정
+        folderNameInput.value = defaultName;
         folderModal.style.display = 'flex';
         folderNameInput.focus();
+        
+        // 모든 텍스트를 선택하여 바로 수정할 수 있게 함
+        folderNameInput.select();
     });
     
     // 폴더 생성 취소
