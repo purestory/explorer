@@ -1,5 +1,7 @@
 // 전역 변수
-const API_BASE_URL = window.location.origin;
+// URL 경로에 따라 적절한 API 베이스 URL 설정
+const API_BASE_URL = window.location.hostname === 'itsmyzone.iptime.org' ? 
+    window.location.origin + '/api' : window.location.origin;
 let currentPath = '';
 let selectedItems = new Set();
 let clipboardItems = [];
