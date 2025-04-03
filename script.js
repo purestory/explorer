@@ -31,9 +31,6 @@ const folderNameInput = document.getElementById('folderName');
 const createFolderConfirmBtn = document.getElementById('createFolderBtn');
 const cancelFolderBtn = document.getElementById('cancelFolderBtn');
 const fileUploadInput = document.getElementById('fileUpload');
-const cutBtn = document.getElementById('cutBtn');
-const pasteBtn = document.getElementById('pasteBtn');
-const renameBtn = document.getElementById('renameBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const renameModal = document.getElementById('renameModal');
 const newNameInput = document.getElementById('newName');
@@ -59,13 +56,8 @@ const downloadBtn = document.getElementById('downloadBtn');
 function updateButtonStates() {
     const selectedCount = selectedItems.size;
     
-    renameBtn.disabled = selectedCount !== 1;
     deleteBtn.disabled = selectedCount === 0;
-    cutBtn.disabled = selectedCount === 0;
     downloadBtn.disabled = selectedCount === 0;
-    
-    // 붙여넣기 버튼은 클립보드에 항목이 있을 때만 활성화
-    pasteBtn.disabled = clipboardItems.length === 0;
     
     // 상태바 업데이트
     selectionInfo.textContent = `${selectedCount}개 선택됨`;
@@ -2853,7 +2845,6 @@ function init() {
     initFolderCreation();
     initRenaming();
     initFileUpload();
-    initClipboardOperations();
     initDeletion();
     initSearch();
     
