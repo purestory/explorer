@@ -458,20 +458,29 @@ app.post('/api/upload', (req, res) => {
     const processedFiles = [];
     const errors = [];
 
-    // 최대 파일명 길이 제한 설정
-    const MAX_FILENAME_LENGTH = 200;
+    // 최대 파일명 길이 제한 설정 (바이트 기준)
+    const MAX_FILENAME_BYTES = 250;
 
-    // 파일명 길이 제한 함수
+    // 파일명 길이 제한 함수 (바이트 기준)
     function truncateFileName(filename) {
-      if (filename.length <= MAX_FILENAME_LENGTH) {
+      if (Buffer.byteLength(filename) <= MAX_FILENAME_BYTES) {
         return filename;
       }
       
       const extension = filename.lastIndexOf('.') > 0 ? filename.substring(filename.lastIndexOf('.')) : '';
       const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') > 0 ? filename.lastIndexOf('.') : filename.length);
-      const newFileName = nameWithoutExt.substring(0, MAX_FILENAME_LENGTH - extension.length - 3) + '...' + extension;
       
-      log(`파일명이 너무 김(${filename.length}자): ${filename} → ${newFileName}`);
+      // 바이트 길이 기준으로 자르기
+      let truncatedName = nameWithoutExt;
+      while (Buffer.byteLength(truncatedName + '...' + extension) > MAX_FILENAME_BYTES) {
+        // 문자열 끝에서 한 글자씩 제거 (멀티바이트 문자 고려)
+        truncatedName = truncatedName.slice(0, -1); 
+        if (truncatedName.length === 0) break; // 이름 부분이 없어지면 중단
+      }
+      
+      const newFileName = truncatedName + '...' + extension;
+      
+      log(`파일명이 너무 김(Bytes: ${Buffer.byteLength(filename)}): ${filename} → ${newFileName}`);
       return newFileName;
     }
 
@@ -490,17 +499,17 @@ app.post('/api/upload', (req, res) => {
         }
 
         try {
-            // 파일명 길이 확인 및 처리
+            // 파일명 길이 확인 및 처리 (바이트 기준)
             let relativeFilePath = fileInfo.relativePath;
             const originalFileName = path.basename(relativeFilePath);
             let finalFileName = originalFileName; // 최종 파일명 변수 추가
             
-            // 파일명이 너무 길면 자르기
-            if (originalFileName.length > MAX_FILENAME_LENGTH) {
+            // 파일명 바이트 길이가 너무 길면 자르기
+            if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
                 finalFileName = truncateFileName(originalFileName);
                 const dirName = path.dirname(relativeFilePath);
                 relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
-                log(`파일명 길이 제한으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`);
+                log(`파일명 길이 제한(Bytes)으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`);
             }
             
             // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 수정된 상대 경로)
