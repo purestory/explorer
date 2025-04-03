@@ -1526,29 +1526,23 @@ function initDragAndDrop() {
             return;
         }
         
-        // 마우스 다운 이벤트와 드래그 시작 사이의 이동 거리를 계산
-        const mouseDownX = parseInt(fileItem.dataset.mouseDownX || '0');
-        const mouseDownY = parseInt(fileItem.dataset.mouseDownY || '0');
-        const mouseDownTime = parseInt(fileItem.dataset.mouseDownTime || '0');
-        const currentTime = Date.now();
-        const timeDiff = currentTime - mouseDownTime;
-        
-        // 일정 시간 내에 마우스를 누르고 드래그를 시작했을 때만 이동 처리
-        const isQuickDrag = timeDiff < 300; // 300ms 내에 드래그 시작
-        
-        // 파일이 이미 선택되어 있고, 빠르게 드래그한 경우에만 이동 처리 허용
+        // 파일이 이미 선택되어 있는 상태인지 확인
         const isAlreadySelected = fileItem.classList.contains('selected');
+        const fileId = fileItem.getAttribute('data-name');
         
-        // 이미 선택된 항목이 없거나 빠른 드래그가 아닌 경우 드래그를 취소하고 선택 모드로 동작
-        if (!isAlreadySelected || !isQuickDrag) {
-            e.preventDefault(); // 드래그 취소
+        // 파일이 선택되어 있지 않은 경우, 해당 파일을 선택하고 드래그는 취소
+        if (!isAlreadySelected) {
+            clearSelection();
+            fileItem.classList.add('selected');
+            selectedItems.add(fileId);
+            updateButtonStates();
+            
+            // 드래그는 취소하고 선택만 수행
+            e.preventDefault();
             return;
         }
         
-        // 이제부터는 이미 선택된 항목에 대한 빠른 드래그만 이동으로 처리
-        
-        // 드래그 중인 요소 식별
-        const fileId = fileItem.getAttribute('data-name');
+        // 이제부터는 이미 선택된 항목에 대한 드래그만 허용 (이동 기능)
         console.log('드래그 시작:', fileId);
         
         // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
@@ -3244,40 +3238,6 @@ function loadLockStatus() {
         });
 }
 
-// 파일 항목에서 마우스 다운 이벤트 처리 (드래그 시작을 위한)
-function handleFileItemMouseDown(e, fileItem) {
-    // 우클릭은 여기서 처리하지 않음 (contextmenu 이벤트에서 처리)
-    if (e.button !== 0) return;
-    
-    // 마우스 위치 저장 (나중에 드래그 여부 판단을 위해)
-    fileItem.dataset.mouseDownX = e.clientX;
-    fileItem.dataset.mouseDownY = e.clientY;
-    fileItem.dataset.mouseDownTime = Date.now();
-    
-    // Ctrl+클릭은 다중 선택을 위해 처리
-    if (e.ctrlKey) {
-        toggleSelection(fileItem);
-    } 
-    // Shift+클릭은 범위 선택을 위해 처리
-    else if (e.shiftKey) {
-        handleShiftSelect(fileItem);
-    } 
-    // 일반 클릭은 단일 선택을 위해 처리
-    else {
-        // 이미 선택된 항목을 클릭했다면 선택 상태 유지 (드래그 이동을 위해)
-        if (fileItem.classList.contains('selected')) {
-            // 선택 상태 유지 (드래그가 시작될 수 있음)
-        } else {
-            // 선택되지 않은 항목을 클릭했다면 새로 선택
-            clearSelection();
-            selectItem(fileItem);
-        }
-    }
-    
-    // 이벤트 전파 중지 (드래그 선택 이벤트와 충돌 방지)
-    e.stopPropagation();
-}
-
 // 파일 항목 초기화 - 각 파일/폴더에 이벤트 연결
 function initFileItem(fileItem) {
     const fileName = fileItem.getAttribute('data-name');
@@ -3295,77 +3255,139 @@ function initFileItem(fileItem) {
     
     // 클릭 이벤트 연결
     fileItem.addEventListener('mousedown', (e) => {
-        handleFileItemMouseDown(e, fileItem);
+        // 우클릭은 여기서 처리하지 않음 (contextmenu 이벤트에서 처리)
+        if (e.button !== 0) return;
+        
+        // Ctrl+클릭은 다중 선택을 위해 처리
+        if (e.ctrlKey) {
+            toggleSelection(fileItem);
+        } 
+        // Shift+클릭은 범위 선택을 위해 처리
+        else if (e.shiftKey) {
+            handleShiftSelect(fileItem);
+        } 
+        // 일반 클릭은 단일 선택을 위해 처리
+        else {
+            // 이미 선택된 항목을 클릭했다면 선택 상태 유지 (드래그 이동을 위해)
+            if (fileItem.classList.contains('selected')) {
+                // 선택 상태 유지 (드래그가 시작될 수 있음)
+            } else {
+                // 선택되지 않은 항목을 클릭했다면 새로 선택
+                clearSelection();
+                selectItem(fileItem);
+            }
+        }
+        
+        // 이벤트 전파 중지 (드래그 선택 이벤트와 충돌 방지)
+        e.stopPropagation();
     });
 }
 
-// 드래그 앤 드롭 초기화
-function initDragAndDrop() {
-    // 파일 리스트에 이벤트 위임 사용 - 동적으로 생성된 파일 항목에도 이벤트 처리
+// 파일/폴더 목록 화면에 표시
+function displayFiles(files, parentPath = '') {
     const fileList = document.getElementById('fileList');
-    const fileView = document.getElementById('fileView');
-    const dropZone = document.getElementById('dropZone');
+    const fileGrid = document.getElementById('fileGrid');
     
-    if (!dropZone) {
-        console.error('드롭존 요소를 찾을 수 없습니다.');
-        return;
+    // 목록 초기화
+    fileList.innerHTML = '';
+    fileGrid.innerHTML = '';
+    
+    // 필터링된 파일 목록 가져오기
+    const filteredFiles = getFilteredFiles(files);
+    sortFiles(filteredFiles);
+    
+    // 상위 폴더로 이동 항목 추가 (루트가 아닌 경우)
+    if (currentPath) {
+        // 상위 폴더 경로 계산
+        const parentDir = getParentPath(currentPath);
+        
+        // 목록 뷰에 상위 폴더 추가
+        const parentItem = document.createElement('div');
+        parentItem.className = 'file-item parent-dir';
+        parentItem.setAttribute('data-name', '..');
+        parentItem.setAttribute('data-is-folder', 'true');
+        parentItem.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시
+        parentItem.setAttribute('data-id', '..');
+        parentItem.innerHTML = `
+            <div class="file-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="file-name">..</div>
+            <div class="file-size"></div>
+            <div class="file-date"></div>
+        `;
+        fileList.appendChild(parentItem);
+        
+        // 그리드 뷰에 상위 폴더 추가
+        const parentItemGrid = document.createElement('div');
+        parentItemGrid.className = 'file-item-grid parent-dir';
+        parentItemGrid.setAttribute('data-name', '..');
+        parentItemGrid.setAttribute('data-is-folder', 'true');
+        parentItemGrid.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시
+        parentItemGrid.innerHTML = `
+            <div class="file-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="file-name">..</div>
+        `;
+        fileGrid.appendChild(parentItemGrid);
+        
+        // 상위 폴더 항목에 이벤트 연결
+        parentItem.addEventListener('dblclick', () => {
+            navigateToFolder('..');
+        });
+        
+        parentItemGrid.addEventListener('dblclick', () => {
+            navigateToFolder('..');
+        });
+        
+        // 초기화 함수 호출
+        initFileItem(parentItem);
+        initFileItem(parentItemGrid);
     }
     
-    // 파일 드래그 이벤트 위임
-    fileList.addEventListener('dragstart', (e) => {
-        const fileItem = e.target.closest('.file-item');
-        if (!fileItem) return;
+    // 각 파일/폴더 항목 생성
+    filteredFiles.forEach(file => {
+        // 파일 정보 맵에 저장 (나중에 참조하기 위함)
+        fileInfoMap.set(file.name, file);
         
-        // 상위 폴더는 드래그되지 않도록 방지
-        if (fileItem.getAttribute('data-parent-dir') === 'true') {
-            e.preventDefault();
-            return;
-        }
+        // 파일/폴더 아이콘 결정
+        const icon = getFileIcon(file);
         
-        // 마우스 다운 이벤트와 드래그 시작 사이의 이동 거리를 계산
-        const mouseDownX = parseInt(fileItem.dataset.mouseDownX || '0');
-        const mouseDownY = parseInt(fileItem.dataset.mouseDownY || '0');
-        const mouseDownTime = parseInt(fileItem.dataset.mouseDownTime || '0');
-        const currentTime = Date.now();
-        const timeDiff = currentTime - mouseDownTime;
+        // 목록 뷰용 항목 생성
+        const listItem = document.createElement('div');
+        listItem.className = 'file-item';
+        listItem.setAttribute('data-name', file.name);
+        listItem.setAttribute('data-is-folder', file.isFolder.toString());
+        listItem.setAttribute('data-id', file.name);
+        listItem.setAttribute('draggable', 'true');
+        listItem.innerHTML = `
+            <div class="file-icon">${icon}</div>
+            <div class="file-name">${file.name}</div>
+            <div class="file-size">${file.isFolder ? '' : formatFileSize(file.size)}</div>
+            <div class="file-date">${formatDate(file.modifiedTime)}</div>
+        `;
+        fileList.appendChild(listItem);
         
-        // 일정 시간 내에 마우스를 누르고 드래그를 시작했을 때만 이동 처리
-        const isQuickDrag = timeDiff < 300; // 300ms 내에 드래그 시작
+        // 그리드 뷰용 항목 생성
+        const gridItem = document.createElement('div');
+        gridItem.className = 'file-item-grid';
+        gridItem.setAttribute('data-name', file.name);
+        gridItem.setAttribute('data-is-folder', file.isFolder.toString());
+        gridItem.setAttribute('draggable', 'true');
+        gridItem.innerHTML = `
+            <div class="file-icon">${icon}</div>
+            <div class="file-name">${file.name}</div>
+        `;
+        fileGrid.appendChild(gridItem);
         
-        // 파일이 이미 선택되어 있고, 빠르게 드래그한 경우에만 이동 처리 허용
-        const isAlreadySelected = fileItem.classList.contains('selected');
-        
-        // 이미 선택된 항목이 없거나 빠른 드래그가 아닌 경우 드래그를 취소하고 선택 모드로 동작
-        if (!isAlreadySelected || !isQuickDrag) {
-            e.preventDefault(); // 드래그 취소
-            return;
-        }
-        
-        // 이제부터는 이미 선택된 항목에 대한 빠른 드래그만 이동으로 처리
-        
-        // 드래그 중인 요소 식별
-        const fileId = fileItem.getAttribute('data-name');
-        console.log('드래그 시작:', fileId);
-        
-        // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
-        if (selectedItems.size > 1 && fileItem.classList.contains('selected')) {
-            // 여러 항목이 선택된 경우 모든 선택 항목의 ID를 저장
-            e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
-            e.dataTransfer.effectAllowed = 'move';
-        } else {
-            // 단일 항목 드래그
-            e.dataTransfer.setData('text/plain', fileId);
-            e.dataTransfer.effectAllowed = 'move';
-        }
-        
-        // 내부 파일 드래그임을 표시하는 데이터 추가
-        e.dataTransfer.setData('application/webdav-internal', 'true');
-        
-        // 드래그 중 스타일 적용
-        setTimeout(() => {
-            document.querySelectorAll('.file-item.selected').forEach(item => {
-                item.classList.add('dragging');
-            });
-        }, 0);
+        // 각 항목 초기화 (이벤트 연결)
+        initFileItem(listItem);
+        initFileItem(gridItem);
     });
+    
+    // 선택 가능한 항목으로 만들기
+    const fileItems = document.querySelectorAll('.file-item, .file-item-grid');
+    
+    // 현재 폴더에 있는 파일 개수 표시
+    updateFileCount(filteredFiles.length);
+    
+    // 버튼 상태 업데이트
+    updateButtonStates();
 }
