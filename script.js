@@ -18,6 +18,7 @@ let uploadButtonCounter = 0;
 let dragDropCounter = 0;
 let dragDropMoveCounter = 0; // 드래그앤드롭 파일 이동 호출 카운터 추가
 let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
+let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 추가
 
 // DOM 요소
 const fileView = document.getElementById('fileView');
@@ -1801,39 +1802,47 @@ function handleInternalFileDrop(e, targetFolderItem) {
 
 // 외부 파일 드롭 처리 함수
 async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키워드 추가
-    // 진행 중인 업로드가 있는지 확인
-    if (progressContainer.style.display === 'block') {
-        statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
-        console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
-        return;
+    if (isHandlingDrop) {
+        console.log('이미 드롭 처리 중입니다. 중복 호출 방지.');
+        return; // 중복 실행 방지
     }
-
-    // DataTransferItemList 사용
-    const items = e.dataTransfer.items;
-    if (!items || items.length === 0) {
-        console.log('드롭된 항목이 없습니다.');
-        return;
-    }
-
-    // 업로드 소스 설정 및 카운터 초기화
-    uploadSource = 'dragdrop';
-    dragDropCounter = 0;
-
-    let targetPath = currentPath; // 기본 업로드 경로는 현재 경로
-
-    // 타겟 폴더가 지정된 경우 경로 업데이트
-    if (targetFolderItem) {
-        const targetFolder = targetFolderItem.getAttribute('data-name');
-        targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
-        console.log('외부 파일 드래그 감지: 대상 폴더:', targetFolder);
-    } else {
-        console.log('외부 파일 드래그 감지: 현재 경로에 업로드');
-    }
-
-    showLoading();
-    statusInfo.textContent = '파일 목록을 읽는 중...';
+    isHandlingDrop = true; // 처리 시작 플래그 설정
 
     try {
+        // 진행 중인 업로드가 있는지 확인
+        if (progressContainer.style.display === 'block') {
+            statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
+            console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
+            // isHandlingDrop = false; // 플래그는 finally에서 해제
+            return;
+        }
+
+        // DataTransferItemList 사용
+        const items = e.dataTransfer.items;
+        if (!items || items.length === 0) {
+            console.log('드롭된 항목이 없습니다.');
+            // isHandlingDrop = false;
+            return;
+        }
+
+        // 업로드 소스 설정 및 카운터 초기화
+        uploadSource = 'dragdrop';
+        dragDropCounter = 0;
+
+        let targetPath = currentPath; // 기본 업로드 경로는 현재 경로
+
+        // 타겟 폴더가 지정된 경우 경로 업데이트
+        if (targetFolderItem) {
+            const targetFolder = targetFolderItem.getAttribute('data-name');
+            targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+            console.log('외부 파일 드래그 감지: 대상 폴더:', targetFolder);
+        } else {
+            console.log('외부 파일 드래그 감지: 현재 경로에 업로드');
+        }
+
+        showLoading();
+        statusInfo.textContent = '파일 목록을 읽는 중...';
+
         const filesWithPaths = [];
         const promises = [];
 
@@ -1851,6 +1860,7 @@ async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키
         if (filesWithPaths.length === 0) {
             statusInfo.textContent = '업로드할 파일을 찾을 수 없습니다.';
             console.log('업로드할 파일이 없습니다.');
+            // isHandlingDrop = false;
             return;
         }
 
@@ -1863,6 +1873,8 @@ async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키
         statusInfo.textContent = '파일 목록 읽기 오류.';
         console.error('파일 트리 탐색 오류:', error);
         alert('파일 목록을 읽는 중 오류가 발생했습니다.');
+    } finally {
+        isHandlingDrop = false; // 처리 완료 또는 오류 발생 시 플래그 해제
     }
 }
 
