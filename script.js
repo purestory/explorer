@@ -1449,42 +1449,31 @@ function handleFileDblClick(e, fileItem) {
 
 // 폴더 탐색
 function navigateToFolder(folderName) {
+    // 중복 탐색 방지
+    if (window.isNavigating) {
+        console.log('이미 폴더 탐색 중입니다.');
+        return;
+    }
+    
+    // 탐색 상태 플래그 설정
+    window.isNavigating = true;
+    
     let newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
     currentPath = newPath;
     
     // 폴더 이동 히스토리 상태 업데이트
     updateHistoryState(currentPath);
     
-    // 이전 더블클릭 이벤트 리스너 제거를 위해 기존 파일 항목 캐시
-    const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
-    oldFileItems.forEach(item => {
-        const clonedItem = item.cloneNode(true);
-        item.parentNode.replaceChild(clonedItem, item);
-    });
-    
-    // 파일 목록 로드 전에 마우스 포인터 상태 리셋
-    document.querySelectorAll('.file-item, .file-item-grid').forEach(item => {
-        item.classList.remove('hover');
-    });
-    
-    // 마우스 포인터 위치 재설정을 위한 강제 mousemove 이벤트 등록
-    setTimeout(() => {
-        // 마우스 이벤트 강제 발생
-        const mouseEvent = new MouseEvent('mousemove', {
-            bubbles: true,
-            cancelable: true,
-            view: window,
-            clientX: window.mouseX || 0,
-            clientY: window.mouseY || 0
-        });
-        document.dispatchEvent(mouseEvent);
-    }, 350); // 파일 목록이 로드된 후 실행
-    
     // 파일 목록 로드
     loadFiles(newPath);
     
     // 선택 초기화
     clearSelection();
+    
+    // 일정 시간 후 탐색 상태 플래그 초기화
+    setTimeout(() => {
+        window.isNavigating = false;
+    }, 500);
 }
 
 // 파일 다운로드
@@ -3216,6 +3205,9 @@ function init() {
     
     // 초기 파일 목록 로드
     loadFiles(currentPath);
+    
+    // 파일 목록 컨테이너에 더블클릭 이벤트 위임 설정
+    initDblClickDelegation();
 }
 
 // 페이지 로드 시 애플리케이션 초기화
@@ -3744,33 +3736,7 @@ function initFileItem(fileItem) {
         fileItem = newFileItem;
     }
     
-    // 더블클릭 이벤트를 파일 항목에 직접 연결
-    fileItem.addEventListener('dblclick', function(e) {
-        // 이벤트 전파 중지
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // 다른 파일 항목으로의 더블클릭 중복 처리 방지
-        if (!window.doubleClickEnabled) {
-            console.log('더블클릭 처리 무시: 이미 처리 중');
-            return;
-        }
-        
-        // 요소 검증 추가 - 현재 마우스 위치에 있는 파일 항목이 맞는지 확인
-        const elementAtPoint = document.elementFromPoint(window.mouseX || e.clientX, window.mouseY || e.clientY);
-        const targetFileItem = elementAtPoint ? elementAtPoint.closest('.file-item, .file-item-grid') : null;
-        
-        // 실제 마우스 위치의 항목과 이벤트 대상이 다른 경우
-        if (targetFileItem && targetFileItem !== fileItem) {
-            console.log('마우스 위치와 이벤트 대상 불일치, 실제 대상으로 재지정');
-            // 실제 마우스 위치의 대상으로 이벤트 처리
-            handleFileDblClick(e, targetFileItem);
-            return;
-        }
-        
-        // 이벤트 처리 위임
-        handleFileDblClick(e, fileItem);
-    }, true);
+    // 더블클릭 이벤트는 제거 - 이벤트 위임으로 처리
     
     // 컨텍스트 메뉴 (우클릭) 이벤트 연결
     fileItem.addEventListener('contextmenu', (e) => {
@@ -3843,54 +3809,7 @@ function initFileItem(fileItem) {
         }
     });
     
-    // 드래그 이벤트 연결
-    fileItem.addEventListener('dragstart', (e) => {
-        // 상위 폴더는 드래그되지 않도록
-        if (fileItem.getAttribute('data-parent-dir') === 'true') {
-            e.preventDefault();
-            return;
-        }
-        
-        // 선택된 항목이 아니면 드래그 취소
-        if (!fileItem.classList.contains('selected')) {
-            // 선택되지 않은 항목은 먼저 선택
-            clearSelection();
-            selectItem(fileItem);
-        }
-        
-        // 드래그 데이터 설정
-        if (selectedItems.size > 1) {
-            // 여러 항목 선택 시 모든 선택 항목 ID 저장
-            e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
-        } else {
-            // 단일 항목 드래그
-            e.dataTransfer.setData('text/plain', fileItem.getAttribute('data-name'));
-        }
-        
-        // 내부 드래그 표시
-        e.dataTransfer.setData('application/webdav-internal', 'true');
-        e.dataTransfer.effectAllowed = 'move';
-        
-        // 글로벌 드래그 상태 추적 시작
-        window.startFileDrag(selectedItems);
-        
-        // 드래그 중 스타일 적용
-        setTimeout(() => {
-            document.querySelectorAll('.file-item.selected, .file-item-grid.selected').forEach(item => {
-                item.classList.add('dragging');
-            });
-        }, 0);
-    });
-    
-    // 드래그 종료 이벤트
-    fileItem.addEventListener('dragend', (e) => {
-        console.log('파일 항목 dragend 이벤트 발생');
-        
-        // 보편적인 드래그 상태 정리 함수 호출
-        handleDragEnd();
-        
-        // 이벤트 캡처링이 진행되도록 중단하지 않음
-    });
+    return fileItem;
 }
 
 // 파일/폴더 목록 화면에 표시
@@ -4011,3 +3930,83 @@ document.addEventListener('mousemove', function(e) {
         fileItem.classList.add('hover');
     }
 });
+
+// 더블클릭 이벤트 위임 초기화 함수 추가
+function initDblClickDelegation() {
+    // 파일 목록 컨테이너
+    const fileList = document.getElementById('fileList');
+    
+    // 기존 이벤트 리스너 제거
+    const newFileList = fileList.cloneNode(true);
+    fileList.parentNode.replaceChild(newFileList, fileList);
+    
+    // 더블클릭 이벤트 위임 처리
+    document.getElementById('fileList').addEventListener('dblclick', function(e) {
+        // 더블클릭 비활성화 상태이거나 탐색 중이면 무시
+        if (window.doubleClickEnabled === false || window.isNavigating === true) {
+            console.log('더블클릭 이벤트 무시: 비활성화 상태 또는 탐색 중');
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+        
+        // 파일 항목 찾기
+        const fileItem = e.target.closest('.file-item, .file-item-grid');
+        if (!fileItem) return;
+        
+        // 이름 변경 입력 필드 클릭은 무시
+        if (e.target.classList.contains('rename-input')) return;
+        
+        // 이벤트 처리 중복 방지
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
+        const fileName = fileItem.getAttribute('data-name');
+        const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
+        
+        console.log(`위임된 더블클릭 이벤트: ${fileName}, 폴더: ${isFolder}, 상위폴더: ${isParentDir}`);
+        
+        // 즉시 더블클릭 비활성화
+        window.doubleClickEnabled = false;
+        
+        // 상위 폴더 처리
+        if (isParentDir) {
+            navigateToParentFolder();
+            return;
+        }
+        
+        if (isFolder) {
+            // 폴더로 이동
+            navigateToFolder(fileName);
+        } else {
+            // 파일 처리
+            const fileExt = fileName.split('.').pop().toLowerCase();
+            const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+            const encodedPath = encodeURIComponent(filePath);
+            
+            const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
+                                  'mp4', 'webm', 'ogg', 'mp3', 'wav', 
+                                  'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
+            
+            if (viewableTypes.includes(fileExt)) {
+                const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
+                window.open(fileUrl, '_blank');
+                
+                // 파일 열기 후 더블클릭 다시 활성화
+                setTimeout(() => {
+                    window.doubleClickEnabled = true;
+                }, 300);
+            } else {
+                downloadFile(fileName);
+                
+                // 다운로드 시작 후 더블클릭 다시 활성화
+                setTimeout(() => {
+                    window.doubleClickEnabled = true;
+                }, 300);
+            }
+        }
+    });
+    
+    console.log('파일 목록에 더블클릭 이벤트 위임 설정 완료');
+}
