@@ -141,6 +141,16 @@
         <div class="spinner"></div>
     </div>
     
+    <!-- 다운로드 진행 컨테이너 -->
+    <div id="downloadContainer" class="progress-container">
+        <div class="upload-file-info">현재 <span id="currentFileDownload">파일을 선택해주세요</span> 다운로드 중...</div>
+        <div class="progress">
+            <div id="downloadProgressBar" class="progress-bar"></div>
+        </div>
+        <div id="downloadStatus" class="upload-status">파일을 선택해주세요</div>
+        <button id="cancelDownloadBtn" class="btn btn-danger"><i class="fas fa-times"></i> 취소</button>
+    </div>
+    
     <script src="script.js"></script>
 </body>
 </html>

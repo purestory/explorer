@@ -21,6 +21,11 @@ let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
 let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 추가
 // 폴더 잠금 상태 저장
 let lockedFolders = [];
+// 다운로드 관련 변수
+let downloadQueue = [];
+let isDownloading = false;
+let currentDownloadXHR = null;
+let downloadCancelled = false;
 
 // DOM 요소
 const fileView = document.getElementById('fileView');
@@ -54,6 +59,12 @@ const selectionInfo = statusbar.querySelector('.selection-info');
 const gridViewBtn = document.getElementById('gridViewBtn');
 const listViewBtn = document.getElementById('listViewBtn');
 const downloadBtn = document.getElementById('downloadBtn');
+// 다운로드 컨테이너 요소
+const downloadContainer = document.getElementById('downloadContainer');
+const downloadProgressBar = document.getElementById('downloadProgressBar');
+const downloadStatus = document.getElementById('downloadStatus');
+const currentFileDownload = document.getElementById('currentFileDownload');
+const cancelDownloadBtn = document.getElementById('cancelDownloadBtn');
 
 // 상황에 맞는 버튼 비활성화/활성화 함수
 function updateButtonStates() {
@@ -2531,85 +2542,237 @@ function initSearch() {
     });
 }
 
-// 선택된 파일 다운로드
+// 선택된 파일 다운로드 (수정)
 function downloadSelectedItems() {
     if (selectedItems.size === 0) return;
     
-    // 단일 파일 다운로드
-    if (selectedItems.size === 1) {
-        const itemId = [...selectedItems][0];
-        const isFolder = document.querySelector(`.file-item[data-id="${itemId}"]`).getAttribute('data-is-folder') === 'true';
-        
-        // 폴더인 경우 무시
-        if (isFolder) {
-            alert('폴더는 다운로드할 수 없습니다.');
-            return;
-        }
-        
-        // 파일 경로 생성
-        const filePath = currentPath ? `${currentPath}/${itemId}` : itemId;
-        const encodedPath = encodeURIComponent(filePath);
-        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
-        
-        // 강제로 다운로드 진행
-        const link = document.createElement('a');
-        link.href = fileUrl;
-        link.setAttribute('download', itemId); // 다운로드 속성 추가
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        statusInfo.textContent = `${itemId} 다운로드 중...`;
-        setTimeout(() => {
-            statusInfo.textContent = `${itemId} 다운로드 완료`;
-        }, 1000);
-        
+    // 다운로드 큐 초기화
+    downloadQueue = [];
+    downloadCancelled = false;
+    
+    // 이미 다운로드 중인지 확인
+    if (isDownloading) {
+        alert('이미 다운로드가 진행 중입니다. 완료 후 다시 시도하세요.');
         return;
     }
     
-    // 여러 파일 선택 시 각 파일을 개별적으로 다운로드
-    showLoading();
-    statusInfo.textContent = '다운로드 준비 중...';
-    
     // 현재 선택된 모든 항목을 다운로드 큐에 추가
-    const downloadQueue = [];
     selectedItems.forEach(itemId => {
         const element = document.querySelector(`.file-item[data-id="${itemId}"]`);
         const isFolder = element.getAttribute('data-is-folder') === 'true';
         
-        // 폴더는 제외 (서버에서 지원하지 않는 경우)
+        // 폴더는 제외
         if (!isFolder) {
-            downloadQueue.push(itemId);
+            const filePath = currentPath ? `${currentPath}/${itemId}` : itemId;
+            // 파일 크기 정보 가져오기
+            const fileSize = element.getAttribute('data-size');
+            
+            downloadQueue.push({
+                name: itemId,
+                path: filePath,
+                size: fileSize
+            });
         }
     });
     
     // 다운로드 큐가 비어있으면 종료
     if (downloadQueue.length === 0) {
         alert('다운로드할 파일이 없습니다. 폴더는 다운로드할 수 없습니다.');
-        hideLoading();
         return;
     }
     
-    // 동시에 여러 파일 다운로드 시작
-    downloadQueue.forEach(fileName => {
-        const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        const encodedPath = encodeURIComponent(filePath);
-        const downloadUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
-        
-        // 링크 생성 및 클릭 이벤트 발생 (download 속성 명시)
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.setAttribute('download', fileName); // 다운로드 속성 설정
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    });
+    // 다운로드 시작
+    isDownloading = true;
+    statusInfo.textContent = `${downloadQueue.length}개 파일 다운로드 시작`;
     
-    // 다운로드 완료 처리
+    // 다운로드 UI 초기화 및 표시
+    initDownloadUI();
+    
+    // 첫 번째 파일 다운로드 시작
+    processNextDownload();
+}
+
+// 다운로드 UI 초기화
+function initDownloadUI() {
+    downloadContainer.style.display = 'block';
+    downloadProgressBar.style.width = '0%';
+    downloadStatus.textContent = '다운로드 준비 중...';
+    
+    // 취소 버튼 이벤트 핸들러
+    cancelDownloadBtn.onclick = cancelDownload;
+}
+
+// 다운로드 취소
+function cancelDownload() {
+    if (currentDownloadXHR) {
+        currentDownloadXHR.abort();
+        currentDownloadXHR = null;
+    }
+    
+    downloadCancelled = true;
+    isDownloading = false;
+    downloadQueue = [];
+    
+    downloadStatus.textContent = '다운로드가 취소되었습니다.';
+    statusInfo.textContent = '다운로드가 취소되었습니다.';
+    
+    // 잠시 후 다운로드 UI 숨김
     setTimeout(() => {
-        hideLoading();
-        statusInfo.textContent = `${downloadQueue.length}개 파일 다운로드 시작됨`;
-    }, 1000);
+        downloadContainer.style.display = 'none';
+    }, 2000);
+}
+
+// 다음 다운로드 처리
+function processNextDownload() {
+    if (downloadQueue.length === 0 || downloadCancelled) {
+        // 모든 다운로드 완료 또는 취소된 경우
+        finishDownloads();
+        return;
+    }
+    
+    // 다음 파일 가져오기
+    const fileToDownload = downloadQueue.shift();
+    
+    // 다운로드 정보 업데이트
+    currentFileDownload.textContent = `${fileToDownload.name} (${formatFileSize(fileToDownload.size || 0)})`;
+    downloadStatus.textContent = `다운로드 중... ${downloadQueue.length}개 파일 남음`;
+    
+    // 다운로드 시작
+    downloadFile(fileToDownload);
+}
+
+// 모든 다운로드 완료 처리
+function finishDownloads() {
+    isDownloading = false;
+    currentDownloadXHR = null;
+    downloadProgressBar.style.width = '100%';
+    
+    if (downloadCancelled) {
+        downloadStatus.textContent = '다운로드가 취소되었습니다.';
+        statusInfo.textContent = '다운로드가 취소되었습니다.';
+    } else {
+        downloadStatus.textContent = '모든 다운로드가 완료되었습니다.';
+        statusInfo.textContent = '모든 다운로드가 완료되었습니다.';
+    }
+    
+    // 잠시 후 다운로드 UI 숨김
+    setTimeout(() => {
+        downloadContainer.style.display = 'none';
+    }, 3000);
+}
+
+// 파일 다운로드 함수 (수정)
+function downloadFile(fileInfo) {
+    const encodedPath = encodeURIComponent(fileInfo.path);
+    const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+    
+    // 파일 확장자 및 이름
+    const fileName = fileInfo.name;
+    const fileExt = fileName.split('.').pop().toLowerCase();
+    
+    // 브라우저에서 볼 수 있는 파일 확장자
+    const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
+                          'mp4', 'webm', 'ogg', 'mp3', 'wav', 
+                          'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
+    
+    // 브라우저에서 직접 볼 수 있는 파일은 새 창으로 열기
+    if (viewableTypes.includes(fileExt)) {
+        window.open(fileUrl, '_blank');
+        
+        // 다음 파일 다운로드로 진행
+        processNextDownload();
+        return;
+    }
+    
+    // 시작 시간 기록 (속도 계산용)
+    const startTime = new Date().getTime();
+    
+    // XHR로 다운로드 수행
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', fileUrl, true);
+    xhr.responseType = 'blob';
+    currentDownloadXHR = xhr;
+    
+    // 진행 상황 모니터링
+    xhr.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            downloadProgressBar.style.width = `${percent}%`;
+            
+            // 다운로드 속도 계산
+            const currentTime = new Date().getTime();
+            const elapsedSeconds = (currentTime - startTime) / 1000;
+            const bytesPerSecond = e.loaded / elapsedSeconds;
+            const speed = formatFileSize(bytesPerSecond) + '/s';
+            
+            // 남은 시간 계산
+            const remainingBytes = e.total - e.loaded;
+            const remainingSeconds = remainingBytes / bytesPerSecond;
+            let timeDisplay = '';
+            
+            if (remainingSeconds < 60) {
+                timeDisplay = `${Math.round(remainingSeconds)}초`;
+            } else if (remainingSeconds < 3600) {
+                timeDisplay = `${Math.floor(remainingSeconds / 60)}분 ${Math.round(remainingSeconds % 60)}초`;
+            } else {
+                timeDisplay = `${Math.floor(remainingSeconds / 3600)}시간 ${Math.floor((remainingSeconds % 3600) / 60)}분`;
+            }
+            
+            // 상태 업데이트
+            downloadStatus.textContent = `${fileName} 다운로드 중: ${percent}% (${speed}, 남은 시간: ${timeDisplay})`;
+            statusInfo.textContent = `${fileName} 다운로드 중: ${percent}%`;
+        }
+    };
+    
+    // 다운로드 완료
+    xhr.onload = function() {
+        if (this.status === 200) {
+            // Blob URL 생성
+            const blob = new Blob([this.response]);
+            const url = window.URL.createObjectURL(blob);
+            
+            // 다운로드 링크 생성 및 클릭
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            
+            // 지연 후 Blob URL 해제
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                // 다음 파일 다운로드 진행
+                processNextDownload();
+            }, 100);
+        } else {
+            console.error(`파일 다운로드 오류: ${fileName} (${this.status})`);
+            downloadStatus.textContent = `${fileName} 다운로드 실패: ${this.status}`;
+            
+            // 다음 파일로 진행
+            processNextDownload();
+        }
+    };
+    
+    // 다운로드 오류
+    xhr.onerror = function() {
+        console.error(`파일 다운로드 네트워크 오류: ${fileName}`);
+        downloadStatus.textContent = `${fileName} 다운로드 실패: 네트워크 오류`;
+        
+        // 다음 파일로 진행
+        processNextDownload();
+    };
+    
+    // 취소
+    xhr.onabort = function() {
+        console.log(`${fileName} 다운로드 취소됨`);
+        // 취소된 경우 이미 cancleDownload 함수에서 처리
+    };
+    
+    // 다운로드 시작
+    xhr.send();
 }
 
 // 항목 이동
@@ -2756,33 +2919,36 @@ function downloadAndOpenFile(fileName) {
 
 // 애플리케이션 초기화
 function init() {
-    // 기본 기능 초기화
     initModals();
     initContextMenu();
-    initDragSelect();
-    initDragAndDrop();
-    initShortcuts();
-    initViewModes();
-    initHistoryNavigation(); // 히스토리 네비게이션 초기화 추가
-    
-    // 파일 관리 기능 초기화
     initFolderCreation();
     initRenaming();
     initFileUpload();
+    initShortcuts();
+    initDragSelect();
+    initDragAndDrop();
     initClipboardOperations();
     initDeletion();
     initSearch();
+    initViewModes();
+    initHistoryNavigation();
+    
+    // 잠금 상태 로드
+    loadLockStatus();
     
     // 다운로드 버튼 이벤트 추가
     downloadBtn.addEventListener('click', downloadSelectedItems);
     
-    // 새로고침 버튼 이벤트 추가
+    // 최초 파일 목록 로드
+    loadFiles();
+    
+    // 디스크 사용량 로드
+    loadDiskUsage();
+    
+    // 새로고침 버튼 이벤트
     document.getElementById('refreshStorageBtn').addEventListener('click', () => {
         loadDiskUsage();
     });
-    
-    // 초기 파일 목록 로드
-    loadFiles(currentPath);
 }
 
 // 페이지 로드 시 애플리케이션 초기화
