@@ -380,6 +380,60 @@ function initDragSelect() {
     // 지역 변수 대신 전역 dragSelectState 객체 사용
     const minDragDistance = 5; // 최소 드래그 거리 (픽셀)
     
+    // 자동 스크롤 관련 변수 추가
+    let autoScrollAnimationId = null;
+    const scrollSpeed = 8; // 스크롤 속도 (픽셀/프레임)
+    const scrollEdgeSize = 80; // 스크롤 감지 영역 크기 (픽셀)
+    
+    // 자동 스크롤 함수
+    function autoScroll(clientX, clientY) {
+        if (!window.dragSelectState.isSelecting || !window.dragSelectState.dragStarted) {
+            cancelAutoScroll();
+            return;
+        }
+        
+        const rect = fileList.getBoundingClientRect();
+        let scrollX = 0;
+        let scrollY = 0;
+        
+        // 수직 스크롤 계산
+        if (clientY < rect.top + scrollEdgeSize) {
+            // 상단 가장자리 근처에서는 위로 스크롤
+            scrollY = -scrollSpeed * (1 - ((clientY - rect.top) / scrollEdgeSize));
+        } else if (clientY > rect.bottom - scrollEdgeSize) {
+            // 하단 가장자리 근처에서는 아래로 스크롤
+            scrollY = scrollSpeed * (1 - ((rect.bottom - clientY) / scrollEdgeSize));
+        }
+        
+        // 수평 스크롤 계산 (필요한 경우)
+        if (clientX < rect.left + scrollEdgeSize) {
+            // 왼쪽 가장자리 근처에서는 왼쪽으로 스크롤
+            scrollX = -scrollSpeed * (1 - ((clientX - rect.left) / scrollEdgeSize));
+        } else if (clientX > rect.right - scrollEdgeSize) {
+            // 오른쪽 가장자리 근처에서는 오른쪽으로 스크롤
+            scrollX = scrollSpeed * (1 - ((rect.right - clientX) / scrollEdgeSize));
+        }
+        
+        // 스크롤 적용
+        if (scrollY !== 0) {
+            fileList.scrollTop += scrollY;
+        }
+        if (scrollX !== 0 && fileList.scrollWidth > fileList.clientWidth) {
+            fileList.scrollLeft += scrollX;
+        }
+        
+        // 다음 프레임에서 계속 스크롤
+        autoScrollAnimationId = requestAnimationFrame(() => autoScroll(clientX, clientY));
+    }
+    
+    // 자동 스크롤 취소 함수
+    function cancelAutoScroll() {
+        if (autoScrollAnimationId !== null) {
+            cancelAnimationFrame(autoScrollAnimationId);
+            autoScrollAnimationId = null;
+        }
+    }
+    
     // 마우스 이벤트를 document에 연결 (화면 어디서나 드래그 가능하도록)
     document.addEventListener('mousedown', (e) => {
         // 컨텍스트 메뉴, 또는 다른 상호작용 요소에서 시작된 이벤트는 무시
@@ -391,6 +445,9 @@ function initDragSelect() {
             || e.target.tagName === 'SELECT' || e.target.tagName === 'A') {
             return;
         }
+        
+        // 자동 스크롤 취소 (이전에 진행 중인 것이 있다면)
+        cancelAutoScroll();
         
         // 초기 클라이언트 좌표 저장 (스크롤 위치와 무관)
         let startClientX = e.clientX;
@@ -413,6 +470,7 @@ function initDragSelect() {
         
         // 초기 스크롤 위치 저장
         const initialScrollTop = fileList.scrollTop;
+        const initialScrollLeft = fileList.scrollLeft; // 수평 스크롤 위치도 저장
         
         // Ctrl 키가 눌려있지 않으면 선택 해제 (아직 드래그 시작 전이므로 대기)
         
@@ -432,6 +490,7 @@ function initDragSelect() {
         selectionBox.dataset.startClientX = startClientX;
         selectionBox.dataset.startClientY = startClientY;
         selectionBox.dataset.initialScrollTop = initialScrollTop;
+        selectionBox.dataset.initialScrollLeft = initialScrollLeft; // 수평 스크롤 위치도 저장
     });
     
     // 마우스 이동 이벤트
@@ -449,6 +508,7 @@ function initDragSelect() {
         const startClientX = parseFloat(selectionBox.dataset.startClientX);
         const startClientY = parseFloat(selectionBox.dataset.startClientY);
         const initialScrollTop = parseFloat(selectionBox.dataset.initialScrollTop);
+        const initialScrollLeft = parseFloat(selectionBox.dataset.initialScrollLeft || 0);
         
         // 현재 클라이언트 좌표
         const currentClientX = e.clientX;
@@ -490,11 +550,13 @@ function initDragSelect() {
         // 파일 항목 선택 로직 (스크롤 고려)
         // 선택 영역의 절대 좌표 계산 (스크롤 포함)
         const currentScrollTop = fileList.scrollTop;
-        const scrollDiff = currentScrollTop - initialScrollTop;
+        const currentScrollLeft = fileList.scrollLeft;
+        const scrollDiffY = currentScrollTop - initialScrollTop;
+        const scrollDiffX = currentScrollLeft - initialScrollLeft;
         
         // 선택 영역의 절대 위치 계산 (컨테이너 내부 좌표)
-        const selectLeft = Math.min(currentClientX, startClientX) - rect.left;
-        const selectRight = Math.max(currentClientX, startClientX) - rect.left;
+        const selectLeft = Math.min(currentClientX, startClientX) - rect.left + scrollDiffX;
+        const selectRight = Math.max(currentClientX, startClientX) - rect.left + scrollDiffX;
         
         // 스크롤 방향에 관계없이 선택 영역의 시작과 끝 좌표 계산을 수정
         // 시작 위치의 Y 좌표를 스크롤 시작 위치 기준으로 계산
@@ -506,18 +568,17 @@ function initDragSelect() {
         const selectTop = Math.min(startY_abs, currentY_abs);
         const selectBottom = Math.max(startY_abs, currentY_abs);
         
-        // 목록 상단/하단 자동 스크롤
-        const buffer = 50; // 자동 스크롤 감지 영역 (픽셀)
-        
-        // 파일 리스트의 영역 내에 있을 때만 자동 스크롤 처리
-        if (e.clientX >= rect.left && e.clientX <= rect.right) {
-            if (e.clientY < rect.top + buffer && e.clientY >= rect.top) {
-                // 상단으로 스크롤
-                fileList.scrollTop -= 10;
-            } else if (e.clientY > rect.bottom - buffer && e.clientY <= rect.bottom) {
-                // 하단으로 스크롤
-                fileList.scrollTop += 10;
+        // 자동 스크롤 처리 - requestAnimationFrame 사용
+        if (e.clientX >= rect.left && e.clientX <= rect.right &&
+            e.clientY >= rect.top && e.clientY <= rect.bottom) {
+            
+            // 이미 자동 스크롤이 진행 중이 아니면 시작
+            if (autoScrollAnimationId === null) {
+                autoScroll(e.clientX, e.clientY);
             }
+        } else {
+            // 마우스가 컨테이너를 벗어나면 자동 스크롤 취소
+            cancelAutoScroll();
         }
         
         // 모든 파일 항목들을 순회하면서 선택 영역과 겹치는지 확인
@@ -531,7 +592,7 @@ function initDragSelect() {
             
             // 항목의 위치와 크기 계산 (절대 위치)
             const itemRect = item.getBoundingClientRect();
-            const itemLeft = itemRect.left - rect.left;
+            const itemLeft = itemRect.left - rect.left + fileList.scrollLeft;
             const itemTop = itemRect.top - rect.top + fileList.scrollTop; // 현재 스크롤 위치 고려
             const itemRight = itemLeft + itemRect.width;
             const itemBottom = itemTop + itemRect.height;
@@ -569,7 +630,7 @@ function initDragSelect() {
             
             // 항목의 위치와 크기 계산 (절대 위치)
             const itemRect = item.getBoundingClientRect();
-            const itemLeft = itemRect.left - rect.left;
+            const itemLeft = itemRect.left - rect.left + fileList.scrollLeft;
             const itemTop = itemRect.top - rect.top + fileList.scrollTop; // 현재 스크롤 위치 고려
             const itemRight = itemLeft + itemRect.width;
             const itemBottom = itemTop + itemRect.height;
@@ -582,64 +643,43 @@ function initDragSelect() {
                 itemTop > selectBottom
             );
             
-            // 선택 상태 업데이트 - 그리드 뷰용
+            // 선택 상태 업데이트
             if (overlap) {
                 if (!item.classList.contains('selected')) {
                     item.classList.add('selected');
-                    // 목록 뷰의 동일 항목도 선택
-                    const fileName = item.getAttribute('data-name');
-                    selectedItems.add(fileName);
-                    const listItem = document.querySelector(`.file-item[data-name="${fileName}"]`);
-                    if (listItem) listItem.classList.add('selected');
+                    selectedItems.add(item.getAttribute('data-name'));
                 }
             } else if (!e.ctrlKey) {
                 if (item.classList.contains('selected')) {
                     item.classList.remove('selected');
-                    // 목록 뷰의 동일 항목도 선택 해제
-                    const fileName = item.getAttribute('data-name');
-                    selectedItems.delete(fileName);
-                    const listItem = document.querySelector(`.file-item[data-name="${fileName}"]`);
-                    if (listItem) listItem.classList.remove('selected');
+                    selectedItems.delete(item.getAttribute('data-name'));
                 }
             }
         });
         
+        // 선택 버튼 상태 업데이트
         updateButtonStates();
     });
     
     // 마우스 업 이벤트
     document.addEventListener('mouseup', (e) => {
-        // 선택된 항목에서 시작된 경우 처리하지 않음
-        if (window.dragSelectState.startedOnSelectedItem) {
-            window.dragSelectState.startedOnSelectedItem = false;
-            // 선택된 항목에서 드래그가 끝났을 때 모든 dragging 클래스 제거
-            document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
-                item.classList.remove('dragging');
-            });
-            return;
-        }
-        
+        // 시작 표시가 없거나 드래그 이벤트가 아니면 무시
         if (!window.dragSelectState.isSelecting) return;
         
+        // 자동 스크롤 중지
+        cancelAutoScroll();
+        
         const selectionBox = document.getElementById('selectionBox');
-        
-        window.dragSelectState.isSelecting = false;
-        
-        // 선택 박스 숨기기
         selectionBox.style.display = 'none';
         
-        // 드래그가 거의 없었을 경우, 클릭한 요소가 파일 항목이 아니라면 모든 선택을 해제
-        if (!window.dragSelectState.dragStarted) {
-            // 파일 항목 위에서 시작하지 않았고, 다른 상호작용 요소(버튼 등)도 아닌 경우에만 선택 해제
-            if (!window.dragSelectState.startedOnFileItem && !e.target.closest('button, input, select, a, .modal, .dropdown-menu')) {
-                clearSelection();
-                updateButtonStates();
-            }
-        }
-        
+        // 전역 상태 초기화
+        window.dragSelectState.isSelecting = false;
         window.dragSelectState.dragStarted = false;
         window.dragSelectState.startedOnFileItem = false;
-        originalTarget = null;
+        window.dragSelectState.startedOnSelectedItem = false;
+        
+        // 버튼 상태 업데이트
+        updateButtonStates();
     });
 }
 
@@ -687,8 +727,15 @@ function setupGlobalDragCleanup() {
             delete selectionBox.dataset.startClientX;
             delete selectionBox.dataset.startClientY;
             delete selectionBox.dataset.initialScrollTop;
+            delete selectionBox.dataset.initialScrollLeft; // 수평 스크롤 정보도 제거
             console.log('clearDragState: 드래그 선택 박스 상태 초기화');
         }
+        
+        // 자동 스크롤 취소 (함수가 존재하는 경우)
+        if (typeof cancelAutoScroll === 'function') {
+            cancelAutoScroll();
+        }
+        
         // --- 추가된 코드 끝 ---
         
         // 모든 dragging 클래스 제거 (파일 이동/업로드 관련)
@@ -720,24 +767,16 @@ function setupGlobalDragCleanup() {
             console.log('mouseup 이벤트 감지: 드래그 상태 정리 시도');
             window.clearDragState();
         }
-    }, true); // 캡처 단계에서 처리하여 다른 이벤트보다 먼저 실행될 가능성 높임
+    }, true);
     
-    // dragend 이벤트: 드롭이 성공하거나 취소될 때 발생
-    document.addEventListener('dragend', (e) => {
-        console.log('dragend 이벤트 감지: 드래그 상태 정리 시도');
-        // dragend 발생 시 무조건 정리 시도
-        window.clearDragState();
-    }, true); // 캡처 단계에서 처리
-    
-    // 페이지 가시성 변경 시 정리 (안전 장치)
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden' && window.isDraggingActive) {
-            console.log('페이지 숨김 감지: 드래그 상태 정리 시도');
+    // mouseleave 이벤트: 마우스가 문서를 벗어날 때 안전장치로 정리
+    document.addEventListener('mouseleave', (e) => {
+        // 문서 경계를 벗어나는 경우에만 처리
+        if (e.target === document.documentElement && window.isDraggingActive) {
+            console.log('mouseleave 이벤트 감지: 문서를 벗어남, 드래그 상태 정리 시도');
             window.clearDragState();
         }
     });
-    
-    // MutationObserver는 복잡성을 증가시키고 다른 문제 유발 가능성 있어 제거
 }
 
 // 드래그 종료 처리
