@@ -1646,10 +1646,11 @@ function deleteSelectedItems() {
             if (!response.ok) {
                 throw new Error(`${itemName} 삭제 실패: ${response.status} ${response.statusText}`);
             }
-            return response.json();
+            // 응답이 JSON이 아니므로 text()로 처리
+            return response.text();
         })
-        .then(data => {
-            console.log(`'${itemName}' 삭제 완료`);
+        .then(text => {
+            console.log(`'${itemName}' 삭제 완료:`, text);
             // 다음 항목 삭제
             deleteNextItem(index + 1);
         })
