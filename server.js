@@ -760,7 +760,7 @@ app.get('/api/lock-status', (req, res) => {
 });
 
 // 폴더 잠금/해제 API
-app.post('/api/lock/:path', (req, res) => {
+app.post('/api/lock/:path(*)', (req, res) => {
   try {
     // URL 디코딩하여 한글 경로 처리
     const folderPath = decodeURIComponent(req.params.path || '');
