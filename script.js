@@ -621,41 +621,118 @@ function initDragSelect() {
 
 // 전역 마우스 업 이벤트 핸들러 추가 - 드래그 상태 정리를 위한 안전장치
 function setupGlobalDragCleanup() {
-    // 전역 상태 변수
+    // 전역 드래그 상태 관리
     window.isDraggingActive = false;
-    window.lastDraggedItems = new Set();
-
-    // 파일/폴더 드래그가 시작될 때 호출되는 함수
-    window.startFileDrag = function(fileItems) {
+    window.dragTimeoutId = null;
+    window.lastMouseMoveTime = 0;
+    window.mouseMoveCheckInterval = null;
+    
+    // 파일 드래그 시작 함수
+    window.startFileDrag = function(items) {
         window.isDraggingActive = true;
-        window.lastDraggedItems = new Set(fileItems);
-        console.log('드래그 시작: 아이템 개수', window.lastDraggedItems.size);
+        window.lastMouseMoveTime = Date.now();
+        console.log(`드래그 시작: ${items.size}개 항목 드래그 중`);
+        
+        // 혹시 이전에 설정된 타임아웃이 있으면 제거
+        if (window.dragTimeoutId) {
+            clearTimeout(window.dragTimeoutId);
+            window.dragTimeoutId = null;
+        }
+        
+        // 이전 마우스 움직임 체크 인터벌 제거
+        if (window.mouseMoveCheckInterval) {
+            clearInterval(window.mouseMoveCheckInterval);
+        }
+        
+        // 마우스 움직임 없을 때 드래그 상태 정리 (1초 이상 움직임 없으면)
+        window.mouseMoveCheckInterval = setInterval(() => {
+            const now = Date.now();
+            if (window.isDraggingActive && (now - window.lastMouseMoveTime > 1000)) {
+                console.log('마우스 움직임 없음 감지 - 드래그 상태 정리');
+                window.clearDragState();
+            }
+        }, 1000);
+        
+        // 일정 시간(3초) 후에 드래그 상태 자동 정리 (안전장치)
+        window.dragTimeoutId = setTimeout(() => {
+            if (window.isDraggingActive) {
+                console.log('드래그 상태 자동 정리 (타임아웃)');
+                window.clearDragState();
+            }
+        }, 3000);
     };
-
+    
+    // 마우스 움직임 감지
+    document.addEventListener('mousemove', () => {
+        if (window.isDraggingActive) {
+            window.lastMouseMoveTime = Date.now();
+        }
+    }, true);
+    
     // 드래그 상태 정리 함수
     window.clearDragState = function() {
-        if (window.isDraggingActive) {
-            console.log('드래그 상태 정리');
-            window.isDraggingActive = false;
-            window.lastDraggedItems.clear();
-            
-            // 모든 dragging 클래스 제거
-            document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
-                item.classList.remove('dragging');
-            });
-            
-            // 모든 drag-over 클래스 제거
-            document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
-                item.classList.remove('drag-over');
-            });
+        // 드래그 상태 초기화
+        window.isDraggingActive = false;
+        
+        // 타임아웃 초기화
+        if (window.dragTimeoutId) {
+            clearTimeout(window.dragTimeoutId);
+            window.dragTimeoutId = null;
         }
+        
+        // 마우스 움직임 체크 인터벌 초기화
+        if (window.mouseMoveCheckInterval) {
+            clearInterval(window.mouseMoveCheckInterval);
+            window.mouseMoveCheckInterval = null;
+        }
+        
+        // 모든 dragging 클래스 제거
+        document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
+            item.classList.remove('dragging');
+        });
+        
+        // 모든 drag-over 클래스 제거
+        document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
+            item.classList.remove('drag-over');
+        });
+        
+        console.log('드래그 상태 정리 완료');
     };
-
-    // 모든 mouseup 이벤트에서 드래그 상태 정리
-    document.addEventListener('mouseup', window.clearDragState);
     
-    // dragend 이벤트도 캡처
-    document.addEventListener('dragend', window.clearDragState, true);
+    // 브라우저 이벤트 핸들링 강화 - mouseup과 dragend 모두 캡처
+    document.addEventListener('mouseup', (e) => {
+        // mouseup 시 활성화된 드래그 상태 확인 및 정리
+        if (window.isDraggingActive) {
+            console.log('mouseup으로 드래그 상태 정리');
+            // 약간의 지연을 주어 dragend 이벤트가 먼저 처리되도록 함
+            setTimeout(() => window.clearDragState(), 50);
+        }
+    }, true); // 캡처 단계에서 이벤트 처리
+    
+    // dragend 이벤트 처리
+    document.addEventListener('dragend', (e) => {
+        console.log('dragend 이벤트로 드래그 상태 정리');
+        window.clearDragState();
+    }, true); // 캡처 단계에서 이벤트 처리
+    
+    // 각종 다른 이벤트 발생 시에도 드래그 상태 확인
+    ['click', 'dblclick', 'contextmenu'].forEach(eventType => {
+        document.addEventListener(eventType, () => {
+            // 이미 드래그 상태인 경우 정리
+            if (window.isDraggingActive) {
+                console.log(`${eventType} 이벤트로 드래그 상태 정리`);
+                window.clearDragState();
+            }
+        }, true);
+    });
+    
+    // 페이지 가시성 변경 시 정리 (탭 전환 등)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && window.isDraggingActive) {
+            console.log('페이지 가시성 변경으로 드래그 상태 정리');
+            window.clearDragState();
+        }
+    });
 }
 
 // 드래그 종료 처리
@@ -1725,8 +1802,20 @@ function initDragAndDrop() {
     
     // 드래그 종료 이벤트 위임
     fileList.addEventListener('dragend', (e) => {
-        // 드래그 상태 정리 함수 호출
-        window.clearDragState();
+        console.log('파일 리스트 dragend 이벤트 발생');
+        // 전역 드래그 상태 정리 함수 호출
+        if (window.clearDragState) {
+            window.clearDragState();
+        } else {
+            // 전역 함수가 없는 경우 대체 정리 로직 수행
+            document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
+                item.classList.remove('dragging');
+            });
+            
+            document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
         
         // 드롭존 비활성화
         dropZone.classList.remove('active');
@@ -3509,15 +3598,20 @@ function initFileItem(fileItem) {
     
     // 드래그 종료 이벤트
     fileItem.addEventListener('dragend', (e) => {
-        // 드래그 스타일 제거
-        document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
-            item.classList.remove('dragging');
-        });
-        
-        // 드래그 오버 스타일 제거
-        document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
-            item.classList.remove('drag-over');
-        });
+        console.log('파일 항목 dragend 이벤트 발생');
+        // 전역 드래그 상태 정리 함수 호출
+        if (window.clearDragState) {
+            window.clearDragState();
+        } else {
+            // 전역 함수가 없는 경우 대체 정리 로직 수행
+            document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
+                item.classList.remove('dragging');
+            });
+            
+            document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
     });
 }
 
