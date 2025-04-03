@@ -492,17 +492,18 @@ app.post('/api/upload', (req, res) => {
         try {
             // 파일명 길이 확인 및 처리
             let relativeFilePath = fileInfo.relativePath;
-            const fileName = path.basename(relativeFilePath);
+            const originalFileName = path.basename(relativeFilePath);
+            let finalFileName = originalFileName; // 최종 파일명 변수 추가
             
             // 파일명이 너무 길면 자르기
-            if (fileName.length > MAX_FILENAME_LENGTH) {
-                const truncatedName = truncateFileName(fileName);
+            if (originalFileName.length > MAX_FILENAME_LENGTH) {
+                finalFileName = truncateFileName(originalFileName);
                 const dirName = path.dirname(relativeFilePath);
-                relativeFilePath = dirName === '.' ? truncatedName : `${dirName}/${truncatedName}`;
+                relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
                 log(`파일명 길이 제한으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`);
             }
             
-            // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 상대 경로)
+            // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 수정된 상대 경로)
             const destinationPath = path.join(rootUploadDir, relativeFilePath);
             // 저장될 디렉토리 경로 추출
             const destinationDir = path.dirname(destinationPath);
@@ -519,11 +520,10 @@ app.post('/api/upload', (req, res) => {
             fs.chmodSync(destinationPath, 0o666); // 저장된 파일 권한 설정
 
             // 처리된 파일 정보 저장
-            const savedFileName = path.basename(destinationPath);
             processedFiles.push({
-                name: savedFileName,
+                name: finalFileName, // 수정된 최종 파일명 사용
                 originalName: fileInfo.originalName, // 원본 파일명도 기록
-                relativePath: relativeFilePath,
+                relativePath: relativeFilePath, // 수정된 상대 경로 사용
                 size: file.size,
                 path: baseUploadPath, // 기본 업로드 경로
                 mimetype: file.mimetype,
