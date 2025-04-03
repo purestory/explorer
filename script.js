@@ -406,10 +406,10 @@ function initDragSelect() {
         
         if (currentY < rect.top + buffer) {
             // 상단으로 스크롤
-            fileList.scrollTop -= 15;
+            fileList.scrollTop -= 20; // 스크롤 속도 증가
         } else if (currentY > rect.bottom - buffer) {
             // 하단으로 스크롤
-            fileList.scrollTop += 15;
+            fileList.scrollTop += 20; // 스크롤 속도 증가
         }
         
         // 현재 선택 박스의 경계 계산 (스크롤 고려)
@@ -421,14 +421,23 @@ function initDragSelect() {
         // 이전에 드래그 중 선택된 항목 기록을 초기화하고 다시 계산
         selectedDuringDrag.clear();
         
-        // 박스와 겹치는 파일 항목 선택
+        // 모든 파일 항목에 대해 선택 상태 계산
         const items = document.querySelectorAll('.file-item');
         items.forEach(item => {
-            if (item.getAttribute('data-parent-dir') === 'true') return; // 상위 폴더는 선택에서 제외
+            // 상위 폴더는 선택에서 제외
+            if (item.getAttribute('data-parent-dir') === 'true') return;
+            
+            const itemName = item.getAttribute('data-name');
+            
+            // 드래그 시작 전부터 선택된 항목은 항상 선택 상태 유지 (Ctrl키 누른 경우)
+            if (e.ctrlKey && initiallySelectedItems.has(itemName)) {
+                item.classList.add('selected');
+                selectedItems.add(itemName);
+                return;
+            }
             
             // 항목의 절대 위치 계산 (스크롤 포함)
             const itemPosition = item.getBoundingClientRect();
-            const itemName = item.getAttribute('data-name');
             
             // 항목의 상대 위치 계산 (파일 리스트 컨테이너 기준)
             const itemTop = itemPosition.top - rect.top + fileList.scrollTop;
@@ -458,6 +467,30 @@ function initDragSelect() {
         });
         
         updateButtonStates();
+    });
+    
+    // 스크롤 이벤트 - 드래그 중에 스크롤이 발생할 때도 선택 상태 유지
+    fileList.addEventListener('scroll', (e) => {
+        if (!isSelecting) return;
+        
+        // 선택 박스 위치 업데이트
+        const selectionBox = document.getElementById('selectionBox');
+        const rect = fileList.getBoundingClientRect();
+        
+        const currentX = parseInt(selectionBox.style.left) + parseInt(selectionBox.style.width) / 2 + rect.left;
+        const currentY = parseInt(selectionBox.style.top) + parseInt(selectionBox.style.height) / 2 + rect.top - fileList.scrollTop;
+        
+        // 마우스 이동 이벤트를 발생시켜 선택 박스와 선택 항목을 업데이트
+        const mouseEvent = new MouseEvent('mousemove', {
+            clientX: currentX,
+            clientY: currentY,
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            ctrlKey: initiallySelectedItems.size > 0
+        });
+        
+        document.dispatchEvent(mouseEvent);
     });
     
     // 마우스 업 이벤트
