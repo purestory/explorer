@@ -819,13 +819,14 @@ function renderFiles(files) {
                 parentItem.appendChild(parentName);
                 parentItem.appendChild(parentDetails);
                 
-                // 클릭 이벤트 추가
-                parentItem.addEventListener('click', () => {
-                    navigateToParentFolder();
-                });
+                // 클릭 이벤트 추가 - 제거하고 더블클릭 이벤트로만 처리하도록 수정
+                // 대신 initFileItem 함수를 통해 다른 파일/폴더와 동일하게 이벤트 처리
                 
                 // 컨테이너에 추가
                 filesContainer.appendChild(parentItem);
+                
+                // initFileItem 함수 호출
+                initFileItem(parentItem);
             }
             
             // 파일 목록 렌더링
@@ -941,15 +942,10 @@ function renderFiles(files) {
                         
                         // 상위 폴더(..)는 선택되지 않도록 처리
                         if (fileItem.getAttribute('data-parent-dir') === 'true') {
-                            if (e.target.closest('.file-item').clickTimer) {
-                                clearTimeout(e.target.closest('.file-item').clickTimer);
-                                e.target.closest('.file-item').clickTimer = null;
-                                navigateToParentFolder();
-                            } else {
-                                e.target.closest('.file-item').clickTimer = setTimeout(() => {
-                                    e.target.closest('.file-item').clickTimer = null;
-                                }, 400);
-                            }
+                            // 원클릭으로 상위 폴더 이동을 하지 않도록 수정
+                            // 대신 handleFileClick 함수로 처리하여 더블클릭 이벤트에서만 이동하도록 함
+                            e.preventDefault();
+                            e.stopPropagation();
                             return;
                         }
                         
@@ -961,15 +957,8 @@ function renderFiles(files) {
                     fileItem.addEventListener('dblclick', (e) => {
                         if (e.target.classList.contains('rename-input')) return;
                         
-                        // 파일/폴더 더블클릭 처리
-                        const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
-                        const name = fileItem.getAttribute('data-name');
-                        
-                        if (isFolder) {
-                            navigateToFolder(name);
-                        } else {
-                            openFile(name);
-                        }
+                        // handleFileDblClick 함수를 사용하여 통합 처리
+                        handleFileDblClick(e, fileItem);
                     });
                     
                     // 파일 항목을 목록에 추가
@@ -1124,24 +1113,18 @@ function handleFileClick(e, fileItem) {
     } else {
         // 일반 클릭: 단일 선택
         const fileName = fileItem.getAttribute('data-name');
-        const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
         
-        if (fileItem.clickTimer) {
-            clearTimeout(fileItem.clickTimer);
-            fileItem.clickTimer = null;
-            // 더블클릭 효과는 dblclick 이벤트에서 처리됨
+        // 더블클릭 이벤트와의 충돌을 방지하기 위한 타이머 제거
+        // 즉시 선택 처리 (지연 없이)
+        if (!fileItem.contains(e.target.closest('.file-icon')) && !fileItem.contains(e.target.closest('.file-name'))) {
             return;
         }
         
-        fileItem.clickTimer = setTimeout(() => {
-            fileItem.clickTimer = null;
-            
-            // 모든 선택 해제 후 현재 항목 선택
-            clearSelection();
-            fileItem.classList.add('selected');
-            selectedItems.add(fileName);
-            updateButtonStates();
-        }, 300); // 300ms로 조정
+        // 모든 선택 해제 후 현재 항목 선택
+        clearSelection();
+        fileItem.classList.add('selected');
+        selectedItems.add(fileName);
+        updateButtonStates();
     }
     
     updateButtonStates();
@@ -1151,6 +1134,13 @@ function handleFileClick(e, fileItem) {
 function handleFileDblClick(e, fileItem) {
     const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
     const fileName = fileItem.getAttribute('data-name');
+    const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
+    
+    // 상위 폴더 처리
+    if (isParentDir) {
+        navigateToParentFolder();
+        return;
+    }
     
     if (isFolder) {
         navigateToFolder(fileName);
@@ -3254,10 +3244,13 @@ function initFileItem(fileItem) {
         showContextMenu(e, fileItem);
     });
     
-    // 클릭 이벤트 연결
-    fileItem.addEventListener('mousedown', (e) => {
+    // 클릭 이벤트 연결 (mousedown 대신 click 이벤트 사용)
+    fileItem.addEventListener('click', (e) => {
         // 우클릭은 여기서 처리하지 않음 (contextmenu 이벤트에서 처리)
         if (e.button !== 0) return;
+        
+        // 이름 변경 중이면 무시
+        if (fileItem.classList.contains('renaming')) return;
         
         // Ctrl+클릭은 다중 선택을 위해 처리
         if (e.ctrlKey) {
@@ -3269,18 +3262,42 @@ function initFileItem(fileItem) {
         } 
         // 일반 클릭은 단일 선택을 위해 처리
         else {
-            // 이미 선택된 항목을 클릭했다면 선택 상태 유지 (드래그 이동을 위해)
-            if (fileItem.classList.contains('selected')) {
-                // 선택 상태 유지 (드래그가 시작될 수 있음)
-            } else {
-                // 선택되지 않은 항목을 클릭했다면 새로 선택
-                clearSelection();
-                selectItem(fileItem);
+            // 상위 폴더(..)는 선택 로직을 다르게 처리
+            if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                return; // 상위 폴더는 선택하지 않음
             }
+            
+            // 모든 선택 해제 후 현재 항목 선택
+            clearSelection();
+            selectItem(fileItem);
         }
         
         // 이벤트 전파 중지 (드래그 선택 이벤트와 충돌 방지)
         e.stopPropagation();
+    });
+    
+    // 드래그 시작 처리를 위한 mousedown 이벤트 유지
+    fileItem.addEventListener('mousedown', (e) => {
+        // 우클릭은 여기서 처리하지 않음
+        if (e.button !== 0) return;
+        
+        // 상위 폴더는 드래그되지 않도록
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            return;
+        }
+        
+        // 선택된 항목을 클릭한 경우 선택 상태 유지 (드래그 시작 가능)
+        if (fileItem.classList.contains('selected')) {
+            e.stopPropagation();
+            return;
+        }
+        
+        // 선택되지 않은 항목을 클릭한 경우 새로 선택 (mousedown에서 즉시 선택)
+        if (!e.ctrlKey && !e.shiftKey) {
+            clearSelection();
+            selectItem(fileItem);
+            e.stopPropagation();
+        }
     });
 }
 
@@ -3329,16 +3346,7 @@ function displayFiles(files, parentPath = '') {
         `;
         fileGrid.appendChild(parentItemGrid);
         
-        // 상위 폴더 항목에 이벤트 연결
-        parentItem.addEventListener('dblclick', () => {
-            navigateToFolder('..');
-        });
-        
-        parentItemGrid.addEventListener('dblclick', () => {
-            navigateToFolder('..');
-        });
-        
-        // 초기화 함수 호출
+        // 초기화 함수 호출 (직접 이벤트를 연결하지 않고 initFileItem을 통해서만 처리)
         initFileItem(parentItem);
         initFileItem(parentItemGrid);
     }
