@@ -389,6 +389,29 @@ app.delete('/api/files/*', (req, res) => {
       return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
     }
 
+    // 폴더가 잠겼는지 확인
+    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
+    let lockedFolders = [];
+    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+    if (fs.existsSync(lockedFoldersPath)) {
+      try {
+        lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
+      } catch (e) {
+        errorLog('잠긴 폴더 목록 로드 오류:', e);
+        lockedFolders = [];
+      }
+    }
+
+    // 현재 경로나 그 상위 경로가 잠겨있는지 확인
+    const isLocked = lockedFolders.some(lockedPath => {
+      return itemPath === lockedPath || itemPath.startsWith(lockedPath + '/');
+    });
+
+    if (isLocked) {
+      errorLog(`잠긴 폴더 삭제 시도: ${fullPath}`);
+      return res.status(403).send('잠긴 폴더는 삭제할 수 없습니다.');
+    }
+
     // 디렉토리인지 확인
     const stats = fs.statSync(fullPath);
     if (stats.isDirectory()) {
@@ -707,6 +730,102 @@ app.post('/api/compress', bodyParser.json(), (req, res) => {
   } catch (error) {
     errorLog('압축 오류:', error);
     res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
+  }
+});
+
+// 폴더 잠금 상태 조회 API
+app.get('/api/lock-status', (req, res) => {
+  try {
+    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
+    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+    let lockState = [];
+    
+    if (fs.existsSync(lockedFoldersPath)) {
+      try {
+        lockState = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
+      } catch (error) {
+        errorLog('잠긴 폴더 목록 파싱 오류:', error);
+      }
+    } else {
+      // 파일이 없으면 빈 배열로 초기화하고 파일 생성
+      fs.writeFileSync(lockedFoldersPath, JSON.stringify({ lockState: [] }), 'utf8');
+    }
+    
+    log(`잠금 상태 조회: ${lockState.length}개 폴더 잠김`);
+    res.status(200).json({ lockState });
+  } catch (error) {
+    errorLog('잠금 상태 조회 오류:', error);
+    res.status(500).send('서버 오류가 발생했습니다.');
+  }
+});
+
+// 폴더 잠금/해제 API
+app.post('/api/lock/:path', (req, res) => {
+  try {
+    // URL 디코딩하여 한글 경로 처리
+    const folderPath = decodeURIComponent(req.params.path || '');
+    const action = req.body.action || 'lock'; // 'lock' 또는 'unlock'
+    const fullPath = path.join(ROOT_DIRECTORY, folderPath);
+    
+    log(`폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 요청: ${fullPath}`);
+
+    // 폴더가 존재하는지 확인
+    if (!fs.existsSync(fullPath)) {
+      errorLog(`폴더를 찾을 수 없음: ${fullPath}`);
+      return res.status(404).send('폴더를 찾을 수 없습니다.');
+    }
+
+    // 디렉토리인지 확인
+    const stats = fs.statSync(fullPath);
+    if (!stats.isDirectory()) {
+      errorLog(`잠금 대상이 폴더가 아님: ${fullPath}`);
+      return res.status(400).send('폴더만 잠금/해제할 수 있습니다.');
+    }
+
+    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
+    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+    let lockedFolders = { lockState: [] };
+    
+    if (fs.existsSync(lockedFoldersPath)) {
+      try {
+        lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8'));
+        if (!lockedFolders.lockState) {
+          lockedFolders.lockState = [];
+        }
+      } catch (error) {
+        errorLog('잠긴 폴더 목록 파싱 오류:', error);
+        lockedFolders = { lockState: [] };
+      }
+    }
+
+    // 잠금 또는 해제 처리
+    if (action === 'lock') {
+      // 이미 잠겨있는지 확인
+      if (!lockedFolders.lockState.includes(folderPath)) {
+        lockedFolders.lockState.push(folderPath);
+        log(`폴더 잠금 완료: ${folderPath}`);
+      } else {
+        log(`폴더가 이미 잠겨 있음: ${folderPath}`);
+      }
+    } else if (action === 'unlock') {
+      // 잠금 해제
+      lockedFolders.lockState = lockedFolders.lockState.filter(path => path !== folderPath);
+      log(`폴더 잠금 해제 완료: ${folderPath}`);
+    }
+
+    // 변경된 목록 저장
+    fs.writeFileSync(lockedFoldersPath, JSON.stringify(lockedFolders, null, 2), 'utf8');
+    fs.chmodSync(lockedFoldersPath, 0o666); // 권한 설정
+
+    res.status(200).json({
+      success: true,
+      message: `폴더가 ${action === 'lock' ? '잠겼습니다' : '잠금 해제되었습니다'}`,
+      path: folderPath,
+      action: action
+    });
+  } catch (error) {
+    errorLog(`폴더 ${req.body.action === 'lock' ? '잠금' : '잠금 해제'} 오류:`, error);
+    res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
 
