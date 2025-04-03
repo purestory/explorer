@@ -654,315 +654,282 @@ function renderFiles(files) {
     // 파일 목록 초기화
     fileView.innerHTML = '';
     
-    // 잠금 상태 로드
-    loadLockStatus();
-    
-    // 목록 보기인 경우 헤더 추가
-    if (listView) {
-        // 헤더 추가
-        const headerDiv = document.createElement('div');
-        headerDiv.className = 'file-list-header';
-        headerDiv.innerHTML = `
-            <div class="header-icon"></div>
-            <div class="header-name" data-sort="name">이름 <i class="fas ${sortField === 'name' ? (sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'}"></i></div>
-            <div class="header-size" data-sort="size">크기 <i class="fas ${sortField === 'size' ? (sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'}"></i></div>
-            <div class="header-date" data-sort="date">수정일 <i class="fas ${sortField === 'date' ? (sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'}"></i></div>
-        `;
-        
-        // 헤더 클릭 이벤트 추가
-        headerDiv.querySelectorAll('[data-sort]').forEach(headerItem => {
-            headerItem.addEventListener('click', () => {
-                const sortBy = headerItem.getAttribute('data-sort');
-                if (sortField === sortBy) {
-                    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-                } else {
-                    sortField = sortBy;
-                    sortDirection = 'asc';
+    // 잠금 상태 로드 후 파일 렌더링
+    showLoading();
+    loadLockStatus()
+        .then(() => {
+            // 목록 보기인 경우 헤더 추가
+            if (listView) {
+                // 헤더 추가
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'file-list-header';
+                headerDiv.innerHTML = `
+                    <div class="header-icon"></div>
+                    <div class="header-name" data-sort="name">이름 <i class="fas ${sortField === 'name' ? (sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'}"></i></div>
+                    <div class="header-size" data-sort="size">크기 <i class="fas ${sortField === 'size' ? (sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'}"></i></div>
+                    <div class="header-date" data-sort="date">수정일 <i class="fas ${sortField === 'date' ? (sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'}"></i></div>
+                `;
+                
+                // 헤더 클릭 이벤트 추가
+                headerDiv.querySelectorAll('[data-sort]').forEach(headerItem => {
+                    headerItem.addEventListener('click', () => {
+                        const sortBy = headerItem.getAttribute('data-sort');
+                        if (sortField === sortBy) {
+                            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            sortField = sortBy;
+                            sortDirection = 'asc';
+                        }
+                        loadFiles(currentPath);
+                    });
+                });
+                
+                fileView.appendChild(headerDiv);
+            }
+            
+            // 파일 컨테이너 추가
+            const filesContainer = document.createElement('div');
+            filesContainer.className = 'files-container';
+            fileView.appendChild(filesContainer);
+            
+            // 파일 정렬
+            const sortedFiles = [...files].sort((a, b) => {
+                // 폴더 우선 정렬
+                if (a.isFolder && !b.isFolder) return -1;
+                if (!a.isFolder && b.isFolder) return 1;
+                
+                // 선택된 필드로 정렬
+                if (sortField === 'name') {
+                    return sortDirection === 'asc' 
+                        ? a.name.localeCompare(b.name) 
+                        : b.name.localeCompare(a.name);
+                } else if (sortField === 'size') {
+                    return sortDirection === 'asc' 
+                        ? a.size - b.size 
+                        : b.size - a.size;
+                } else if (sortField === 'date') {
+                    return sortDirection === 'asc' 
+                        ? new Date(a.modifiedTime) - new Date(b.modifiedTime) 
+                        : new Date(b.modifiedTime) - new Date(a.modifiedTime);
                 }
-                loadFiles(currentPath);
+                
+                return 0;
             });
-        });
-        
-        fileView.appendChild(headerDiv);
-    }
-    
-    // 파일 컨테이너 추가
-    const filesContainer = document.createElement('div');
-    filesContainer.className = 'files-container';
-    fileView.appendChild(filesContainer);
-    
-    // 파일 정렬
-    const sortedFiles = [...files].sort((a, b) => {
-        // 폴더 우선 정렬
-        if (a.isFolder && !b.isFolder) return -1;
-        if (!a.isFolder && b.isFolder) return 1;
-        
-        // 선택된 필드로 정렬
-        if (sortField === 'name') {
-            return sortDirection === 'asc' 
-                ? a.name.localeCompare(b.name) 
-                : b.name.localeCompare(a.name);
-        } else if (sortField === 'size') {
-            return sortDirection === 'asc' 
-                ? a.size - b.size 
-                : b.size - a.size;
-        } else if (sortField === 'date') {
-            return sortDirection === 'asc' 
-                ? new Date(a.modifiedTime) - new Date(b.modifiedTime) 
-                : new Date(b.modifiedTime) - new Date(a.modifiedTime);
-        }
-        
-        return 0;
-    });
-    
-    // 숨김 파일 제외 (점으로 시작하는 파일)
-    const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
-    
-    // 상위 폴더로 이동 항목 추가 (루트 폴더가 아닌 경우)
-    if (currentPath) {
-        // 상위 디렉토리 항목 생성
-        const parentItem = document.createElement('div');
-        parentItem.className = 'file-item parent-dir';
-        parentItem.setAttribute('data-id', '..');
-        parentItem.setAttribute('data-name', '..');
-        parentItem.setAttribute('data-is-folder', 'true');
-        parentItem.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시를 위한 속성 추가
-        
-        // 아이콘 생성
-        const parentIcon = document.createElement('div');
-        parentIcon.className = 'file-icon';
-        parentIcon.innerHTML = '<i class="fas fa-level-up-alt"></i>';
-        
-        // 이름 생성
-        const parentName = document.createElement('div');
-        parentName.className = 'file-name';
-        parentName.innerText = '.. (상위 폴더)';
-        
-        // 빈 세부 정보
-        const parentDetails = document.createElement('div');
-        parentDetails.className = 'file-details';
-        parentDetails.innerHTML = '<div class="file-size">--</div><div class="file-date">--</div>';
-        
-        // 부모 항목에 추가
-        parentItem.appendChild(parentIcon);
-        parentItem.appendChild(parentName);
-        parentItem.appendChild(parentDetails);
-        
-        // 클릭 이벤트 추가
-        parentItem.addEventListener('click', () => {
-            navigateToParentFolder();
-        });
-        
-        // 컨테이너에 추가
-        filesContainer.appendChild(parentItem);
-    }
-    
-    // 파일 목록 렌더링
-    if (visibleFiles.length === 0 && !currentPath) {
-        const noFilesDiv = document.createElement('div');
-        noFilesDiv.className = 'no-files';
-        noFilesDiv.textContent = '파일이 없습니다.';
-        filesContainer.appendChild(noFilesDiv);
-    } else {
-        visibleFiles.forEach(file => {
-            // 파일 항목 생성
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            fileItem.setAttribute('data-name', file.name);
-            fileItem.setAttribute('data-id', file.name); // ID 속성 추가
-            fileItem.setAttribute('data-is-folder', file.isFolder.toString());
-            fileItem.setAttribute('data-size', file.size);
-            fileItem.setAttribute('data-date', file.modifiedTime);
-            fileItem.setAttribute('draggable', 'true');
             
-            // 상위 폴더인 경우 (..) 추가 속성 설정
-            if (file.name === '..') {
-                fileItem.setAttribute('data-parent-dir', 'true');
+            // 숨김 파일 제외 (점으로 시작하는 파일)
+            const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
+            
+            // 상위 폴더로 이동 항목 추가 (루트 폴더가 아닌 경우)
+            if (currentPath) {
+                // 상위 디렉토리 항목 생성
+                const parentItem = document.createElement('div');
+                parentItem.className = 'file-item parent-dir';
+                parentItem.setAttribute('data-id', '..');
+                parentItem.setAttribute('data-name', '..');
+                parentItem.setAttribute('data-is-folder', 'true');
+                parentItem.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시를 위한 속성 추가
+                
+                // 아이콘 생성
+                const parentIcon = document.createElement('div');
+                parentIcon.className = 'file-icon';
+                parentIcon.innerHTML = '<i class="fas fa-level-up-alt"></i>';
+                
+                // 이름 생성
+                const parentName = document.createElement('div');
+                parentName.className = 'file-name';
+                parentName.innerText = '.. (상위 폴더)';
+                
+                // 빈 세부 정보
+                const parentDetails = document.createElement('div');
+                parentDetails.className = 'file-details';
+                parentDetails.innerHTML = '<div class="file-size">--</div><div class="file-date">--</div>';
+                
+                // 부모 항목에 추가
+                parentItem.appendChild(parentIcon);
+                parentItem.appendChild(parentName);
+                parentItem.appendChild(parentDetails);
+                
+                // 클릭 이벤트 추가
+                parentItem.addEventListener('click', () => {
+                    navigateToParentFolder();
+                });
+                
+                // 컨테이너에 추가
+                filesContainer.appendChild(parentItem);
             }
             
-            // 파일 경로 계산
-            const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
-            fileItem.setAttribute('data-path', filePath);
-            
-            // 잠금 상태 표시
-            if (file.isFolder && isPathLocked(filePath)) {
-                fileItem.classList.add('locked-folder');
-            }
-            
-            // 파일 아이콘 및 미리보기 설정
-            const fileIcon = document.createElement('div');
-            fileIcon.className = 'file-icon';
-            
-            if (file.isFolder) {
-                fileIcon.innerHTML = '<i class="fas fa-folder"></i>';
+            // 파일 목록 렌더링
+            if (visibleFiles.length === 0 && !currentPath) {
+                const noFilesDiv = document.createElement('div');
+                noFilesDiv.className = 'no-files';
+                noFilesDiv.textContent = '파일이 없습니다.';
+                filesContainer.appendChild(noFilesDiv);
             } else {
-                const fileExt = file.name.split('.').pop().toLowerCase();
-                // 아이콘 선택
-                switch (fileExt) {
-                    case 'pdf': fileIcon.innerHTML = '<i class="fas fa-file-pdf"></i>'; break;
-                    case 'doc': case 'docx': fileIcon.innerHTML = '<i class="fas fa-file-word"></i>'; break;
-                    case 'xls': case 'xlsx': fileIcon.innerHTML = '<i class="fas fa-file-excel"></i>'; break;
-                    case 'ppt': case 'pptx': fileIcon.innerHTML = '<i class="fas fa-file-powerpoint"></i>'; break;
-                    case 'zip': case 'rar': case 'tar': case 'gz': fileIcon.innerHTML = '<i class="fas fa-file-archive"></i>'; break;
-                    case 'jpg': case 'jpeg': case 'png': case 'gif': case 'bmp': 
-                        fileIcon.innerHTML = '<i class="fas fa-file-image"></i>'; break;
-                    case 'mp3': case 'wav': case 'ogg': fileIcon.innerHTML = '<i class="fas fa-file-audio"></i>'; break;
-                    case 'mp4': case 'avi': case 'mov': case 'wmv': fileIcon.innerHTML = '<i class="fas fa-file-video"></i>'; break;
-                    case 'txt': case 'rtf': fileIcon.innerHTML = '<i class="fas fa-file-alt"></i>'; break;
-                    case 'html': case 'htm': case 'css': case 'js': fileIcon.innerHTML = '<i class="fas fa-file-code"></i>'; break;
-                    case 'exe': case 'msi': fileIcon.innerHTML = '<i class="fas fa-cog"></i>'; break;
-                    default: fileIcon.innerHTML = '<i class="fas fa-file"></i>';
-                }
-            }
-            
-            // 파일 이름
-            const fileName = document.createElement('div');
-            fileName.className = 'file-name';
-            fileName.innerText = file.name;
-            
-            // 이름 변경 입력 필드
-            const renameInput = document.createElement('input');
-            renameInput.type = 'text';
-            renameInput.className = 'rename-input';
-            renameInput.value = file.name;
-            
-            // 파일 세부 정보
-            const fileDetails = document.createElement('div');
-            fileDetails.className = 'file-details';
-            
-            // 파일 크기
-            const fileSize = document.createElement('div');
-            fileSize.className = 'file-size';
-            fileSize.innerText = file.isFolder ? '--' : formatFileSize(file.size);
-            
-            // 파일 날짜
-            const fileDate = document.createElement('div');
-            fileDate.className = 'file-date';
-            fileDate.innerText = formatDate(file.modifiedTime);
-            
-            // 세부 정보에 추가
-            fileDetails.appendChild(fileSize);
-            fileDetails.appendChild(fileDate);
-            
-            // 파일 항목에 추가
-            fileItem.appendChild(fileIcon);
-            fileItem.appendChild(fileName);
-            fileItem.appendChild(renameInput);
-            fileItem.appendChild(fileDetails);
-            
-            // 잠긴 폴더에 잠금 아이콘 추가
-            if (file.isFolder && isPathLocked(filePath)) {
-                const lockIcon = document.createElement('div');
-                lockIcon.className = 'lock-icon';
-                lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
-                fileItem.appendChild(lockIcon);
-            }
-            
-            // 이벤트 리스너 설정
-            fileItem.addEventListener('click', (e) => {
-                if (e.target.classList.contains('rename-input')) return;
+                // 잠금 상태 디버그 로깅
+                console.log('현재 잠금 폴더 목록:', lockedFolders);
                 
-                // 상위 폴더(..)는 선택되지 않도록 처리
-                if (fileItem.getAttribute('data-parent-dir') === 'true') {
-                    if (e.target.closest('.file-item').clickTimer) {
-                        clearTimeout(e.target.closest('.file-item').clickTimer);
-                        e.target.closest('.file-item').clickTimer = null;
-                        navigateToParentFolder();
-                    } else {
-                        e.target.closest('.file-item').clickTimer = setTimeout(() => {
-                            e.target.closest('.file-item').clickTimer = null;
-                        }, 400);
-                    }
-                    return;
-                }
-                
-                if (e.ctrlKey) {
-                    // Ctrl 키를 누른 상태로 클릭: 다중 선택
-                    if (fileItem.classList.contains('selected')) {
-                        fileItem.classList.remove('selected');
-                        selectedItems.delete(file.name);
-                    } else {
-                        fileItem.classList.add('selected');
-                        selectedItems.add(file.name);
-                    }
-                } else if (e.shiftKey && selectedItems.size > 0) {
-                    // Shift 키를 누른 상태로 클릭: 범위 선택
-                    const items = Array.from(document.querySelectorAll('.file-item:not([data-parent-dir="true"])'));
-                    const firstSelected = items.findIndex(item => item.classList.contains('selected'));
-                    const currentIndex = items.indexOf(fileItem);
+                visibleFiles.forEach(file => {
+                    // 파일 항목 생성
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.setAttribute('data-name', file.name);
+                    fileItem.setAttribute('data-id', file.name); // ID 속성 추가
+                    fileItem.setAttribute('data-is-folder', file.isFolder.toString());
+                    fileItem.setAttribute('data-size', file.size);
+                    fileItem.setAttribute('data-date', file.modifiedTime);
+                    fileItem.setAttribute('draggable', 'true');
                     
-                    // 범위 설정
-                    const start = Math.min(firstSelected, currentIndex);
-                    const end = Math.max(firstSelected, currentIndex);
-                    
-                    // 범위 내 모든 항목 선택
-                    for (let i = start; i <= end; i++) {
-                        items[i].classList.add('selected');
-                        selectedItems.add(items[i].getAttribute('data-name'));
+                    // 상위 폴더인 경우 (..) 추가 속성 설정
+                    if (file.name === '..') {
+                        fileItem.setAttribute('data-parent-dir', 'true');
                     }
-                } else {
-                    // 일반 클릭: 단일 선택
-                    if (fileItem.getAttribute('data-is-folder') === 'true') {
-                        if (fileItem.clickTimer) {
-                            clearTimeout(fileItem.clickTimer);
-                            fileItem.clickTimer = null;
-                            // 더블클릭: 폴더 열기
-                            navigateToFolder(file.name);
+                    
+                    // 파일 경로 계산
+                    const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+                    fileItem.setAttribute('data-path', filePath);
+                    
+                    // 잠금 상태 확인 및 표시
+                    const isLocked = isPathLocked(filePath);
+                    console.log(`파일/폴더: ${filePath}, 잠금 상태: ${isLocked}`);
+                    
+                    if (file.isFolder && isLocked) {
+                        fileItem.classList.add('locked-folder');
+                    }
+                    
+                    // 파일 아이콘 및 미리보기 설정
+                    const fileIcon = document.createElement('div');
+                    fileIcon.className = 'file-icon';
+                    
+                    if (file.isFolder) {
+                        fileIcon.innerHTML = '<i class="fas fa-folder"></i>';
+                    } else {
+                        const fileExt = file.name.split('.').pop().toLowerCase();
+                        // 아이콘 선택
+                        switch (fileExt) {
+                            case 'pdf': fileIcon.innerHTML = '<i class="fas fa-file-pdf"></i>'; break;
+                            case 'doc': case 'docx': fileIcon.innerHTML = '<i class="fas fa-file-word"></i>'; break;
+                            case 'xls': case 'xlsx': fileIcon.innerHTML = '<i class="fas fa-file-excel"></i>'; break;
+                            case 'ppt': case 'pptx': fileIcon.innerHTML = '<i class="fas fa-file-powerpoint"></i>'; break;
+                            case 'zip': case 'rar': case 'tar': case 'gz': fileIcon.innerHTML = '<i class="fas fa-file-archive"></i>'; break;
+                            case 'jpg': case 'jpeg': case 'png': case 'gif': case 'bmp': 
+                                fileIcon.innerHTML = '<i class="fas fa-file-image"></i>'; break;
+                            case 'mp3': case 'wav': case 'ogg': fileIcon.innerHTML = '<i class="fas fa-file-audio"></i>'; break;
+                            case 'mp4': case 'avi': case 'mov': case 'wmv': fileIcon.innerHTML = '<i class="fas fa-file-video"></i>'; break;
+                            case 'txt': case 'rtf': fileIcon.innerHTML = '<i class="fas fa-file-alt"></i>'; break;
+                            case 'html': case 'htm': case 'css': case 'js': fileIcon.innerHTML = '<i class="fas fa-file-code"></i>'; break;
+                            case 'exe': case 'msi': fileIcon.innerHTML = '<i class="fas fa-cog"></i>'; break;
+                            default: fileIcon.innerHTML = '<i class="fas fa-file"></i>';
+                        }
+                    }
+                    
+                    // 파일 이름
+                    const fileName = document.createElement('div');
+                    fileName.className = 'file-name';
+                    fileName.innerText = file.name;
+                    
+                    // 이름 변경 입력 필드
+                    const renameInput = document.createElement('input');
+                    renameInput.type = 'text';
+                    renameInput.className = 'rename-input';
+                    renameInput.value = file.name;
+                    
+                    // 파일 세부 정보
+                    const fileDetails = document.createElement('div');
+                    fileDetails.className = 'file-details';
+                    
+                    // 파일 크기
+                    const fileSize = document.createElement('div');
+                    fileSize.className = 'file-size';
+                    fileSize.innerText = file.isFolder ? '--' : formatFileSize(file.size);
+                    
+                    // 파일 날짜
+                    const fileDate = document.createElement('div');
+                    fileDate.className = 'file-date';
+                    fileDate.innerText = formatDate(file.modifiedTime);
+                    
+                    // 세부 정보에 추가
+                    fileDetails.appendChild(fileSize);
+                    fileDetails.appendChild(fileDate);
+                    
+                    // 파일 항목에 추가
+                    fileItem.appendChild(fileIcon);
+                    fileItem.appendChild(fileName);
+                    fileItem.appendChild(renameInput);
+                    fileItem.appendChild(fileDetails);
+                    
+                    // 잠긴 폴더에 잠금 아이콘 추가
+                    if (file.isFolder && isLocked) {
+                        const lockIcon = document.createElement('div');
+                        lockIcon.className = 'lock-icon';
+                        lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
+                        fileItem.appendChild(lockIcon);
+                    }
+                    
+                    // 이벤트 리스너 설정
+                    fileItem.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('rename-input')) return;
+                        
+                        // 상위 폴더(..)는 선택되지 않도록 처리
+                        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                            if (e.target.closest('.file-item').clickTimer) {
+                                clearTimeout(e.target.closest('.file-item').clickTimer);
+                                e.target.closest('.file-item').clickTimer = null;
+                                navigateToParentFolder();
+                            } else {
+                                e.target.closest('.file-item').clickTimer = setTimeout(() => {
+                                    e.target.closest('.file-item').clickTimer = null;
+                                }, 400);
+                            }
                             return;
                         }
                         
-                        fileItem.clickTimer = setTimeout(() => {
-                            fileItem.clickTimer = null;
-                            
-                            // 모든 선택 해제 후 현재 항목 선택
-                            clearSelection();
-                            fileItem.classList.add('selected');
-                            selectedItems.add(file.name);
-                            updateButtonStates();
-                        }, 400); // 400ms로 설정
-                    } else {
-                        // 파일인 경우
-                        if (fileItem.clickTimer) {
-                            clearTimeout(fileItem.clickTimer);
-                            fileItem.clickTimer = null;
-                            // 더블클릭: 파일 열기
-                            openFile(file.name);
-                            return;
-                        }
+                        // 기존 핸들링 계속
+                        handleFileClick(e, fileItem);
+                    });
+                    
+                    // 더블클릭 이벤트
+                    fileItem.addEventListener('dblclick', (e) => {
+                        if (e.target.classList.contains('rename-input')) return;
                         
-                        fileItem.clickTimer = setTimeout(() => {
-                            fileItem.clickTimer = null;
-                            // 단일 클릭: 파일 선택
-                            clearSelection();
-                            fileItem.classList.add('selected');
-                            selectedItems.add(file.name);
-                            updateButtonStates();
-                        }, 400); // 400ms로 설정
-                    }
-                }
-                
-                updateButtonStates();
-            });
+                        // 파일/폴더 더블클릭 처리
+                        const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
+                        const name = fileItem.getAttribute('data-name');
+                        
+                        if (isFolder) {
+                            navigateToFolder(name);
+                        } else {
+                            openFile(name);
+                        }
+                    });
+                    
+                    // 파일 항목을 목록에 추가
+                    filesContainer.appendChild(fileItem);
+                });
+            }
             
-            // 파일 항목을 목록에 추가
-            filesContainer.appendChild(fileItem);
+            // 리스트뷰 설정
+            if (listView) {
+                fileView.classList.add('list-view');
+            } else {
+                fileView.classList.remove('list-view');
+            }
+        
+            // 상태 정보 업데이트 - 숨김 파일 카운트 포함
+            const hiddenCount = sortedFiles.length - visibleFiles.length;
+            if (hiddenCount > 0) {
+                statusInfo.textContent = `${visibleFiles.length}개 항목 (${hiddenCount}개 숨김 파일 제외)`;
+            } else {
+                statusInfo.textContent = `${visibleFiles.length}개 항목`;
+            }
+            
+            hideLoading();
+        })
+        .catch(error => {
+            console.error('잠금 상태 로드 오류:', error);
+            hideLoading();
+            // 오류가 발생해도 파일 목록은 표시
+            statusInfo.textContent = '파일 목록 로드 완료 (잠금 상태 오류)';
         });
-    }
-    
-    // 리스트뷰 설정
-    if (listView) {
-        fileView.classList.add('list-view');
-    } else {
-        fileView.classList.remove('list-view');
-    }
-
-    // 상태 정보 업데이트 - 숨김 파일 카운트 포함
-    const hiddenCount = sortedFiles.length - visibleFiles.length;
-    if (hiddenCount > 0) {
-        statusInfo.textContent = `${visibleFiles.length}개 항목 (${hiddenCount}개 숨김 파일 제외)`;
-    } else {
-        statusInfo.textContent = `${visibleFiles.length}개 항목`;
-    }
 }
 
 // 정렬 아이콘 가져오기
@@ -1063,33 +1030,48 @@ function handleFileClick(e, fileItem) {
     if (e.ctrlKey) {
         if (fileItem.classList.contains('selected')) {
             fileItem.classList.remove('selected');
-            selectedItems.delete(fileItem.getAttribute('data-id'));
+            selectedItems.delete(fileItem.getAttribute('data-name'));
         } else {
             fileItem.classList.add('selected');
-            selectedItems.add(fileItem.getAttribute('data-id'));
+            selectedItems.add(fileItem.getAttribute('data-name'));
         }
     } else if (e.shiftKey && selectedItems.size > 0) {
         // Shift 키로 범위 선택
-        const items = Array.from(document.querySelectorAll('.file-item'));
-        const lastSelected = document.querySelector('.file-item.selected');
+        const items = Array.from(document.querySelectorAll('.file-item:not([data-parent-dir="true"])'));
+        const firstSelected = items.findIndex(item => item.classList.contains('selected'));
+        const currentIndex = items.indexOf(fileItem);
         
-        if (lastSelected) {
-            const startIndex = items.indexOf(lastSelected);
-            const endIndex = items.indexOf(fileItem);
-            
-            const start = Math.min(startIndex, endIndex);
-            const end = Math.max(startIndex, endIndex);
-            
-            clearSelection();
-            
-            for (let i = start; i <= end; i++) {
-                items[i].classList.add('selected');
-                selectedItems.add(items[i].getAttribute('data-name'));
-            }
+        // 범위 설정
+        const start = Math.min(firstSelected, currentIndex);
+        const end = Math.max(firstSelected, currentIndex);
+        
+        clearSelection();
+        
+        for (let i = start; i <= end; i++) {
+            items[i].classList.add('selected');
+            selectedItems.add(items[i].getAttribute('data-name'));
         }
     } else {
         // 일반 클릭: 단일 선택
-        selectItem(fileItem);
+        const fileName = fileItem.getAttribute('data-name');
+        const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
+        
+        if (fileItem.clickTimer) {
+            clearTimeout(fileItem.clickTimer);
+            fileItem.clickTimer = null;
+            // 더블클릭 효과는 dblclick 이벤트에서 처리됨
+            return;
+        }
+        
+        fileItem.clickTimer = setTimeout(() => {
+            fileItem.clickTimer = null;
+            
+            // 모든 선택 해제 후 현재 항목 선택
+            clearSelection();
+            fileItem.classList.add('selected');
+            selectedItems.add(fileName);
+            updateButtonStates();
+        }, 300); // 300ms로 조정
     }
     
     updateButtonStates();
@@ -2657,6 +2639,7 @@ function moveItems(itemIds) {
 // 상위 폴더로 이동
 function navigateToParentFolder() {
     if (!currentPath) return; // 이미 루트 폴더인 경우
+    
     
     // 마지막 슬래시 위치 찾기
     const lastSlashIndex = currentPath.lastIndexOf('/');
