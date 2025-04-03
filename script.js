@@ -2102,6 +2102,10 @@ function uploadFiles(filesWithPaths, targetUploadPath = currentPath) {
             // 로딩 상태 초기화
             currentFileIndex = 0;
             currentFileCumulativeSize = 0;
+            
+            // 즉시 업로드 UI 상태 초기화 (타이머 없이 바로 설정)
+            progressContainer.style.display = 'none';
+            document.getElementById('currentFileUpload').style.display = 'none';
 
             if (xhr.status === 200 || xhr.status === 201) {
                 // 업로드 성공 - 프로그레스바 100%로 설정
@@ -2113,20 +2117,14 @@ function uploadFiles(filesWithPaths, targetUploadPath = currentPath) {
                     uploadStatus.textContent = `${totalFiles}개 파일 업로드 완료`;
                 }
 
-                // 업로드 UI 즉시 숨기기 (지연시간 단축)
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                    document.getElementById('currentFileUpload').style.display = 'none';
-                    uploadStatus.style.display = 'none';
-                    // 업로드된 경로로 파일 목록 새로고침
-                    loadFiles(targetUploadPath);
-                }, 500); // 약간의 지연을 주어 완료 메시지 확인 가능하도록 함
-
                 if (totalFiles === 1) {
                     statusInfo.textContent = '파일 업로드 완료';
                 } else {
                     statusInfo.textContent = `${totalFiles}개 파일 업로드 완료`;
                 }
+                
+                // 업로드된 경로로 파일 목록 새로고침
+                loadFiles(targetUploadPath);
             } else {
                 // 오류 처리
                 let errorMsg = '업로드 실패';
@@ -2141,14 +2139,12 @@ function uploadFiles(filesWithPaths, targetUploadPath = currentPath) {
 
                 uploadStatus.textContent = errorMsg;
                 statusInfo.textContent = errorMsg;
-
-                // 잠시 후 업로드 UI 숨기기
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                    document.getElementById('currentFileUpload').style.display = 'none';
-                    uploadStatus.style.display = 'none';
-                }, 2000);
             }
+            
+            // 상태 표시 잠시 유지 후 숨김
+            setTimeout(() => {
+                uploadStatus.style.display = 'none';
+            }, 2000);
         }
     };
 
@@ -2156,13 +2152,15 @@ function uploadFiles(filesWithPaths, targetUploadPath = currentPath) {
         // 업로드 완료 플래그 설정
         uploadCompleted = true;
 
+        // 즉시 업로드 UI 상태 초기화
+        progressContainer.style.display = 'none';
+        document.getElementById('currentFileUpload').style.display = 'none';
+        
         uploadStatus.textContent = `파일 업로드 실패: 네트워크 오류`;
         statusInfo.textContent = `파일 업로드 실패: 네트워크 오류`;
 
-        // 잠시 후 업로드 UI 숨기기
+        // 잠시 후 상태 메시지만 숨김
         setTimeout(() => {
-            progressContainer.style.display = 'none';
-            document.getElementById('currentFileUpload').style.display = 'none';
             uploadStatus.style.display = 'none';
         }, 2000);
     };
