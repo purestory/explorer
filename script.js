@@ -1374,11 +1374,20 @@ function handleFileClick(e, fileItem) {
     updateButtonStates();
 }
 
-// 파일 더블클릭 처리
+// 파일 더블클릭 처리 (파일 열기/다운로드 전용)
 function handleFileDblClick(e, fileItem) {
-    // 파일 로딩 중이면 더블클릭 무시
+    // 파일 로딩 중이면 무시 (중복 체크)
     if (isLoadingFiles) {
-        console.log('파일 로딩 중에는 더블클릭을 무시합니다.');
+        console.log('파일 로딩 중에는 파일 열기/다운로드를 무시합니다.');
+        return;
+    }
+    
+    const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
+    const fileName = fileItem.getAttribute('data-name');
+    
+    // 폴더는 여기서 처리하지 않음
+    if (isFolder) {
+        console.warn('handleFileDblClick 호출됨 (폴더) - 무시됨');
         return;
     }
     
@@ -1386,39 +1395,31 @@ function handleFileDblClick(e, fileItem) {
     e.preventDefault();
     e.stopPropagation();
     
-    const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
-    const fileName = fileItem.getAttribute('data-name');
-    const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
+    // 상위 폴더 처리 (더블클릭 핸들러에서는 불필요)
+    // const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
+    // if (isParentDir) {
+    //     // navigateToParentFolder(); // 클릭 핸들러에서 처리
+    //     return;
+    // }
     
-    // 상위 폴더 처리
-    if (isParentDir) {
-        navigateToParentFolder();
-        return;
-    }
+    // 파일 확장자에 따라 처리
+    const fileExt = fileName.split('.').pop().toLowerCase();
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    const encodedPath = encodeURIComponent(filePath);
     
-    if (isFolder) {
-        // 폴더로 이동
-        navigateToFolder(fileName);
+    // 이미지, 비디오, PDF 등 브라우저에서 열 수 있는 파일 형식
+    const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
+                          'mp4', 'webm', 'ogg', 'mp3', 'wav', 
+                          'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
+    
+    if (viewableTypes.includes(fileExt)) {
+        // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
+        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
+        // 새 창에서 파일 열기
+        window.open(fileUrl, '_blank');
     } else {
-        // 파일 확장자에 따라 처리
-        const fileExt = fileName.split('.').pop().toLowerCase();
-        const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        const encodedPath = encodeURIComponent(filePath);
-        
-        // 이미지, 비디오, PDF 등 브라우저에서 열 수 있는 파일 형식
-        const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
-                              'mp4', 'webm', 'ogg', 'mp3', 'wav', 
-                              'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
-        
-        if (viewableTypes.includes(fileExt)) {
-            // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
-            const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
-            // 새 창에서 파일 열기
-            window.open(fileUrl, '_blank');
-        } else {
-            // 다운로드
-            downloadFile(fileName);
-        }
+        // 다운로드
+        downloadFile(fileName);
     }
 }
 
@@ -2760,6 +2761,7 @@ function initRenaming() {
         showLoading();
         statusInfo.textContent = '이름 변경 중...';
         
+        
         fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
             method: 'PUT',
             headers: {
@@ -3516,9 +3518,24 @@ function loadLockStatus() {
 // 파일 항목 초기화 - 각 파일/폴더에 이벤트 연결
 function initFileItem(fileItem) {
     const fileName = fileItem.getAttribute('data-name');
+    let clickTimer = null;
+    const DOUBLE_CLICK_DELAY = 300; // 더블클릭 간격 (ms)
     
-    // 더블클릭 이벤트 연결
+    // 더블클릭 이벤트 연결 (파일에만 적용)
     fileItem.addEventListener('dblclick', (e) => {
+        // 파일 로딩 중이면 무시
+        if (isLoadingFiles) return;
+        
+        const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
+        
+        // 폴더는 여기서 처리하지 않음 (click 이벤트에서 시뮬레이션)
+        if (isFolder) {
+            e.preventDefault(); // 폴더의 기본 더블클릭 동작 방지
+            e.stopPropagation();
+            return;
+        }
+        
+        // 파일 더블클릭 처리 (열기/다운로드)
         handleFileDblClick(e, fileItem);
     });
     
@@ -3528,36 +3545,58 @@ function initFileItem(fileItem) {
         showContextMenu(e, fileItem);
     });
     
-    // 클릭 이벤트 연결 (mousedown 대신 click 이벤트 사용)
+    // 클릭 이벤트 연결 (더블클릭 시뮬레이션 포함)
     fileItem.addEventListener('click', (e) => {
-        // 우클릭은 여기서 처리하지 않음 (contextmenu 이벤트에서 처리)
+        // 파일 로딩 중이면 무시
+        if (isLoadingFiles) return;
+        
+        // 우클릭은 여기서 처리하지 않음
         if (e.button !== 0) return;
         
         // 이름 변경 중이면 무시
         if (fileItem.classList.contains('renaming')) return;
         
-        // Ctrl+클릭은 다중 선택을 위해 처리
-        if (e.ctrlKey) {
-            toggleSelection(fileItem);
-        } 
-        // Shift+클릭은 범위 선택을 위해 처리
-        else if (e.shiftKey) {
-            handleShiftSelect(fileItem);
-        } 
-        // 일반 클릭은 단일 선택을 위해 처리
-        else {
-            // 상위 폴더(..)는 선택 로직을 다르게 처리
-            if (fileItem.getAttribute('data-parent-dir') === 'true') {
-                return; // 상위 폴더는 선택하지 않음
-            }
-            
-            // 모든 선택 해제 후 현재 항목 선택
-            clearSelection();
-            selectItem(fileItem);
+        const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
+        const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
+        
+        // 상위 폴더(..)는 바로 이동
+        if (isParentDir) {
+            navigateToParentFolder();
+            return;
         }
         
-        // 이벤트 전파 중지 (드래그 선택 이벤트와 충돌 방지)
-        e.stopPropagation();
+        // 폴더인 경우 더블클릭 시뮬레이션
+        if (isFolder) {
+            if (clickTimer === null) {
+                // 첫 번째 클릭: 타이머 설정
+                clickTimer = setTimeout(() => {
+                    // 타이머 만료: 단일 클릭으로 처리 (선택)
+                    clickTimer = null;
+                    if (!e.ctrlKey && !e.shiftKey) {
+                        clearSelection();
+                        selectItem(fileItem);
+                    }
+                    e.stopPropagation(); // 추가: 단일 클릭 시 이벤트 전파 중지
+                }, DOUBLE_CLICK_DELAY);
+            } else {
+                // 두 번째 클릭 (타이머 실행 중): 더블클릭으로 처리
+                clearTimeout(clickTimer);
+                clickTimer = null;
+                navigateToFolder(fileName); // 폴더 이동
+                e.stopPropagation(); // 추가: 더블 클릭 시 이벤트 전파 중지
+            }
+        } else {
+            // 파일인 경우: 일반 선택 로직 처리
+            if (e.ctrlKey) {
+                toggleSelection(fileItem);
+            } else if (e.shiftKey) {
+                handleShiftSelect(fileItem);
+            } else {
+                clearSelection();
+                selectItem(fileItem);
+            }
+            e.stopPropagation(); // 파일 클릭 시 이벤트 전파 중지
+        }
     });
     
     // 드래그 시작 처리를 위한 mousedown 이벤트 유지
