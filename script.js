@@ -149,6 +149,18 @@ function initModals() {
             renameModal.style.display = 'none';
         }
     });
+    
+    // ESC 키로 모달 닫기
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (folderModal.style.display === 'flex') {
+                folderModal.style.display = 'none';
+            }
+            if (renameModal.style.display === 'flex') {
+                renameModal.style.display = 'none';
+            }
+        }
+    });
 }
 
 // 로딩 표시
@@ -2683,6 +2695,14 @@ function initFolderCreation() {
         folderModal.style.display = 'none';
     });
     
+    // ESC 키로 폴더 생성 취소
+    folderNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            folderModal.style.display = 'none';
+            e.preventDefault(); // 이벤트 기본 동작 방지
+        }
+    });
+    
     // Enter 키로 폴더 생성
     folderNameInput.addEventListener('keyup', (e) => {
         if (e.key === 'Enter') {
@@ -2736,6 +2756,14 @@ function initRenaming() {
     // 이름 변경 취소
     cancelRenameBtn.addEventListener('click', () => {
         renameModal.style.display = 'none';
+    });
+    
+    // ESC 키로 이름 변경 취소
+    newNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            renameModal.style.display = 'none';
+            e.preventDefault(); // 이벤트 기본 동작 방지
+        }
     });
     
     // Enter 키로 이름 변경 완료
