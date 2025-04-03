@@ -3936,9 +3936,17 @@ function initDblClickDelegation() {
     // 파일 목록 컨테이너
     const fileList = document.getElementById('fileList');
     
-    // 기존 이벤트 리스너 제거
-    const newFileList = fileList.cloneNode(true);
-    fileList.parentNode.replaceChild(newFileList, fileList);
+    // 기존 이벤트 리스너를 제거하되 내용은 복제하지 않음
+    const newFileList = fileList.cloneNode(false);
+    
+    // 자식 요소들을 옮기기
+    while (fileList.firstChild) {
+        newFileList.appendChild(fileList.firstChild);
+    }
+    
+    if (fileList.parentNode) {
+        fileList.parentNode.replaceChild(newFileList, fileList);
+    }
     
     // 더블클릭 이벤트 위임 처리
     document.getElementById('fileList').addEventListener('dblclick', function(e) {
