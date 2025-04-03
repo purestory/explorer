@@ -396,11 +396,16 @@ function initDragSelect() {
         const width = Math.abs(currentX - startX);
         const height = Math.abs(currentY - startY);
         
-        // 화면에 표시되는 선택 박스 업데이트
+        // 화면에 표시되는 선택 박스 업데이트 (화면 좌표로 변환)
+        // 절대 위치 top에서 현재 스크롤 위치를 빼서 화면 상 위치 계산
         selectionBox.style.left = `${left}px`;
         selectionBox.style.top = `${top - fileList.scrollTop}px`; // 화면상 위치로 변환
         selectionBox.style.width = `${width}px`;
         selectionBox.style.height = `${height}px`;
+        
+        // 스크롤 이벤트 발생 시 선택 박스 위치 업데이트를 위한 데이터 저장
+        selectionBox.dataset.absoluteTop = top;
+        selectionBox.dataset.absoluteLeft = left;
         
         // 목록 상단/하단 자동 스크롤
         const buffer = 50; // 자동 스크롤 감지 영역 (픽셀)
@@ -408,9 +413,13 @@ function initDragSelect() {
         if (e.clientY < rect.top + buffer) {
             // 상단으로 스크롤
             fileList.scrollTop -= 10;
+            // 스크롤 시 선택 박스 위치 업데이트
+            selectionBox.style.top = `${top - fileList.scrollTop}px`;
         } else if (e.clientY > rect.bottom - buffer) {
             // 하단으로 스크롤
             fileList.scrollTop += 10;
+            // 스크롤 시 선택 박스 위치 업데이트
+            selectionBox.style.top = `${top - fileList.scrollTop}px`;
         }
         
         // 모든 파일 항목들을 순회하면서 선택 영역과 겹치는지 확인
@@ -474,6 +483,22 @@ function initDragSelect() {
         const fileList = document.getElementById('fileList');
         delete fileList.dataset.selectStartX;
         delete fileList.dataset.selectStartY;
+    });
+    
+    // 스크롤 이벤트 추가 - 스크롤 중에도 선택 박스 위치 업데이트
+    fileList.addEventListener('scroll', () => {
+        const selectionBox = document.getElementById('selectionBox');
+        
+        // 선택 중이고, 선택 박스가 표시 중일 때만 처리
+        if (isSelecting && selectionBox.style.display === 'block') {
+            // 저장된 절대 위치가 있으면 업데이트
+            if (selectionBox.dataset.absoluteTop) {
+                const absoluteTop = parseFloat(selectionBox.dataset.absoluteTop);
+                
+                // 스크롤 위치를 고려하여 화면 상 위치 업데이트
+                selectionBox.style.top = `${absoluteTop - fileList.scrollTop}px`;
+            }
+        }
     });
 }
 
