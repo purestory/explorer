@@ -1,28 +1,26 @@
 // 전역 변수
-let API_BASE_URL = '';
+const API_BASE_URL = window.location.origin;
 let currentPath = '';
 let selectedItems = new Set();
+let clipboardItems = [];
+let clipboardOperation = ''; // 'cut' or 'copy'
+let isDragging = false;
+let startX, startY;
+let listView = true; // 기본값을 true로 설정 (목록 보기)
+let diskUsage = null;
+// 정렬 상태 추가
+let sortField = 'name'; // 정렬 필드: name, size, date
+let sortDirection = 'asc'; // 정렬 방향: asc, desc
+// 파일 정보 저장을 위한 맵 추가
 let fileInfoMap = new Map();
-let listView = true;
-let cutItems = null;
-let draggingItems = null;
-let sortField = 'name';
-let sortDirection = 'asc';
+// 업로드 함수 호출 카운터 추가
+let uploadButtonCounter = 0;
+let dragDropCounter = 0;
+let dragDropMoveCounter = 0; // 드래그앤드롭 파일 이동 호출 카운터 추가
+let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
+let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 추가
+// 폴더 잠금 상태 저장
 let lockedFolders = [];
-
-// 전역 변수 추가 - 더블클릭 타이머 및 폴더 이동 상태 관리
-let lastClickTime = 0;
-let lastClickedItem = null;
-let isNavigating = false; // 폴더 이동 진행중 상태
-const dblClickDelay = 300; // 더블클릭 인식 시간 (밀리초)
-
-// 드래그 선택 상태 관련 전역 변수 추가
-window.dragSelectState = {
-    isSelecting: false,
-    dragStarted: false,
-    startedOnFileItem: false,
-    startedOnSelectedItem: false
-};
 
 // DOM 요소
 const fileView = document.getElementById('fileView');
@@ -56,11 +54,6 @@ const selectionInfo = statusbar.querySelector('.selection-info');
 const gridViewBtn = document.getElementById('gridViewBtn');
 const listViewBtn = document.getElementById('listViewBtn');
 const downloadBtn = document.getElementById('downloadBtn');
-
-// UI에서 잘라내기, 붙여넣기, 이름변경 버튼 숨기기
-cutBtn.style.display = 'none';
-pasteBtn.style.display = 'none';
-renameBtn.style.display = 'none';
 
 // 상황에 맞는 버튼 비활성화/활성화 함수
 function updateButtonStates() {
@@ -355,7 +348,12 @@ function openFile(fileName) {
 // 파일 드래그 선택 초기화
 function initDragSelect() {
     const fileList = document.getElementById('fileList');
-    // 지역 변수 대신 전역 dragSelectState 객체 사용
+    let isSelecting = false;
+    let startClientX, startClientY; // 클라이언트 좌표 저장
+    let startedOnFileItem = false; // 파일 항목에서 시작된 드래그 인지 여부
+    let startedOnSelectedItem = false; // 선택된 항목에서 시작된 드래그 인지 여부
+    let dragStarted = false; // 실제 드래그가 시작되었는지 여부
+    let originalTarget = null; // 드래그 시작 시 원래 타겟
     const minDragDistance = 5; // 최소 드래그 거리 (픽셀)
     
     // 마우스 이벤트를 document에 연결 (화면 어디서나 드래그 가능하도록)
@@ -371,30 +369,30 @@ function initDragSelect() {
         }
         
         // 초기 클라이언트 좌표 저장 (스크롤 위치와 무관)
-        let startClientX = e.clientX;
-        let startClientY = e.clientY;
-        let originalTarget = e.target;
+        startClientX = e.clientX;
+        startClientY = e.clientY;
+        originalTarget = e.target;
         
         // 파일 항목 위에서 시작되었는지 확인
         const fileItemElement = e.target.closest('.file-item') || e.target.closest('.file-item-grid');
-        window.dragSelectState.startedOnFileItem = fileItemElement !== null;
+        startedOnFileItem = fileItemElement !== null;
         
         // 선택된 항목 위에서 시작된 경우 드래그 선택을 하지 않음 (파일 이동 우선)
-        if (window.dragSelectState.startedOnFileItem && fileItemElement.classList.contains('selected')) {
-            window.dragSelectState.startedOnSelectedItem = true;
+        if (startedOnFileItem && fileItemElement.classList.contains('selected')) {
+            startedOnSelectedItem = true;
             return; // 선택된 항목에서는 드래그 선택을 시작하지 않음
         }
         
         e.preventDefault();
         
-        window.dragSelectState.dragStarted = false;
+        dragStarted = false;
         
         // 초기 스크롤 위치 저장
         const initialScrollTop = fileList.scrollTop;
         
         // Ctrl 키가 눌려있지 않으면 선택 해제 (아직 드래그 시작 전이므로 대기)
         
-        window.dragSelectState.isSelecting = true;
+        isSelecting = true;
         
         // 선택 박스 초기화 (아직 보이지 않음)
         const selectionBox = document.getElementById('selectionBox');
@@ -415,9 +413,9 @@ function initDragSelect() {
     // 마우스 이동 이벤트
     document.addEventListener('mousemove', (e) => {
         // 선택된 항목에서 시작된 경우 드래그 선택하지 않음 (파일 이동 우선)
-        if (window.dragSelectState.startedOnSelectedItem) return;
+        if (startedOnSelectedItem) return;
         
-        if (!window.dragSelectState.isSelecting) return;
+        if (!isSelecting) return;
         
         const fileList = document.getElementById('fileList');
         const selectionBox = document.getElementById('selectionBox');
@@ -438,8 +436,8 @@ function initDragSelect() {
         const dragDistance = Math.sqrt(dragDistanceX * dragDistanceX + dragDistanceY * dragDistanceY);
         
         // 최소 드래그 거리를 넘으면 드래그 선택 시작
-        if (!window.dragSelectState.dragStarted && dragDistance >= minDragDistance) {
-            window.dragSelectState.dragStarted = true;
+        if (!dragStarted && dragDistance >= minDragDistance) {
+            dragStarted = true;
             
             // 선택 박스 표시
             selectionBox.style.display = 'block';
@@ -451,7 +449,7 @@ function initDragSelect() {
         }
         
         // 드래그가 시작되지 않았으면 더 이상 처리하지 않음
-        if (!window.dragSelectState.dragStarted) return;
+        if (!dragStarted) return;
         
         // 선택 박스 위치 계산 (고정 위치 기반)
         const left = Math.min(currentClientX, startClientX);
@@ -588,8 +586,8 @@ function initDragSelect() {
     // 마우스 업 이벤트
     document.addEventListener('mouseup', (e) => {
         // 선택된 항목에서 시작된 경우 처리하지 않음
-        if (window.dragSelectState.startedOnSelectedItem) {
-            window.dragSelectState.startedOnSelectedItem = false;
+        if (startedOnSelectedItem) {
+            startedOnSelectedItem = false;
             // 선택된 항목에서 드래그가 끝났을 때 모든 dragging 클래스 제거
             document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
                 item.classList.remove('dragging');
@@ -597,26 +595,26 @@ function initDragSelect() {
             return;
         }
         
-        if (!window.dragSelectState.isSelecting) return;
+        if (!isSelecting) return;
         
         const selectionBox = document.getElementById('selectionBox');
         
-        window.dragSelectState.isSelecting = false;
+        isSelecting = false;
         
         // 선택 박스 숨기기
         selectionBox.style.display = 'none';
         
         // 드래그가 거의 없었을 경우, 클릭한 요소가 파일 항목이 아니라면 모든 선택을 해제
-        if (!window.dragSelectState.dragStarted) {
+        if (!dragStarted) {
             // 파일 항목 위에서 시작하지 않았고, 다른 상호작용 요소(버튼 등)도 아닌 경우에만 선택 해제
-            if (!window.dragSelectState.startedOnFileItem && !e.target.closest('button, input, select, a, .modal, .dropdown-menu')) {
+            if (!startedOnFileItem && !e.target.closest('button, input, select, a, .modal, .dropdown-menu')) {
                 clearSelection();
                 updateButtonStates();
             }
         }
         
-        window.dragSelectState.dragStarted = false;
-        window.dragSelectState.startedOnFileItem = false;
+        dragStarted = false;
+        startedOnFileItem = false;
         originalTarget = null;
     });
 }
@@ -645,38 +643,17 @@ function setupGlobalDragCleanup() {
         window._isCleaningDragState = true;
         console.log('clearDragState: 정리 시작');
         
-        // 드래그 상태 플래그 초기화 (파일 이동/업로드 관련)
+        // 드래그 상태 플래그 초기화
         window.isDraggingActive = false;
         
-        // --- 드래그 선택 내부 상태 변수 초기화 ---
-        window.dragSelectState.isSelecting = false;
-        window.dragSelectState.dragStarted = false;
-        window.dragSelectState.startedOnFileItem = false;
-        window.dragSelectState.startedOnSelectedItem = false;
-        console.log('clearDragState: 드래그 선택 상태 변수 초기화 완료');
-        
-        // --- 추가된 코드: 드래그 *선택* 상태 관련 정리 ---
-        const selectionBox = document.getElementById('selectionBox');
-        if (selectionBox) {
-            selectionBox.style.display = 'none';
-            selectionBox.style.width = '0px';
-            selectionBox.style.height = '0px';
-            // 관련 데이터 속성 초기화 (드래그 선택 시작점 정보 제거)
-            delete selectionBox.dataset.startClientX;
-            delete selectionBox.dataset.startClientY;
-            delete selectionBox.dataset.initialScrollTop;
-            console.log('clearDragState: 드래그 선택 박스 상태 초기화');
-        }
-        // --- 추가된 코드 끝 ---
-        
-        // 모든 dragging 클래스 제거 (파일 이동/업로드 관련)
+        // 모든 dragging 클래스 제거
         const draggingElements = document.querySelectorAll('.dragging');
         if (draggingElements.length > 0) {
             console.log(`clearDragState: ${draggingElements.length}개의 dragging 클래스 제거`);
             draggingElements.forEach(el => el.classList.remove('dragging'));
         }
         
-        // 모든 drag-over 클래스 제거 (파일 이동/업로드 관련)
+        // 모든 drag-over 클래스 제거
         const dragOverElements = document.querySelectorAll('.drag-over');
         if (dragOverElements.length > 0) {
             console.log(`clearDragState: ${dragOverElements.length}개의 drag-over 클래스 제거`);
@@ -1361,6 +1338,12 @@ function handleFileClick(e, fileItem) {
 
 // 파일 더블클릭 처리
 function handleFileDblClick(e, fileItem) {
+    // 로딩 중이면 이벤트 처리 중단
+    if (isLoading) {
+        console.log("File list is loading, ignoring double click.");
+        return;
+    }
+    
     // 이벤트 버블링 방지
     e.preventDefault();
     e.stopPropagation();
@@ -1376,7 +1359,6 @@ function handleFileDblClick(e, fileItem) {
     }
     
     if (isFolder) {
-        // 폴더로 이동
         navigateToFolder(fileName);
     } else {
         // 파일 확장자에 따라 처리
@@ -1406,34 +1388,13 @@ function navigateToFolder(folderName) {
     let newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
     currentPath = newPath;
     
-    // 폴더 이동 중 상태 설정
-    isNavigating = true;
-    
     // 폴더 이동 히스토리 상태 업데이트
     updateHistoryState(currentPath);
     
-    // 이전 더블클릭 이벤트 리스너 제거를 위해 기존 파일 항목 캐시
-    const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
-    oldFileItems.forEach(item => {
-        const clonedItem = item.cloneNode(true);
-        item.parentNode.replaceChild(clonedItem, item);
-    });
-    
-    // 더블클릭 관련 변수 초기화
-    lastClickTime = 0;
-    lastClickedItem = null;
-    
-    // 파일 목록 로드
     loadFiles(newPath);
     
     // 선택 초기화
     clearSelection();
-    
-    // 폴더 이동 완료 후 잠시 지연시간을 둔 후 상태 변경
-    setTimeout(() => {
-        isNavigating = false;
-        console.log('폴더 이동 완료, 클릭 이벤트 처리 준비됨');
-    }, 500); // 500ms 동안 클릭 이벤트 차단
 }
 
 // 파일 다운로드
@@ -3503,68 +3464,10 @@ function loadLockStatus() {
 function initFileItem(fileItem) {
     const fileName = fileItem.getAttribute('data-name');
     
-    // 기존 dblclick 이벤트 리스너를 제거하고 click 이벤트로 대체
-    // fileItem.addEventListener('dblclick', (e) => {
-    //     handleFileDblClick(e, fileItem);
-    // });
-    
-    // 직접 구현한 단일클릭/더블클릭 처리
-    fileItem.addEventListener('click', (e) => {
-        // 우클릭은 여기서 처리하지 않음
-        if (e.button !== 0) return;
-        
-        // 이름 변경 중이면 무시
-        if (fileItem.classList.contains('renaming')) return;
-        
-        // 폴더 이동 중이면 클릭 무시
-        if (isNavigating) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-        }
-        
-        const currentTime = new Date().getTime();
-        const isSameItem = (lastClickedItem === fileItem);
-        const isDoubleClick = (currentTime - lastClickTime < dblClickDelay) && isSameItem;
-        
-        if (isDoubleClick) {
-            // 더블클릭 처리 (폴더 이동 또는 파일 열기)
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // 타이머 초기화
-            lastClickTime = 0;
-            lastClickedItem = null;
-            
-            // 기존 더블클릭 핸들러 호출
-            handleFileDblClick(e, fileItem);
-        } else {
-            // 단일 클릭 처리 - 선택 관련 코드
-            if (e.ctrlKey) {
-                toggleSelection(fileItem);
-            } else if (e.shiftKey) {
-                handleShiftSelect(fileItem);
-            } else {
-                // 상위 폴더(..)는 선택 로직을 다르게 처리
-                if (fileItem.getAttribute('data-parent-dir') === 'true') {
-                    return; // 상위 폴더는 선택하지 않음
-                }
-                
-                // 모든 선택 해제 후 현재 항목 선택
-                clearSelection();
-                selectItem(fileItem);
-            }
-            
-            // 타이머 및 마지막 클릭 항목 업데이트
-            lastClickTime = currentTime;
-            lastClickedItem = fileItem;
-        }
-        
-        // 이벤트 전파 중지 (드래그 선택 이벤트와 충돌 방지)
-        e.stopPropagation();
+    // 더블클릭 이벤트 연결
+    fileItem.addEventListener('dblclick', (e) => {
+        handleFileDblClick(e, fileItem);
     });
-
-    // ... existing code - 컨텍스트 메뉴 이벤트 등 ...
     
     // 컨텍스트 메뉴 (우클릭) 이벤트 연결
     fileItem.addEventListener('contextmenu', (e) => {
@@ -3572,17 +3475,48 @@ function initFileItem(fileItem) {
         showContextMenu(e, fileItem);
     });
     
+    // 클릭 이벤트 연결 (mousedown 대신 click 이벤트 사용)
+    fileItem.addEventListener('click', (e) => {
+        // 로딩 중이면 이벤트 처리 중단
+        if (isLoading) {
+            console.log("File list is loading, ignoring click.");
+            return;
+        }
+        
+        // 우클릭은 여기서 처리하지 않음 (contextmenu 이벤트에서 처리)
+        if (e.button !== 0) return;
+        
+        // 이름 변경 중이면 무시
+        if (fileItem.classList.contains('renaming')) return;
+        
+        // Ctrl+클릭은 다중 선택을 위해 처리
+        if (e.ctrlKey) {
+            toggleSelection(fileItem);
+        } 
+        // Shift+클릭은 범위 선택을 위해 처리
+        else if (e.shiftKey) {
+            handleShiftSelect(fileItem);
+        } 
+        // 일반 클릭은 단일 선택을 위해 처리
+        else {
+            // 상위 폴더(..)는 선택 로직을 다르게 처리
+            if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                return; // 상위 폴더는 선택하지 않음
+            }
+            
+            // 모든 선택 해제 후 현재 항목 선택
+            clearSelection();
+            selectItem(fileItem);
+        }
+        
+        // 이벤트 전파 중지 (드래그 선택 이벤트와 충돌 방지)
+        e.stopPropagation();
+    });
+    
     // 드래그 시작 처리를 위한 mousedown 이벤트 유지
     fileItem.addEventListener('mousedown', (e) => {
         // 우클릭은 여기서 처리하지 않음
         if (e.button !== 0) return;
-        
-        // 폴더 이동 중이면 마우스 이벤트 무시
-        if (isNavigating) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-        }
         
         // 상위 폴더는 드래그되지 않도록
         if (fileItem.getAttribute('data-parent-dir') === 'true') {
@@ -3612,86 +3546,152 @@ function initFileItem(fileItem) {
         }
     });
     
-    // ... existing code ...
-}
-
-// 폴더 탐색
-function navigateToFolder(folderName) {
-    let newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-    currentPath = newPath;
-    
-    // 폴더 이동 중 상태 설정
-    isNavigating = true;
-    
-    // 폴더 이동 히스토리 상태 업데이트
-    updateHistoryState(currentPath);
-    
-    // 이전 더블클릭 이벤트 리스너 제거를 위해 기존 파일 항목 캐시
-    const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
-    oldFileItems.forEach(item => {
-        const clonedItem = item.cloneNode(true);
-        item.parentNode.replaceChild(clonedItem, item);
+    // 드래그 이벤트 연결
+    fileItem.addEventListener('dragstart', (e) => {
+        // 상위 폴더는 드래그되지 않도록
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            e.preventDefault();
+            return;
+        }
+        
+        // 선택된 항목이 아니면 드래그 취소
+        if (!fileItem.classList.contains('selected')) {
+            // 선택되지 않은 항목은 먼저 선택
+            clearSelection();
+            selectItem(fileItem);
+        }
+        
+        // 드래그 데이터 설정
+        if (selectedItems.size > 1) {
+            // 여러 항목 선택 시 모든 선택 항목 ID 저장
+            e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
+        } else {
+            // 단일 항목 드래그
+            e.dataTransfer.setData('text/plain', fileItem.getAttribute('data-name'));
+        }
+        
+        // 내부 드래그 표시
+        e.dataTransfer.setData('application/webdav-internal', 'true');
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // 글로벌 드래그 상태 추적 시작
+        window.startFileDrag(selectedItems);
+        
+        // 드래그 중 스타일 적용
+        setTimeout(() => {
+            document.querySelectorAll('.file-item.selected, .file-item-grid.selected').forEach(item => {
+                item.classList.add('dragging');
+            });
+        }, 0);
     });
     
-    // 더블클릭 관련 변수 초기화
-    lastClickTime = 0;
-    lastClickedItem = null;
-    
-    // 파일 목록 로드
-    loadFiles(newPath);
-    
-    // 선택 초기화
-    clearSelection();
-    
-    // 폴더 이동 완료 후 잠시 지연시간을 둔 후 상태 변경
-    setTimeout(() => {
-        isNavigating = false;
-        console.log('폴더 이동 완료, 클릭 이벤트 처리 준비됨');
-    }, 500); // 500ms 동안 클릭 이벤트 차단
+    // 드래그 종료 이벤트
+    fileItem.addEventListener('dragend', (e) => {
+        console.log('파일 항목 dragend 이벤트 발생');
+        
+        // 보편적인 드래그 상태 정리 함수 호출
+        handleDragEnd();
+        
+        // 이벤트 캡처링이 진행되도록 중단하지 않음
+    });
 }
 
-// 파일 더블클릭 처리
-function handleFileDblClick(e, fileItem) {
-    // 이벤트 버블링 방지
-    e.preventDefault();
-    e.stopPropagation();
+// 파일/폴더 목록 화면에 표시
+function displayFiles(files, parentPath = '') {
+    const fileList = document.getElementById('fileList');
+    const fileGrid = document.getElementById('fileGrid');
     
-    const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
-    const fileName = fileItem.getAttribute('data-name');
-    const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
+    // 목록 초기화
+    fileList.innerHTML = '';
+    fileGrid.innerHTML = '';
     
-    console.log('더블클릭 처리:', fileName, isFolder ? '(폴더)' : '(파일)');
+    // 필터링된 파일 목록 가져오기
+    const filteredFiles = getFilteredFiles(files);
+    sortFiles(filteredFiles);
     
-    // 상위 폴더 처리
-    if (isParentDir) {
-        navigateToParentFolder();
-        return;
+    // 상위 폴더로 이동 항목 추가 (루트가 아닌 경우)
+    if (currentPath) {
+        // 상위 폴더 경로 계산
+        const parentDir = getParentPath(currentPath);
+        
+        // 목록 뷰에 상위 폴더 추가
+        const parentItem = document.createElement('div');
+        parentItem.className = 'file-item parent-dir';
+        parentItem.setAttribute('data-name', '..');
+        parentItem.setAttribute('data-is-folder', 'true');
+        parentItem.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시
+        parentItem.setAttribute('data-id', '..');
+        parentItem.innerHTML = `
+            <div class="file-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="file-name">..</div>
+            <div class="file-size"></div>
+            <div class="file-date"></div>
+        `;
+        fileList.appendChild(parentItem);
+        
+        // 그리드 뷰에 상위 폴더 추가
+        const parentItemGrid = document.createElement('div');
+        parentItemGrid.className = 'file-item-grid parent-dir';
+        parentItemGrid.setAttribute('data-name', '..');
+        parentItemGrid.setAttribute('data-is-folder', 'true');
+        parentItemGrid.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시
+        parentItemGrid.innerHTML = `
+            <div class="file-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="file-name">..</div>
+        `;
+        fileGrid.appendChild(parentItemGrid);
+        
+        // 초기화 함수 호출 (직접 이벤트를 연결하지 않고 initFileItem을 통해서만 처리)
+        initFileItem(parentItem);
+        initFileItem(parentItemGrid);
     }
     
-    if (isFolder) {
-        // 폴더로 이동
-        navigateToFolder(fileName);
-    } else {
-        // 파일 확장자에 따라 처리
-        const fileExt = fileName.split('.').pop().toLowerCase();
-        const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        const encodedPath = encodeURIComponent(filePath);
+    // 각 파일/폴더 항목 생성
+    filteredFiles.forEach(file => {
+        // 파일 정보 맵에 저장 (나중에 참조하기 위함)
+        fileInfoMap.set(file.name, file);
         
-        // 이미지, 비디오, PDF 등 브라우저에서 열 수 있는 파일 형식
-        const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
-                              'mp4', 'webm', 'ogg', 'mp3', 'wav', 
-                              'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
+        // 파일/폴더 아이콘 결정
+        const icon = getFileIcon(file);
         
-        if (viewableTypes.includes(fileExt)) {
-            // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
-            const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
-            // 새 창에서 파일 열기
-            window.open(fileUrl, '_blank');
-        } else {
-            // 다운로드
-            downloadFile(fileName);
-        }
-    }
+        // 목록 뷰용 항목 생성
+        const listItem = document.createElement('div');
+        listItem.className = 'file-item';
+        listItem.setAttribute('data-name', file.name);
+        listItem.setAttribute('data-is-folder', file.isFolder.toString());
+        listItem.setAttribute('data-id', file.name);
+        listItem.setAttribute('draggable', 'true');
+        listItem.innerHTML = `
+            <div class="file-icon">${icon}</div>
+            <div class="file-name">${file.name}</div>
+            <div class="file-size">${file.isFolder ? '' : formatFileSize(file.size)}</div>
+            <div class="file-date">${formatDate(file.modifiedTime)}</div>
+        `;
+        fileList.appendChild(listItem);
+        
+        // 그리드 뷰용 항목 생성
+        const gridItem = document.createElement('div');
+        gridItem.className = 'file-item-grid';
+        gridItem.setAttribute('data-name', file.name);
+        gridItem.setAttribute('data-is-folder', file.isFolder.toString());
+        gridItem.setAttribute('draggable', 'true');
+        gridItem.innerHTML = `
+            <div class="file-icon">${icon}</div>
+            <div class="file-name">${file.name}</div>
+        `;
+        fileGrid.appendChild(gridItem);
+        
+        // 각 항목 초기화 (이벤트 연결)
+        initFileItem(listItem);
+        initFileItem(gridItem);
+    });
+    
+    // 선택 가능한 항목으로 만들기
+    const fileItems = document.querySelectorAll('.file-item, .file-item-grid');
+    
+    // 현재 폴더에 있는 파일 개수 표시
+    updateFileCount(filteredFiles.length);
+    
+    // 버튼 상태 업데이트
+    updateButtonStates();
 }
-
-// ... existing code ...
