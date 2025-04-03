@@ -336,6 +336,8 @@ function openFile(fileName) {
 function initDragSelect() {
     const fileList = document.getElementById('fileList');
     let isSelecting = false;
+    let initiallySelectedItems = new Set(); // 드래그 시작 시 이미 선택된 항목 저장
+    let selectedDuringDrag = new Set(); // 드래그 중에 선택된 항목 추적
     
     // 마우스 이벤트를 file-list에 연결 (파일 아이템 사이의 빈 공간 포함)
     fileList.addEventListener('mousedown', (e) => {
@@ -351,6 +353,10 @@ function initDragSelect() {
         const rect = fileList.getBoundingClientRect();
         startX = e.clientX;
         startY = e.clientY;
+        
+        // 드래그 시작 시 이미 선택된 항목 저장
+        initiallySelectedItems = new Set(selectedItems);
+        selectedDuringDrag = new Set();
         
         // Ctrl 키가 눌려있지 않으면 선택 해제
         if (!e.ctrlKey) {
@@ -400,42 +406,54 @@ function initDragSelect() {
         
         if (currentY < rect.top + buffer) {
             // 상단으로 스크롤
-            fileList.scrollTop -= 10;
+            fileList.scrollTop -= 15;
         } else if (currentY > rect.bottom - buffer) {
             // 하단으로 스크롤
-            fileList.scrollTop += 10;
+            fileList.scrollTop += 15;
         }
         
-        // 박스와 겹치는 파일 항목 선택 - 스크롤 위치 고려하여 계산
-        const topWithScroll = top - scrollTop;
-        const bottomWithScroll = topWithScroll + height;
+        // 현재 선택 박스의 경계 계산 (스크롤 고려)
+        const selectionLeft = Math.min(currentX, startX);
+        const selectionRight = Math.max(currentX, startX);
+        const selectionTop = Math.min(currentY, startY) + window.pageYOffset - rect.top + fileList.scrollTop;
+        const selectionBottom = Math.max(currentY, startY) + window.pageYOffset - rect.top + fileList.scrollTop;
         
+        // 이전에 드래그 중 선택된 항목 기록을 초기화하고 다시 계산
+        selectedDuringDrag.clear();
+        
+        // 박스와 겹치는 파일 항목 선택
         const items = document.querySelectorAll('.file-item');
         items.forEach(item => {
-            const itemRect = item.getBoundingClientRect();
+            if (item.getAttribute('data-parent-dir') === 'true') return; // 상위 폴더는 선택에서 제외
             
-            const itemLeft = itemRect.left;
-            const itemRight = itemRect.right;
-            const itemTop = itemRect.top - rect.top;
-            const itemBottom = itemRect.bottom - rect.top;
+            // 항목의 절대 위치 계산 (스크롤 포함)
+            const itemPosition = item.getBoundingClientRect();
+            const itemName = item.getAttribute('data-name');
             
-            const overlap = !(
-                itemRight < Math.min(currentX, startX) ||
-                itemLeft > Math.max(currentX, startX) ||
-                itemBottom < topWithScroll ||
-                itemTop > bottomWithScroll
+            // 항목의 상대 위치 계산 (파일 리스트 컨테이너 기준)
+            const itemTop = itemPosition.top - rect.top + fileList.scrollTop;
+            const itemBottom = itemPosition.bottom - rect.top + fileList.scrollTop;
+            const itemLeft = itemPosition.left;
+            const itemRight = itemPosition.right;
+            
+            // 선택 박스와 겹치는지 확인
+            const isOverlapping = !(
+                itemRight < selectionLeft ||
+                itemLeft > selectionRight ||
+                itemBottom < selectionTop ||
+                itemTop > selectionBottom
             );
             
-            if (overlap) {
-                if (!item.classList.contains('selected')) {
-                    item.classList.add('selected');
-                    selectedItems.add(item.getAttribute('data-name'));
-                }
-            } else if (!e.ctrlKey) {
-                if (item.classList.contains('selected')) {
-                    item.classList.remove('selected');
-                    selectedItems.delete(item.getAttribute('data-name'));
-                }
+            // 겹치는 경우 선택에 추가
+            if (isOverlapping) {
+                item.classList.add('selected');
+                selectedItems.add(itemName);
+                selectedDuringDrag.add(itemName);
+            } 
+            // 겹치지 않고, ctrl키가 눌려있지 않고, 초기에 선택되지 않았던 항목만 선택 해제
+            else if (!e.ctrlKey && !initiallySelectedItems.has(itemName)) {
+                item.classList.remove('selected');
+                selectedItems.delete(itemName);
             }
         });
         
@@ -447,6 +465,8 @@ function initDragSelect() {
         if (!isSelecting) return;
         
         isSelecting = false;
+        initiallySelectedItems.clear();
+        selectedDuringDrag.clear();
         
         // 선택 박스 숨기기
         const selectionBox = document.getElementById('selectionBox');
