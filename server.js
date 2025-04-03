@@ -458,8 +458,8 @@ app.post('/api/upload', (req, res) => {
     const processedFiles = [];
     const errors = [];
 
-    // 최대 파일명 길이 제한 설정 (바이트 기준)
-    const MAX_FILENAME_BYTES = 250;
+    // 최대 파일명 길이 제한 설정 (바이트 기준, 시스템 최대치의 90%)
+    const MAX_FILENAME_BYTES = 229;
 
     // 파일명 길이 제한 함수 (바이트 기준)
     function truncateFileName(filename) {
