@@ -1526,25 +1526,20 @@ function initDragAndDrop() {
             return;
         }
         
-        // 드래그 중인 요소 식별
-        const fileId = fileItem.getAttribute('data-name');
-        console.log('드래그 시작:', fileId);
+        // 파일이 이미 선택되어 있는 상태인지 확인
+        const isAlreadySelected = fileItem.classList.contains('selected');
         
-        // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
-        if (!fileItem.classList.contains('selected')) {
-            clearSelection();
-            fileItem.classList.add('selected');
-            selectedItems.add(fileId);
-            updateButtonStates();
-        }
-        
-        // 드래그가 시작되려면 선택된 항목이 있어야 함
-        // 즉, 선택된 항목이 있을 때만 드래그 이동이 가능함
-        if (selectedItems.size === 0) {
-            // 선택된 항목이 없으면 드래그 취소
+        // 파일이 선택되어 있지 않은 경우 드래그를 취소
+        if (!isAlreadySelected) {
             e.preventDefault();
             return;
         }
+        
+        // 이제부터는 이미 선택된 항목에 대한 드래그만 허용
+        
+        // 드래그 중인 요소 식별
+        const fileId = fileItem.getAttribute('data-name');
+        console.log('드래그 시작:', fileId);
         
         // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
         if (selectedItems.size > 1 && fileItem.classList.contains('selected')) {
