@@ -144,6 +144,14 @@ function initModals() {
             renameModal.style.display = 'none';
         }
     });
+    
+    // ESC 키를 눌렀을 때 모달 닫기 추가
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            folderModal.style.display = 'none';
+            renameModal.style.display = 'none';
+        }
+    });
 }
 
 // 로딩 표시
@@ -227,7 +235,7 @@ function initContextMenu() {
             e.preventDefault();
             clearSelection();
             
-            // 메뉴 표시 (붙여넣기와 새 폴더 항목)
+            // 메뉴 표시 (붙여넣기와 새폴더 항목)
             contextMenu.style.display = 'block';
             contextMenu.style.left = `${e.pageX}px`;
             contextMenu.style.top = `${e.pageY}px`;
@@ -237,7 +245,7 @@ function initContextMenu() {
                 item.style.display = 'none';
             });
             document.getElementById('ctxPaste').style.display = clipboardItems.length > 0 ? 'flex' : 'none';
-            document.getElementById('ctxNewFolder').style.display = 'flex'; // 새 폴더 항목 표시
+            document.getElementById('ctxNewFolder').style.display = 'flex'; // 새폴더 항목 표시
             
             // 컨텍스트 메뉴가 화면 밖으로 나가는지 확인
             const menuRect = contextMenu.getBoundingClientRect();
@@ -2612,7 +2620,7 @@ function initViewModes() {
 
 // 폴더 생성 기능 초기화
 function initFolderCreation() {
-    // 새 폴더 버튼
+    // 새폴더 버튼
     createFolderBtn.addEventListener('click', () => {
         // 현재 폴더에 존재하는 파일 목록 확인
         const fileItems = document.querySelectorAll('.file-item');
@@ -2869,7 +2877,8 @@ function compressAndDownload(itemList) {
                         String(now.getMonth() + 1).padStart(2, '0') +
                         String(now.getDate()).padStart(2, '0') + '_' +
                         String(now.getHours()).padStart(2, '0') +
-                        String(now.getMinutes()).padStart(2, '0');
+                        String(now.getMinutes()).padStart(2, '0') +
+                        String(now.getSeconds()).padStart(2, '0');
     
     // 현재 폴더명 또는 기본명으로 압축파일명 생성
     const currentFolderName = currentPath ? currentPath.split('/').pop() : 'files';

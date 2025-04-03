@@ -1,7 +1,0 @@
-[33mcommit 250157cff43976ea9c5e1e6adabf4ef4af352a6a[m[33m ([m[1;36mHEAD[m[33m)[m
-Author: purestory <purestory@example.com>
-Date:   Mon Mar 31 04:47:32 2025 +0000
-
-    드래그앤드롭으로 파일 이동 기능 구현
-
-script.js
