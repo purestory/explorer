@@ -16,6 +16,14 @@ let lastClickedItem = null;
 let isNavigating = false; // 폴더 이동 진행중 상태
 const dblClickDelay = 300; // 더블클릭 인식 시간 (밀리초)
 
+// 드래그 선택 상태 관련 전역 변수 추가
+window.dragSelectState = {
+    isSelecting: false,
+    dragStarted: false,
+    startedOnFileItem: false,
+    startedOnSelectedItem: false
+};
+
 // DOM 요소
 const fileView = document.getElementById('fileView');
 const breadcrumb = document.getElementById('breadcrumb');
