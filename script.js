@@ -31,6 +31,9 @@ const folderNameInput = document.getElementById('folderName');
 const createFolderConfirmBtn = document.getElementById('createFolderBtn');
 const cancelFolderBtn = document.getElementById('cancelFolderBtn');
 const fileUploadInput = document.getElementById('fileUpload');
+const cutBtn = document.getElementById('cutBtn');
+const pasteBtn = document.getElementById('pasteBtn');
+const renameBtn = document.getElementById('renameBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const renameModal = document.getElementById('renameModal');
 const newNameInput = document.getElementById('newName');
@@ -56,8 +59,13 @@ const downloadBtn = document.getElementById('downloadBtn');
 function updateButtonStates() {
     const selectedCount = selectedItems.size;
     
+    renameBtn.disabled = selectedCount !== 1;
     deleteBtn.disabled = selectedCount === 0;
+    cutBtn.disabled = selectedCount === 0;
     downloadBtn.disabled = selectedCount === 0;
+    
+    // 붙여넣기 버튼은 클립보드에 항목이 있을 때만 활성화
+    pasteBtn.disabled = clipboardItems.length === 0;
     
     // 상태바 업데이트
     selectionInfo.textContent = `${selectedCount}개 선택됨`;
@@ -73,27 +81,40 @@ function updateButtonStates() {
 
 // 모든 선택 해제
 function clearSelection() {
-    selectedItems.clear();
-    document.querySelectorAll('.file-item.selected').forEach(item => {
+    document.querySelectorAll('.file-item.selected, .file-item-grid.selected').forEach(item => {
         item.classList.remove('selected');
     });
+    selectedItems.clear();
     updateButtonStates();
 }
 
-// 항목 선택
-function selectItem(item, addToSelection = false) {
-    // 상위 폴더(..)는 선택 불가능하도록 처리
-    if (item.getAttribute('data-parent-dir') === 'true') {
-        return;
-    }
-    
-    if (!addToSelection) {
-        clearSelection();
-    }
-    
-    item.classList.add('selected');
-    selectedItems.add(item.getAttribute('data-name'));
+// 항목 선택 함수
+function selectItem(fileItem) {
+    const itemName = fileItem.getAttribute('data-name');
+    fileItem.classList.add('selected');
+    selectedItems.add(itemName);
     updateButtonStates();
+}
+
+// 항목 선택 토글 함수
+function toggleSelection(fileItem) {
+    const itemName = fileItem.getAttribute('data-name');
+    if (fileItem.classList.contains('selected')) {
+        fileItem.classList.remove('selected');
+        selectedItems.delete(itemName);
+    } else {
+        fileItem.classList.add('selected');
+        selectedItems.add(itemName);
+    }
+    updateButtonStates();
+}
+
+// Shift 키를 이용한 범위 선택 함수
+function handleShiftSelect(fileItem) {
+    // 구현 예정 - 필요에 따라 추가 가능
+    // 현재는 단일 선택으로 처리
+    clearSelection();
+    selectItem(fileItem);
 }
 
 // 모달 초기화
@@ -1509,6 +1530,22 @@ function initDragAndDrop() {
         const fileId = fileItem.getAttribute('data-name');
         console.log('드래그 시작:', fileId);
         
+        // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
+        if (!fileItem.classList.contains('selected')) {
+            clearSelection();
+            fileItem.classList.add('selected');
+            selectedItems.add(fileId);
+            updateButtonStates();
+        }
+        
+        // 드래그가 시작되려면 선택된 항목이 있어야 함
+        // 즉, 선택된 항목이 있을 때만 드래그 이동이 가능함
+        if (selectedItems.size === 0) {
+            // 선택된 항목이 없으면 드래그 취소
+            e.preventDefault();
+            return;
+        }
+        
         // 단일 항목 드래그 또는 다중 선택 항목 드래그 처리
         if (selectedItems.size > 1 && fileItem.classList.contains('selected')) {
             // 여러 항목이 선택된 경우 모든 선택 항목의 ID를 저장
@@ -1516,16 +1553,8 @@ function initDragAndDrop() {
             e.dataTransfer.effectAllowed = 'move';
         } else {
             // 단일 항목 드래그
-        e.dataTransfer.setData('text/plain', fileId);
+            e.dataTransfer.setData('text/plain', fileId);
             e.dataTransfer.effectAllowed = 'move';
-        
-        // 현재 선택된 항목이 아니면 다른 선택 모두 해제하고 이 항목만 선택
-        if (!fileItem.classList.contains('selected')) {
-            clearSelection();
-            fileItem.classList.add('selected');
-            selectedItems.add(fileId);
-            updateButtonStates();
-            }
         }
         
         // 내부 파일 드래그임을 표시하는 데이터 추가
@@ -2845,6 +2874,7 @@ function init() {
     initFolderCreation();
     initRenaming();
     initFileUpload();
+    initClipboardOperations();
     initDeletion();
     initSearch();
     
@@ -3207,4 +3237,158 @@ function loadLockStatus() {
             console.error('잠금 상태 조회 오류:', error);
             return [];
         });
+}
+
+// 파일 항목 초기화 - 각 파일/폴더에 이벤트 연결
+function initFileItem(fileItem) {
+    const fileName = fileItem.getAttribute('data-name');
+    
+    // 더블클릭 이벤트 연결
+    fileItem.addEventListener('dblclick', (e) => {
+        handleFileDblClick(e, fileItem);
+    });
+    
+    // 컨텍스트 메뉴 (우클릭) 이벤트 연결
+    fileItem.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showContextMenu(e, fileItem);
+    });
+    
+    // 클릭 이벤트 연결
+    fileItem.addEventListener('mousedown', (e) => {
+        // 우클릭은 여기서 처리하지 않음 (contextmenu 이벤트에서 처리)
+        if (e.button !== 0) return;
+        
+        // Ctrl+클릭은 다중 선택을 위해 처리
+        if (e.ctrlKey) {
+            toggleSelection(fileItem);
+        } 
+        // Shift+클릭은 범위 선택을 위해 처리
+        else if (e.shiftKey) {
+            handleShiftSelect(fileItem);
+        } 
+        // 일반 클릭은 단일 선택을 위해 처리
+        else {
+            // 이미 선택된 항목을 클릭했다면 선택 상태 유지 (드래그 이동을 위해)
+            if (fileItem.classList.contains('selected')) {
+                // 선택 상태 유지 (드래그가 시작될 수 있음)
+            } else {
+                // 선택되지 않은 항목을 클릭했다면 새로 선택
+                clearSelection();
+                selectItem(fileItem);
+            }
+        }
+        
+        // 이벤트 전파 중지 (드래그 선택 이벤트와 충돌 방지)
+        e.stopPropagation();
+    });
+}
+
+// 파일/폴더 목록 화면에 표시
+function displayFiles(files, parentPath = '') {
+    const fileList = document.getElementById('fileList');
+    const fileGrid = document.getElementById('fileGrid');
+    
+    // 목록 초기화
+    fileList.innerHTML = '';
+    fileGrid.innerHTML = '';
+    
+    // 필터링된 파일 목록 가져오기
+    const filteredFiles = getFilteredFiles(files);
+    sortFiles(filteredFiles);
+    
+    // 상위 폴더로 이동 항목 추가 (루트가 아닌 경우)
+    if (currentPath) {
+        // 상위 폴더 경로 계산
+        const parentDir = getParentPath(currentPath);
+        
+        // 목록 뷰에 상위 폴더 추가
+        const parentItem = document.createElement('div');
+        parentItem.className = 'file-item parent-dir';
+        parentItem.setAttribute('data-name', '..');
+        parentItem.setAttribute('data-is-folder', 'true');
+        parentItem.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시
+        parentItem.setAttribute('data-id', '..');
+        parentItem.innerHTML = `
+            <div class="file-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="file-name">..</div>
+            <div class="file-size"></div>
+            <div class="file-date"></div>
+        `;
+        fileList.appendChild(parentItem);
+        
+        // 그리드 뷰에 상위 폴더 추가
+        const parentItemGrid = document.createElement('div');
+        parentItemGrid.className = 'file-item-grid parent-dir';
+        parentItemGrid.setAttribute('data-name', '..');
+        parentItemGrid.setAttribute('data-is-folder', 'true');
+        parentItemGrid.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시
+        parentItemGrid.innerHTML = `
+            <div class="file-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="file-name">..</div>
+        `;
+        fileGrid.appendChild(parentItemGrid);
+        
+        // 상위 폴더 항목에 이벤트 연결
+        parentItem.addEventListener('dblclick', () => {
+            navigateToFolder('..');
+        });
+        
+        parentItemGrid.addEventListener('dblclick', () => {
+            navigateToFolder('..');
+        });
+        
+        // 초기화 함수 호출
+        initFileItem(parentItem);
+        initFileItem(parentItemGrid);
+    }
+    
+    // 각 파일/폴더 항목 생성
+    filteredFiles.forEach(file => {
+        // 파일 정보 맵에 저장 (나중에 참조하기 위함)
+        fileInfoMap.set(file.name, file);
+        
+        // 파일/폴더 아이콘 결정
+        const icon = getFileIcon(file);
+        
+        // 목록 뷰용 항목 생성
+        const listItem = document.createElement('div');
+        listItem.className = 'file-item';
+        listItem.setAttribute('data-name', file.name);
+        listItem.setAttribute('data-is-folder', file.isFolder.toString());
+        listItem.setAttribute('data-id', file.name);
+        listItem.setAttribute('draggable', 'true');
+        listItem.innerHTML = `
+            <div class="file-icon">${icon}</div>
+            <div class="file-name">${file.name}</div>
+            <div class="file-size">${file.isFolder ? '' : formatFileSize(file.size)}</div>
+            <div class="file-date">${formatDate(file.modifiedTime)}</div>
+        `;
+        fileList.appendChild(listItem);
+        
+        // 그리드 뷰용 항목 생성
+        const gridItem = document.createElement('div');
+        gridItem.className = 'file-item-grid';
+        gridItem.setAttribute('data-name', file.name);
+        gridItem.setAttribute('data-is-folder', file.isFolder.toString());
+        gridItem.setAttribute('draggable', 'true');
+        gridItem.innerHTML = `
+            <div class="file-icon">${icon}</div>
+            <div class="file-name">${file.name}</div>
+        `;
+        fileGrid.appendChild(gridItem);
+        
+        // 각 항목 초기화 (이벤트 연결)
+        initFileItem(listItem);
+        initFileItem(gridItem);
+    });
+    
+    // 선택 가능한 항목으로 만들기
+    const fileItems = document.querySelectorAll('.file-item, .file-item-grid');
+    
+    // 현재 폴더에 있는 파일 개수 표시
+    updateFileCount(filteredFiles.length);
+    
+    // 버튼 상태 업데이트
+    updateButtonStates();
 }
