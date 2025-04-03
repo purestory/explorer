@@ -9,8 +9,8 @@ const app = express();
 const PORT = process.env.PORT || 3333;
 
 // 로깅 설정
-const logFile = fs.createWriteStream('/var/log/webdav/server.log', { flags: 'a' });
-const errorLogFile = fs.createWriteStream('/var/log/webdav/error.log', { flags: 'a' });
+const logFile = fs.createWriteStream(path.join(__dirname, 'logs/server.log'), { flags: 'a' });
+const errorLogFile = fs.createWriteStream(path.join(__dirname, 'logs/error.log'), { flags: 'a' });
 
 function log(message) {
   const timestamp = new Date().toISOString();
@@ -458,6 +458,23 @@ app.post('/api/upload', (req, res) => {
     const processedFiles = [];
     const errors = [];
 
+    // 최대 파일명 길이 제한 설정
+    const MAX_FILENAME_LENGTH = 200;
+
+    // 파일명 길이 제한 함수
+    function truncateFileName(filename) {
+      if (filename.length <= MAX_FILENAME_LENGTH) {
+        return filename;
+      }
+      
+      const extension = filename.lastIndexOf('.') > 0 ? filename.substring(filename.lastIndexOf('.')) : '';
+      const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') > 0 ? filename.lastIndexOf('.') : filename.length);
+      const newFileName = nameWithoutExt.substring(0, MAX_FILENAME_LENGTH - extension.length - 3) + '...' + extension;
+      
+      log(`파일명이 너무 김(${filename.length}자): ${filename} → ${newFileName}`);
+      return newFileName;
+    }
+
     // req.files 배열과 fileInfoArray 매핑 (순서가 같다고 가정)
     // 클라이언트에서 file_${index} 와 fileInfo 순서를 일치시킴
     req.files.forEach((file, index) => {
@@ -473,7 +490,18 @@ app.post('/api/upload', (req, res) => {
         }
 
         try {
-            const relativeFilePath = fileInfo.relativePath;
+            // 파일명 길이 확인 및 처리
+            let relativeFilePath = fileInfo.relativePath;
+            const fileName = path.basename(relativeFilePath);
+            
+            // 파일명이 너무 길면 자르기
+            if (fileName.length > MAX_FILENAME_LENGTH) {
+                const truncatedName = truncateFileName(fileName);
+                const dirName = path.dirname(relativeFilePath);
+                relativeFilePath = dirName === '.' ? truncatedName : `${dirName}/${truncatedName}`;
+                log(`파일명 길이 제한으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`);
+            }
+            
             // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 상대 경로)
             const destinationPath = path.join(rootUploadDir, relativeFilePath);
             // 저장될 디렉토리 경로 추출
