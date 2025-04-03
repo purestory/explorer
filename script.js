@@ -351,6 +351,7 @@ function initDragSelect() {
     let isSelecting = false;
     let startClientX, startClientY; // 클라이언트 좌표 저장
     let startedOnFileItem = false; // 파일 항목에서 시작된 드래그 인지 여부
+    let startedOnSelectedItem = false; // 선택된 항목에서 시작된 드래그 인지 여부
     let dragStarted = false; // 실제 드래그가 시작되었는지 여부
     let originalTarget = null; // 드래그 시작 시 원래 타겟
     const minDragDistance = 5; // 최소 드래그 거리 (픽셀)
@@ -367,15 +368,23 @@ function initDragSelect() {
             return;
         }
         
-        e.preventDefault();
-        
         // 초기 클라이언트 좌표 저장 (스크롤 위치와 무관)
         startClientX = e.clientX;
         startClientY = e.clientY;
         originalTarget = e.target;
         
         // 파일 항목 위에서 시작되었는지 확인
-        startedOnFileItem = e.target.closest('.file-item') !== null || e.target.closest('.file-item-grid') !== null;
+        const fileItemElement = e.target.closest('.file-item') || e.target.closest('.file-item-grid');
+        startedOnFileItem = fileItemElement !== null;
+        
+        // 선택된 항목 위에서 시작된 경우 드래그 선택을 하지 않음 (파일 이동 우선)
+        if (startedOnFileItem && fileItemElement.classList.contains('selected')) {
+            startedOnSelectedItem = true;
+            return; // 선택된 항목에서는 드래그 선택을 시작하지 않음
+        }
+        
+        e.preventDefault();
+        
         dragStarted = false;
         
         // 초기 스크롤 위치 저장
@@ -403,6 +412,9 @@ function initDragSelect() {
     
     // 마우스 이동 이벤트
     document.addEventListener('mousemove', (e) => {
+        // 선택된 항목에서 시작된 경우 드래그 선택하지 않음 (파일 이동 우선)
+        if (startedOnSelectedItem) return;
+        
         if (!isSelecting) return;
         
         const fileList = document.getElementById('fileList');
@@ -573,6 +585,12 @@ function initDragSelect() {
     
     // 마우스 업 이벤트
     document.addEventListener('mouseup', (e) => {
+        // 선택된 항목에서 시작된 경우 처리하지 않음
+        if (startedOnSelectedItem) {
+            startedOnSelectedItem = false;
+            return;
+        }
+        
         if (!isSelecting) return;
         
         const selectionBox = document.getElementById('selectionBox');
@@ -3393,6 +3411,55 @@ function initFileItem(fileItem) {
             // 드래그를 허용하기 위해 기본 동작은 막지 않음
             e.stopPropagation();
         }
+    });
+    
+    // 드래그 이벤트 연결
+    fileItem.addEventListener('dragstart', (e) => {
+        // 상위 폴더는 드래그되지 않도록
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            e.preventDefault();
+            return;
+        }
+        
+        // 선택된 항목이 아니면 드래그 취소
+        if (!fileItem.classList.contains('selected')) {
+            // 선택되지 않은 항목은 먼저 선택
+            clearSelection();
+            selectItem(fileItem);
+        }
+        
+        // 드래그 데이터 설정
+        if (selectedItems.size > 1) {
+            // 여러 항목 선택 시 모든 선택 항목 ID 저장
+            e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
+        } else {
+            // 단일 항목 드래그
+            e.dataTransfer.setData('text/plain', fileItem.getAttribute('data-name'));
+        }
+        
+        // 내부 드래그 표시
+        e.dataTransfer.setData('application/webdav-internal', 'true');
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // 드래그 중 스타일 적용
+        setTimeout(() => {
+            document.querySelectorAll('.file-item.selected, .file-item-grid.selected').forEach(item => {
+                item.classList.add('dragging');
+            });
+        }, 0);
+    });
+    
+    // 드래그 종료 이벤트
+    fileItem.addEventListener('dragend', (e) => {
+        // 드래그 스타일 제거
+        document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
+            item.classList.remove('dragging');
+        });
+        
+        // 드래그 오버 스타일 제거
+        document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
+            item.classList.remove('drag-over');
+        });
     });
 }
 
