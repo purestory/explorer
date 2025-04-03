@@ -263,8 +263,15 @@ app.get('/api/files/*', async (req, res) => {
         'css': 'text/css',
         'js': 'text/javascript',
         'json': 'application/json',
-        'xml': 'application/xml'
+        'xml': 'application/xml',
+        'zip': 'application/zip',
+        'rar': 'application/x-rar-compressed',
+        'tar': 'application/x-tar',
+        'gz': 'application/gzip'
       };
+      
+      // 파일 크기
+      const fileSize = stats.size;
       
       // 직접 보기 요청인지 확인 (쿼리 파라미터로 확인)
       const forceView = req.query.view === 'true';
@@ -274,21 +281,35 @@ app.get('/api/files/*', async (req, res) => {
       
       // 직접 보기 요청이고 viewableTypes에 포함되는 파일 형식이면서 압축 파일이 아닌 경우만 직접 보기 제공
       if (forceView && viewableTypes.includes(fileExt) && !isZipFile) {
+        log(`파일 열기 - 직접 보기 모드: ${fileName}`);
+        
         // Content-Type 설정
         res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
         // 인라인 표시 설정 (브라우저에서 직접 열기)
         res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+        res.setHeader('Content-Length', fileSize);
+        
         // 파일 스트림 전송
         fs.createReadStream(fullPath).pipe(res);
       } else {
-        // 항상 다운로드 모드로 제공 (보안 경고 방지)
+        // 강제 다운로드 모드
+        log(`파일 다운로드 모드: ${fileName}`);
+        
+        // Content-Type 설정
         res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
-        // Content-Disposition 헤더에 attachment 설정으로 항상 다운로드
+        // Content-Disposition 헤더에 attachment 설정으로 강제 다운로드
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+        res.setHeader('Content-Length', fileSize);
+        
         // 추가 캐시 방지 헤더 설정
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
+        
+        // CORS 헤더 추가
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET');
+        
         // 파일 스트림 전송
         fs.createReadStream(fullPath).pipe(res);
       }

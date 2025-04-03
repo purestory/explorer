@@ -1141,13 +1141,8 @@ function downloadFile(fileName) {
     const encodedPath = encodeURIComponent(filePath);
     const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
     
-    // 원래 방식으로 복구
-    const link = document.createElement('a');
-    link.href = fileUrl;
-    link.setAttribute('download', fileName); // 명시적으로 download 속성 설정
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // 다운로드 링크를 새 창에서 열기
+    window.open(fileUrl, '_blank');
     
     statusInfo.textContent = `${fileName} 다운로드 중...`;
     setTimeout(() => {
@@ -2561,13 +2556,8 @@ function downloadSelectedItems() {
             return;
         }
         
-        // 일반 파일은 직접 다운로드 (원래 방식으로 복구)
-        const link = document.createElement('a');
-        link.href = fileUrl;
-        link.setAttribute('download', itemId); // 명시적으로 download 속성 설정
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // 일반 파일은 다운로드 - 새 창에서 열기
+        window.open(fileUrl, '_blank');
         
         statusInfo.textContent = `${itemId} 다운로드 중...`;
         setTimeout(() => {
@@ -2629,13 +2619,8 @@ function compressAndDownload(itemList) {
         const encodedZipPath = encodeURIComponent(zipPath);
         const zipUrl = `${API_BASE_URL}/api/files/${encodedZipPath}`;
         
-        // 압축 파일 다운로드 (원래 방식으로 복구)
-        const link = document.createElement('a');
-        link.href = zipUrl;
-        link.setAttribute('download', data.zipFile); // 명시적으로 download 속성 설정
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // 새 창에서 다운로드
+        window.open(zipUrl, '_blank');
         
         // 상태 업데이트
         statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 중...`;
