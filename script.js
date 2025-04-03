@@ -588,6 +588,10 @@ function initDragSelect() {
         // 선택된 항목에서 시작된 경우 처리하지 않음
         if (startedOnSelectedItem) {
             startedOnSelectedItem = false;
+            // 선택된 항목에서 드래그가 끝났을 때 모든 dragging 클래스 제거
+            document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
+                item.classList.remove('dragging');
+            });
             return;
         }
         
@@ -613,6 +617,60 @@ function initDragSelect() {
         startedOnFileItem = false;
         originalTarget = null;
     });
+}
+
+// 전역 마우스 업 이벤트 핸들러 추가 - 드래그 상태 정리를 위한 안전장치
+function setupGlobalDragCleanup() {
+    // 전역 상태 변수
+    window.isDraggingActive = false;
+    window.lastDraggedItems = new Set();
+
+    // 파일/폴더 드래그가 시작될 때 호출되는 함수
+    window.startFileDrag = function(fileItems) {
+        window.isDraggingActive = true;
+        window.lastDraggedItems = new Set(fileItems);
+        console.log('드래그 시작: 아이템 개수', window.lastDraggedItems.size);
+    };
+
+    // 드래그 상태 정리 함수
+    window.clearDragState = function() {
+        if (window.isDraggingActive) {
+            console.log('드래그 상태 정리');
+            window.isDraggingActive = false;
+            window.lastDraggedItems.clear();
+            
+            // 모든 dragging 클래스 제거
+            document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
+                item.classList.remove('dragging');
+            });
+            
+            // 모든 drag-over 클래스 제거
+            document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
+    };
+
+    // 모든 mouseup 이벤트에서 드래그 상태 정리
+    document.addEventListener('mouseup', window.clearDragState);
+    
+    // dragend 이벤트도 캡처
+    document.addEventListener('dragend', window.clearDragState, true);
+}
+
+// 드래그 종료 처리
+function handleDragEnd() {
+    // 드래그 스타일 제거
+    document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
+        item.classList.remove('dragging');
+    });
+    
+    // 드래그 오버 스타일 제거
+    document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+    
+    isDragging = false;
 }
 
 // 단축키 초기화
@@ -1590,12 +1648,12 @@ function handleDragStart(e, fileItem) {
 // 드래그 종료 처리
 function handleDragEnd() {
     // 드래그 스타일 제거
-    document.querySelectorAll('.file-item.dragging').forEach(item => {
+    document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
         item.classList.remove('dragging');
     });
     
     // 드래그 오버 스타일 제거
-    document.querySelectorAll('.file-item.drag-over').forEach(item => {
+    document.querySelectorAll('.file-item.drag-over, .file-item-grid.drag-over').forEach(item => {
         item.classList.remove('drag-over');
     });
     
@@ -1654,6 +1712,9 @@ function initDragAndDrop() {
         // 내부 파일 드래그임을 표시하는 데이터 추가
         e.dataTransfer.setData('application/webdav-internal', 'true');
         
+        // 글로벌 드래그 상태 추적 시작
+        window.startFileDrag(selectedItems);
+        
         // 드래그 중 스타일 적용
         setTimeout(() => {
             document.querySelectorAll('.file-item.selected').forEach(item => {
@@ -1664,15 +1725,8 @@ function initDragAndDrop() {
     
     // 드래그 종료 이벤트 위임
     fileList.addEventListener('dragend', (e) => {
-        // 드래그 스타일 제거
-        document.querySelectorAll('.file-item.dragging').forEach(item => {
-            item.classList.remove('dragging');
-        });
-        
-        // 드래그 오버 스타일 제거
-        document.querySelectorAll('.file-item.drag-over').forEach(item => {
-            item.classList.remove('drag-over');
-        });
+        // 드래그 상태 정리 함수 호출
+        window.clearDragState();
         
         // 드롭존 비활성화
         dropZone.classList.remove('active');
@@ -2963,6 +3017,7 @@ function init() {
     initShortcuts();
     initViewModes();
     initHistoryNavigation(); // 히스토리 네비게이션 초기화 추가
+    setupGlobalDragCleanup(); // 드래그 상태 정리 기능 초기화
     
     // 파일 관리 기능 초기화
     initFolderCreation();
@@ -3440,6 +3495,9 @@ function initFileItem(fileItem) {
         // 내부 드래그 표시
         e.dataTransfer.setData('application/webdav-internal', 'true');
         e.dataTransfer.effectAllowed = 'move';
+        
+        // 글로벌 드래그 상태 추적 시작
+        window.startFileDrag(selectedItems);
         
         // 드래그 중 스타일 적용
         setTimeout(() => {
