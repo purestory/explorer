@@ -63,6 +63,11 @@ const gridViewBtn = document.getElementById('gridViewBtn');
 const listViewBtn = document.getElementById('listViewBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 
+// UI에서 잘라내기, 붙여넣기, 이름변경 버튼 숨기기
+cutBtn.style.display = 'none';
+pasteBtn.style.display = 'none';
+renameBtn.style.display = 'none';
+
 // 상황에 맞는 버튼 비활성화/활성화 함수
 function updateButtonStates() {
     const selectedCount = selectedItems.size;
