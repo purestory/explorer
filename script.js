@@ -336,6 +336,7 @@ function openFile(fileName) {
 function initDragSelect() {
     const fileList = document.getElementById('fileList');
     let isSelecting = false;
+    let startClientX, startClientY; // 클라이언트 좌표 저장
     
     // 마우스 이벤트를 file-list에 연결 (파일 아이템 사이의 빈 공간 포함)
     fileList.addEventListener('mousedown', (e) => {
@@ -347,11 +348,12 @@ function initDragSelect() {
         
         e.preventDefault();
         
-        // 초기 좌표 저장 - 스크롤 위치 고려
-        const rect = fileList.getBoundingClientRect();
-        // 스크롤된 컨테이너 내 절대 위치 저장
-        startX = e.clientX - rect.left;
-        startY = e.clientY - rect.top + fileList.scrollTop;
+        // 초기 클라이언트 좌표 저장 (스크롤 위치와 무관)
+        startClientX = e.clientX;
+        startClientY = e.clientY;
+        
+        // 초기 스크롤 위치 저장
+        const initialScrollTop = fileList.scrollTop;
         
         // Ctrl 키가 눌려있지 않으면 선택 해제
         if (!e.ctrlKey) {
@@ -362,17 +364,17 @@ function initDragSelect() {
         
         // 선택 박스 초기화
         const selectionBox = document.getElementById('selectionBox');
-        
-        // 선택 박스 위치와 크기 설정 - 스크롤 위치 고려
-        selectionBox.style.left = `${startX}px`;
-        selectionBox.style.top = `${startY - fileList.scrollTop}px`;
+        selectionBox.style.position = 'fixed'; // fixed로 변경하여 스크롤과 무관하게 함
+        selectionBox.style.left = `${startClientX}px`;
+        selectionBox.style.top = `${startClientY}px`;
         selectionBox.style.width = '0px';
         selectionBox.style.height = '0px';
         selectionBox.style.display = 'block';
         
-        // 시작 지점 절대 위치 저장 (스크롤 위치 포함)
-        fileList.dataset.selectStartX = startX;
-        fileList.dataset.selectStartY = startY;
+        // 시작 정보 저장
+        selectionBox.dataset.startClientX = startClientX;
+        selectionBox.dataset.startClientY = startClientY;
+        selectionBox.dataset.initialScrollTop = initialScrollTop;
     });
     
     // 마우스 이동 이벤트
@@ -383,29 +385,26 @@ function initDragSelect() {
         const selectionBox = document.getElementById('selectionBox');
         const rect = fileList.getBoundingClientRect();
         
-        // 현재 마우스 위치 - 컨테이너 내 절대 위치로 계산
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top + fileList.scrollTop;
+        // 저장된 시작 클라이언트 좌표
+        const startClientX = parseFloat(selectionBox.dataset.startClientX);
+        const startClientY = parseFloat(selectionBox.dataset.startClientY);
+        const initialScrollTop = parseFloat(selectionBox.dataset.initialScrollTop);
         
-        // 박스 위치와 크기 계산 - 스크롤 위치 고려
-        const startX = parseFloat(fileList.dataset.selectStartX);
-        const startY = parseFloat(fileList.dataset.selectStartY);
+        // 현재 클라이언트 좌표
+        const currentClientX = e.clientX;
+        const currentClientY = e.clientY;
         
-        const left = Math.min(currentX, startX);
-        const top = Math.min(currentY, startY);
-        const width = Math.abs(currentX - startX);
-        const height = Math.abs(currentY - startY);
+        // 선택 박스 위치 계산 (고정 위치 기반)
+        const left = Math.min(currentClientX, startClientX);
+        const top = Math.min(currentClientY, startClientY);
+        const width = Math.abs(currentClientX - startClientX);
+        const height = Math.abs(currentClientY - startClientY);
         
-        // 화면에 표시되는 선택 박스 업데이트 (화면 좌표로 변환)
-        // 절대 위치 top에서 현재 스크롤 위치를 빼서 화면 상 위치 계산
+        // 선택 박스 업데이트 (fixed 위치)
         selectionBox.style.left = `${left}px`;
-        selectionBox.style.top = `${top - fileList.scrollTop}px`; // 화면상 위치로 변환
+        selectionBox.style.top = `${top}px`;
         selectionBox.style.width = `${width}px`;
         selectionBox.style.height = `${height}px`;
-        
-        // 스크롤 이벤트 발생 시 선택 박스 위치 업데이트를 위한 데이터 저장
-        selectionBox.dataset.absoluteTop = top;
-        selectionBox.dataset.absoluteLeft = left;
         
         // 목록 상단/하단 자동 스크롤
         const buffer = 50; // 자동 스크롤 감지 영역 (픽셀)
@@ -413,14 +412,21 @@ function initDragSelect() {
         if (e.clientY < rect.top + buffer) {
             // 상단으로 스크롤
             fileList.scrollTop -= 10;
-            // 스크롤 시 선택 박스 위치 업데이트
-            selectionBox.style.top = `${top - fileList.scrollTop}px`;
         } else if (e.clientY > rect.bottom - buffer) {
             // 하단으로 스크롤
             fileList.scrollTop += 10;
-            // 스크롤 시 선택 박스 위치 업데이트
-            selectionBox.style.top = `${top - fileList.scrollTop}px`;
         }
+        
+        // 파일 항목 선택 로직 (스크롤 고려)
+        // 선택 영역의 절대 좌표 계산 (스크롤 포함)
+        const currentScrollTop = fileList.scrollTop;
+        const scrollDiff = currentScrollTop - initialScrollTop;
+        
+        // 선택 영역의 절대 위치 계산 (컨테이너 내부 좌표)
+        const selectLeft = Math.min(currentClientX, startClientX) - rect.left;
+        const selectRight = Math.max(currentClientX, startClientX) - rect.left;
+        const selectTop = Math.min(currentClientY, startClientY) - rect.top + initialScrollTop; // 스크롤 시작 위치 기준
+        const selectBottom = Math.max(currentClientY, startClientY) - rect.top + initialScrollTop + scrollDiff; // 현재 스크롤 위치 고려
         
         // 모든 파일 항목들을 순회하면서 선택 영역과 겹치는지 확인
         const items = document.querySelectorAll('.file-item');
@@ -434,15 +440,9 @@ function initDragSelect() {
             // 항목의 위치와 크기 계산 (절대 위치)
             const itemRect = item.getBoundingClientRect();
             const itemLeft = itemRect.left - rect.left;
-            const itemTop = itemRect.top - rect.top + fileList.scrollTop; // 절대 위치로 변환
+            const itemTop = itemRect.top - rect.top + fileList.scrollTop; // 현재 스크롤 위치 고려
             const itemRight = itemLeft + itemRect.width;
             const itemBottom = itemTop + itemRect.height;
-            
-            // 선택 영역의 절대 위치 계산
-            const selectLeft = Math.min(startX, currentX);
-            const selectTop = Math.min(startY, currentY);
-            const selectRight = Math.max(startX, currentX);
-            const selectBottom = Math.max(startY, currentY);
             
             // 겹침 여부 확인 (절대 위치 기준)
             const overlap = !(
@@ -478,27 +478,6 @@ function initDragSelect() {
         // 선택 박스 숨기기
         const selectionBox = document.getElementById('selectionBox');
         selectionBox.style.display = 'none';
-        
-        // 시작 위치 데이터 삭제
-        const fileList = document.getElementById('fileList');
-        delete fileList.dataset.selectStartX;
-        delete fileList.dataset.selectStartY;
-    });
-    
-    // 스크롤 이벤트 추가 - 스크롤 중에도 선택 박스 위치 업데이트
-    fileList.addEventListener('scroll', () => {
-        const selectionBox = document.getElementById('selectionBox');
-        
-        // 선택 중이고, 선택 박스가 표시 중일 때만 처리
-        if (isSelecting && selectionBox.style.display === 'block') {
-            // 저장된 절대 위치가 있으면 업데이트
-            if (selectionBox.dataset.absoluteTop) {
-                const absoluteTop = parseFloat(selectionBox.dataset.absoluteTop);
-                
-                // 스크롤 위치를 고려하여 화면 상 위치 업데이트
-                selectionBox.style.top = `${absoluteTop - fileList.scrollTop}px`;
-            }
-        }
     });
 }
 

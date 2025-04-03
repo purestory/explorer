@@ -353,12 +353,13 @@ h1 {
     display: block;
 }
 
-.selection-box {
-    position: absolute;
-    border: 1px solid #007bff;
+#selectionBox {
+    position: fixed;
+    border: 1px dashed #007bff;
     background-color: rgba(0, 123, 255, 0.1);
     pointer-events: none;
-    z-index: 100;
+    z-index: 1000;
+    display: none;
 }
 
 .upload-form {
