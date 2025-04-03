@@ -744,6 +744,15 @@ function handleDragEnd() {
         
         isDragging = false;
     }
+    
+    // 폴더 이동 후 더블클릭이 작동하도록 윈도우 상태 초기화
+    window.isMovingFiles = false;
+    
+    // 약간의 지연 시간을 두어 이벤트 상태가 완전히 초기화되도록 함
+    setTimeout(() => {
+        // 이동 후 더블클릭 이벤트 처리를 위한 준비 완료
+        window.dragEndTime = Date.now();
+    }, 50);
 }
 
 // 단축키 초기화
@@ -1371,6 +1380,16 @@ function handleFileDblClick(e, fileItem) {
     const fileName = fileItem.getAttribute('data-name');
     const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
     
+    // 파일 이동 중인 경우 더블클릭 무시하지 않음
+    const now = Date.now();
+    const dragJustEnded = window.dragEndTime && (now - window.dragEndTime < 300);
+    
+    // 드래그가 방금 끝났으면 이동 상태 초기화하고 더블클릭 처리
+    if (dragJustEnded) {
+        console.log('드래그 후 더블클릭 감지됨');
+        window.isMovingFiles = false;
+    }
+    
     // 상위 폴더 처리
     if (isParentDir) {
         navigateToParentFolder();
@@ -1738,6 +1757,15 @@ function handleDragEnd() {
         
         isDragging = false;
     }
+    
+    // 폴더 이동 후 더블클릭이 작동하도록 윈도우 상태 초기화
+    window.isMovingFiles = false;
+    
+    // 약간의 지연 시간을 두어 이벤트 상태가 완전히 초기화되도록 함
+    setTimeout(() => {
+        // 이동 후 더블클릭 이벤트 처리를 위한 준비 완료
+        window.dragEndTime = Date.now();
+    }, 50);
 }
 
 // 드래그 앤 드롭 초기화
