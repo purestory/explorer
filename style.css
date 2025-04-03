@@ -358,8 +358,9 @@ h1 {
     border: 1px dashed #007bff;
     background-color: rgba(0, 123, 255, 0.1);
     pointer-events: none;
-    z-index: 1000;
+    z-index: 9999;
     display: none;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
 }
 
 .upload-form {

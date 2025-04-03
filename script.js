@@ -351,11 +351,16 @@ function initDragSelect() {
     let isSelecting = false;
     let startClientX, startClientY; // 클라이언트 좌표 저장
     
-    // 마우스 이벤트를 file-list에 연결 (파일 아이템 사이의 빈 공간 포함)
-    fileList.addEventListener('mousedown', (e) => {
-        // 파일 항목 또는 컨텍스트 메뉴에서 시작된 이벤트는 무시
+    // 마우스 이벤트를 document에 연결 (화면 어디서나 드래그 가능하도록)
+    document.addEventListener('mousedown', (e) => {
+        // 파일 항목, 컨텍스트 메뉴, 또는 다른 상호작용 요소에서 시작된 이벤트는 무시
         if (e.target.closest('.file-item') || e.target.closest('.file-list-header') 
-            || e.target.closest('.context-menu') || e.button !== 0) {
+            || e.target.closest('.context-menu') || e.button !== 0
+            || e.target.closest('button') || e.target.closest('input')
+            || e.target.closest('select') || e.target.closest('a')
+            || e.target.closest('.modal') || e.target.closest('.dropdown-menu')
+            || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT'
+            || e.target.tagName === 'SELECT' || e.target.tagName === 'A') {
             return;
         }
         
@@ -383,6 +388,7 @@ function initDragSelect() {
         selectionBox.style.width = '0px';
         selectionBox.style.height = '0px';
         selectionBox.style.display = 'block';
+        selectionBox.style.zIndex = '9999'; // 더 높은 z-index 설정
         
         // 시작 정보 저장
         selectionBox.dataset.startClientX = startClientX;
@@ -438,19 +444,18 @@ function initDragSelect() {
         const selectTop = Math.min(startY_abs, currentY_abs);
         const selectBottom = Math.max(startY_abs, currentY_abs);
         
-        // 디버그 로깅 추가
-        console.log(`스크롤 정보: 초기=${initialScrollTop}, 현재=${currentScrollTop}, 차이=${scrollDiff}`);
-        console.log(`선택 영역: top=${selectTop}, bottom=${selectBottom}`);
-        
         // 목록 상단/하단 자동 스크롤
         const buffer = 50; // 자동 스크롤 감지 영역 (픽셀)
         
-        if (e.clientY < rect.top + buffer) {
-            // 상단으로 스크롤
-            fileList.scrollTop -= 10;
-        } else if (e.clientY > rect.bottom - buffer) {
-            // 하단으로 스크롤
-            fileList.scrollTop += 10;
+        // 파일 리스트의 영역 내에 있을 때만 자동 스크롤 처리
+        if (e.clientX >= rect.left && e.clientX <= rect.right) {
+            if (e.clientY < rect.top + buffer && e.clientY >= rect.top) {
+                // 상단으로 스크롤
+                fileList.scrollTop -= 10;
+            } else if (e.clientY > rect.bottom - buffer && e.clientY <= rect.bottom) {
+                // 하단으로 스크롤
+                fileList.scrollTop += 10;
+            }
         }
         
         // 모든 파일 항목들을 순회하면서 선택 영역과 겹치는지 확인
