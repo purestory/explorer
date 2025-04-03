@@ -294,7 +294,6 @@ function initContextMenu() {
 function openFile(fileName) {
     const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
     const encodedPath = encodeURIComponent(filePath);
-    const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
     
     // 파일 확장자 확인
     const fileExt = fileName.split('.').pop().toLowerCase();
@@ -306,12 +305,18 @@ function openFile(fileName) {
     
     // 브라우저에서 볼 수 있는 파일인 경우
     if (viewableTypes.includes(fileExt)) {
+        // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
+        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
+        
         // 새 창에서 열기
         window.open(fileUrl, '_blank');
         statusInfo.textContent = `${fileName} 파일 열기`;
     } else {
         // 브라우저에서 직접 볼 수 없는 파일은 다운로드
         statusInfo.textContent = `${fileName} 다운로드 중...`;
+        
+        // 다운로드 모드 URL (쿼리 파라미터 없음)
+        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
         
         const link = document.createElement('a');
         link.href = fileUrl;
@@ -1096,7 +1101,6 @@ function handleFileDblClick(e, fileItem) {
         const fileExt = fileName.split('.').pop().toLowerCase();
         const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
         const encodedPath = encodeURIComponent(filePath);
-        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
         
         // 이미지, 비디오, PDF 등 브라우저에서 열 수 있는 파일 형식
         const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
@@ -1104,6 +1108,8 @@ function handleFileDblClick(e, fileItem) {
                               'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
         
         if (viewableTypes.includes(fileExt)) {
+            // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
+            const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
             // 새 창에서 파일 열기
             window.open(fileUrl, '_blank');
         } else {

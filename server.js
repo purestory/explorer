@@ -266,8 +266,11 @@ app.get('/api/files/*', async (req, res) => {
         'xml': 'application/xml'
       };
       
-      // 직접 볼 수 있는 파일인지 확인
-      if (viewableTypes.includes(fileExt)) {
+      // 직접 보기 요청인지 확인 (쿼리 파라미터로 확인)
+      const forceView = req.query.view === 'true';
+      
+      // 직접 보기 요청이거나 viewableTypes에 포함되는 파일 형식인 경우 직접 보기 제공
+      if (forceView && viewableTypes.includes(fileExt)) {
         // Content-Type 설정
         res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
         // 인라인 표시 설정 (브라우저에서 직접 열기)
@@ -275,10 +278,12 @@ app.get('/api/files/*', async (req, res) => {
         // 파일 스트림 전송
         fs.createReadStream(fullPath).pipe(res);
       } else {
-        // 일반 다운로드 파일
-        // Content-Disposition 헤더에 UTF-8로 인코딩된 파일명 설정
+        // 항상 다운로드 모드로 제공 (보안 경고 방지)
+        res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
+        // Content-Disposition 헤더에 attachment 설정으로 항상 다운로드
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        res.download(fullPath);
+        // 파일 스트림 전송
+        fs.createReadStream(fullPath).pipe(res);
       }
       return;
     }
