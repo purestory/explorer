@@ -1875,8 +1875,33 @@ function traverseFileTree(entry, path, filesWithPaths) {
             entry.file(file => {
                 // 숨김 파일 (.으로 시작)은 제외
                 if (!file.name.startsWith('.')) {
-                    filesWithPaths.push({ file: file, relativePath: currentPath });
-                    console.log(`파일 추가: ${currentPath}`);
+                    // 파일 이름 길이 체크 및 처리
+                    const maxFileNameLength = 200; // 최대 파일명 길이 설정
+                    let fileName = file.name;
+                    let relativePath = currentPath;
+                    
+                    // 파일명이 너무 길면 잘라내기
+                    if (fileName.length > maxFileNameLength) {
+                        const extension = fileName.lastIndexOf('.') > 0 ? fileName.substring(fileName.lastIndexOf('.')) : '';
+                        const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.') > 0 ? fileName.lastIndexOf('.') : fileName.length);
+                        const newFileName = fileNameWithoutExt.substring(0, maxFileNameLength - extension.length - 3) + '...' + extension;
+                        
+                        // 상대 경로도 수정
+                        if (path) {
+                            relativePath = `${path}/${newFileName}`;
+                        } else {
+                            relativePath = newFileName;
+                        }
+                        
+                        console.log(`파일명이 너무 깁니다. 원본: ${fileName}, 수정됨: ${newFileName}`);
+                        
+                        // 파일 객체를 새로운 이름으로 복제 (File 객체는 직접 수정할 수 없음)
+                        const renamedFile = new File([file], newFileName, { type: file.type });
+                        filesWithPaths.push({ file: renamedFile, relativePath: relativePath });
+                    } else {
+                        filesWithPaths.push({ file: file, relativePath: currentPath });
+                    }
+                    console.log(`파일 추가: ${relativePath}`);
                 } else {
                     console.log(`숨김 파일 제외: ${currentPath}`);
                 }
