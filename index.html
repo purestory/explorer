@@ -39,14 +39,14 @@
             
             <div class="file-actions">
                 <div class="action-buttons">
-                    <button id="createFolder" class="btn btn-primary"><i class="fas fa-folder-plus"></i> 새 폴더</button>
+                    <button id="createFolder" class="btn btn-primary"><i class="fas fa-folder-plus"></i> 새폴더</button>
                     <div class="upload-form">
                         <button class="btn btn-success"><i class="fas fa-upload"></i> 업로드</button>
                         <input type="file" id="fileUpload" multiple>
                     </div>
-                    <button id="cutBtn" class="btn btn-secondary" disabled><i class="fas fa-cut"></i> 잘라내기</button>
-                    <button id="pasteBtn" class="btn btn-secondary" disabled><i class="fas fa-paste"></i> 붙여넣기</button>
-                    <button id="renameBtn" class="btn btn-secondary" disabled><i class="fas fa-edit"></i> 이름 변경</button>
+                    <button id="cutBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-cut"></i> 잘라내기</button>
+                    <button id="pasteBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-paste"></i> 붙여넣기</button>
+                    <button id="renameBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-edit"></i> 이름 변경</button>
                     <button id="downloadBtn" class="btn btn-info" disabled><i class="fas fa-download"></i> 다운로드</button>
                     <button id="deleteBtn" class="btn btn-danger" disabled><i class="fas fa-trash-alt"></i> 삭제</button>
                 </div>
@@ -91,7 +91,7 @@
     <div class="modal" id="folderModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>새 폴더 만들기</h3>
+                <h3>새폴더 만들기</h3>
                 <span class="modal-close">&times;</span>
             </div>
             <div class="form-group">
@@ -125,7 +125,7 @@
     
     <!-- 컨텍스트 메뉴 -->
     <div id="contextMenu" class="context-menu">
-        <div id="ctxNewFolder" class="context-menu-item"><i class="fas fa-folder-plus"></i> 새 폴더</div>
+        <div id="ctxNewFolder" class="context-menu-item"><i class="fas fa-folder-plus"></i> 새폴더</div>
         <div id="ctxOpen" class="context-menu-item"><i class="fas fa-folder-open"></i> 열기</div>
         <div id="ctxDownload" class="context-menu-item"><i class="fas fa-download"></i> 다운로드</div>
         <div id="ctxCompress" class="context-menu-item"><i class="fas fa-file-archive"></i> 압축</div>

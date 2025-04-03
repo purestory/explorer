@@ -2939,7 +2939,8 @@ function compressAndDownload(itemList) {
                         String(now.getMonth() + 1).padStart(2, '0') +
                         String(now.getDate()).padStart(2, '0') + '_' +
                         String(now.getHours()).padStart(2, '0') +
-                        String(now.getMinutes()).padStart(2, '0');
+                        String(now.getMinutes()).padStart(2, '0') +
+                        String(now.getSeconds()).padStart(2, '0');
     
     // 현재 폴더명 또는 기본명으로 압축파일명 생성
     const currentFolderName = currentPath ? currentPath.split('/').pop() : 'files';
