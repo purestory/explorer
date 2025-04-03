@@ -22,6 +22,14 @@ let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 �
 // 폴더 잠금 상태 저장
 let lockedFolders = [];
 
+// 드래그 선택 상태 관련 전역 변수 추가
+window.dragSelectState = {
+    isSelecting: false,
+    dragStarted: false,
+    startedOnFileItem: false,
+    startedOnSelectedItem: false
+};
+
 // DOM 요소
 const fileView = document.getElementById('fileView');
 const breadcrumb = document.getElementById('breadcrumb');
@@ -348,12 +356,7 @@ function openFile(fileName) {
 // 파일 드래그 선택 초기화
 function initDragSelect() {
     const fileList = document.getElementById('fileList');
-    let isSelecting = false;
-    let startClientX, startClientY; // 클라이언트 좌표 저장
-    let startedOnFileItem = false; // 파일 항목에서 시작된 드래그 인지 여부
-    let startedOnSelectedItem = false; // 선택된 항목에서 시작된 드래그 인지 여부
-    let dragStarted = false; // 실제 드래그가 시작되었는지 여부
-    let originalTarget = null; // 드래그 시작 시 원래 타겟
+    // 지역 변수 대신 전역 dragSelectState 객체 사용
     const minDragDistance = 5; // 최소 드래그 거리 (픽셀)
     
     // 마우스 이벤트를 document에 연결 (화면 어디서나 드래그 가능하도록)
@@ -369,30 +372,30 @@ function initDragSelect() {
         }
         
         // 초기 클라이언트 좌표 저장 (스크롤 위치와 무관)
-        startClientX = e.clientX;
-        startClientY = e.clientY;
-        originalTarget = e.target;
+        let startClientX = e.clientX;
+        let startClientY = e.clientY;
+        let originalTarget = e.target;
         
         // 파일 항목 위에서 시작되었는지 확인
         const fileItemElement = e.target.closest('.file-item') || e.target.closest('.file-item-grid');
-        startedOnFileItem = fileItemElement !== null;
+        window.dragSelectState.startedOnFileItem = fileItemElement !== null;
         
         // 선택된 항목 위에서 시작된 경우 드래그 선택을 하지 않음 (파일 이동 우선)
-        if (startedOnFileItem && fileItemElement.classList.contains('selected')) {
-            startedOnSelectedItem = true;
+        if (window.dragSelectState.startedOnFileItem && fileItemElement.classList.contains('selected')) {
+            window.dragSelectState.startedOnSelectedItem = true;
             return; // 선택된 항목에서는 드래그 선택을 시작하지 않음
         }
         
         e.preventDefault();
         
-        dragStarted = false;
+        window.dragSelectState.dragStarted = false;
         
         // 초기 스크롤 위치 저장
         const initialScrollTop = fileList.scrollTop;
         
         // Ctrl 키가 눌려있지 않으면 선택 해제 (아직 드래그 시작 전이므로 대기)
         
-        isSelecting = true;
+        window.dragSelectState.isSelecting = true;
         
         // 선택 박스 초기화 (아직 보이지 않음)
         const selectionBox = document.getElementById('selectionBox');
@@ -413,9 +416,9 @@ function initDragSelect() {
     // 마우스 이동 이벤트
     document.addEventListener('mousemove', (e) => {
         // 선택된 항목에서 시작된 경우 드래그 선택하지 않음 (파일 이동 우선)
-        if (startedOnSelectedItem) return;
+        if (window.dragSelectState.startedOnSelectedItem) return;
         
-        if (!isSelecting) return;
+        if (!window.dragSelectState.isSelecting) return;
         
         const fileList = document.getElementById('fileList');
         const selectionBox = document.getElementById('selectionBox');
@@ -436,8 +439,8 @@ function initDragSelect() {
         const dragDistance = Math.sqrt(dragDistanceX * dragDistanceX + dragDistanceY * dragDistanceY);
         
         // 최소 드래그 거리를 넘으면 드래그 선택 시작
-        if (!dragStarted && dragDistance >= minDragDistance) {
-            dragStarted = true;
+        if (!window.dragSelectState.dragStarted && dragDistance >= minDragDistance) {
+            window.dragSelectState.dragStarted = true;
             
             // 선택 박스 표시
             selectionBox.style.display = 'block';
@@ -449,7 +452,7 @@ function initDragSelect() {
         }
         
         // 드래그가 시작되지 않았으면 더 이상 처리하지 않음
-        if (!dragStarted) return;
+        if (!window.dragSelectState.dragStarted) return;
         
         // 선택 박스 위치 계산 (고정 위치 기반)
         const left = Math.min(currentClientX, startClientX);
@@ -586,8 +589,8 @@ function initDragSelect() {
     // 마우스 업 이벤트
     document.addEventListener('mouseup', (e) => {
         // 선택된 항목에서 시작된 경우 처리하지 않음
-        if (startedOnSelectedItem) {
-            startedOnSelectedItem = false;
+        if (window.dragSelectState.startedOnSelectedItem) {
+            window.dragSelectState.startedOnSelectedItem = false;
             // 선택된 항목에서 드래그가 끝났을 때 모든 dragging 클래스 제거
             document.querySelectorAll('.file-item.dragging, .file-item-grid.dragging').forEach(item => {
                 item.classList.remove('dragging');
@@ -595,26 +598,26 @@ function initDragSelect() {
             return;
         }
         
-        if (!isSelecting) return;
+        if (!window.dragSelectState.isSelecting) return;
         
         const selectionBox = document.getElementById('selectionBox');
         
-        isSelecting = false;
+        window.dragSelectState.isSelecting = false;
         
         // 선택 박스 숨기기
         selectionBox.style.display = 'none';
         
         // 드래그가 거의 없었을 경우, 클릭한 요소가 파일 항목이 아니라면 모든 선택을 해제
-        if (!dragStarted) {
+        if (!window.dragSelectState.dragStarted) {
             // 파일 항목 위에서 시작하지 않았고, 다른 상호작용 요소(버튼 등)도 아닌 경우에만 선택 해제
-            if (!startedOnFileItem && !e.target.closest('button, input, select, a, .modal, .dropdown-menu')) {
+            if (!window.dragSelectState.startedOnFileItem && !e.target.closest('button, input, select, a, .modal, .dropdown-menu')) {
                 clearSelection();
                 updateButtonStates();
             }
         }
         
-        dragStarted = false;
-        startedOnFileItem = false;
+        window.dragSelectState.dragStarted = false;
+        window.dragSelectState.startedOnFileItem = false;
         originalTarget = null;
     });
 }
@@ -645,6 +648,13 @@ function setupGlobalDragCleanup() {
         
         // 드래그 상태 플래그 초기화 (파일 이동/업로드 관련)
         window.isDraggingActive = false;
+        
+        // --- 드래그 선택 내부 상태 변수 초기화 ---
+        window.dragSelectState.isSelecting = false;
+        window.dragSelectState.dragStarted = false;
+        window.dragSelectState.startedOnFileItem = false;
+        window.dragSelectState.startedOnSelectedItem = false;
+        console.log('clearDragState: 드래그 선택 상태 변수 초기화 완료');
         
         // --- 추가된 코드: 드래그 *선택* 상태 관련 정리 ---
         const selectionBox = document.getElementById('selectionBox');
