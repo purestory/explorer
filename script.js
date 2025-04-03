@@ -1462,6 +1462,24 @@ function navigateToFolder(folderName) {
         item.parentNode.replaceChild(clonedItem, item);
     });
     
+    // 파일 목록 로드 전에 마우스 포인터 상태 리셋
+    document.querySelectorAll('.file-item, .file-item-grid').forEach(item => {
+        item.classList.remove('hover');
+    });
+    
+    // 마우스 포인터 위치 재설정을 위한 강제 mousemove 이벤트 등록
+    setTimeout(() => {
+        // 마우스 이벤트 강제 발생
+        const mouseEvent = new MouseEvent('mousemove', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            clientX: window.mouseX || 0,
+            clientY: window.mouseY || 0
+        });
+        document.dispatchEvent(mouseEvent);
+    }, 350); // 파일 목록이 로드된 후 실행
+    
     // 파일 목록 로드
     loadFiles(newPath);
     
@@ -3738,6 +3756,18 @@ function initFileItem(fileItem) {
             return;
         }
         
+        // 요소 검증 추가 - 현재 마우스 위치에 있는 파일 항목이 맞는지 확인
+        const elementAtPoint = document.elementFromPoint(window.mouseX || e.clientX, window.mouseY || e.clientY);
+        const targetFileItem = elementAtPoint ? elementAtPoint.closest('.file-item, .file-item-grid') : null;
+        
+        // 실제 마우스 위치의 항목과 이벤트 대상이 다른 경우
+        if (targetFileItem && targetFileItem !== fileItem) {
+            console.log('마우스 위치와 이벤트 대상 불일치, 실제 대상으로 재지정');
+            // 실제 마우스 위치의 대상으로 이벤트 처리
+            handleFileDblClick(e, targetFileItem);
+            return;
+        }
+        
         // 이벤트 처리 위임
         handleFileDblClick(e, fileItem);
     }, true);
@@ -3962,3 +3992,22 @@ function displayFiles(files, parentPath = '') {
     // 버튼 상태 업데이트
     updateButtonStates();
 }
+
+// 마우스 위치 추적 기능 추가
+document.addEventListener('mousemove', function(e) {
+    // 현재 마우스 위치 저장
+    window.mouseX = e.clientX;
+    window.mouseY = e.clientY;
+    
+    // 마우스 이벤트 대상 요소에 호버 클래스 추가
+    const fileItem = e.target.closest('.file-item, .file-item-grid');
+    if (fileItem) {
+        // 기존 호버 클래스 제거
+        document.querySelectorAll('.file-item.hover, .file-item-grid.hover').forEach(item => {
+            item.classList.remove('hover');
+        });
+        
+        // 현재 요소에 호버 클래스 추가
+        fileItem.classList.add('hover');
+    }
+});
