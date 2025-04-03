@@ -160,7 +160,8 @@ function initContextMenu() {
             
             if (isFolder) {
                 ctxOpen.innerHTML = '<i class="fas fa-folder-open"></i> 열기';
-                ctxDownload.style.display = 'none';
+                ctxDownload.style.display = 'flex'; // 폴더도 다운로드 메뉴 표시
+                ctxDownload.innerHTML = '<i class="fas fa-download"></i> 압축 다운로드'; // 폴더는 압축 다운로드로 표시
                 ctxLock.style.display = 'flex'; // 폴더인 경우에만 잠금 메뉴 표시
                 
                 // 경로 가져오기
@@ -176,6 +177,7 @@ function initContextMenu() {
             } else {
                 ctxOpen.innerHTML = '<i class="fas fa-external-link-alt"></i> 열기';
                 ctxDownload.style.display = 'flex';
+                ctxDownload.innerHTML = '<i class="fas fa-download"></i> 다운로드'; // 일반 파일은 다운로드로 표시
                 ctxLock.style.display = 'none'; // 파일인 경우 잠금 메뉴 숨김
             }
             
