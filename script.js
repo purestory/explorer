@@ -1367,12 +1367,13 @@ function handleFileClick(e, fileItem) {
 
 // 파일 더블클릭 처리
 function handleFileDblClick(e, fileItem) {
+    // 이벤트 버블링 방지
+    e.preventDefault();
+    e.stopPropagation();
+    
     const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
     const fileName = fileItem.getAttribute('data-name');
     const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
-    
-    // 이벤트 중복 실행 방지
-    e.stopPropagation();
     
     // 상위 폴더 처리
     if (isParentDir) {
@@ -1381,6 +1382,7 @@ function handleFileDblClick(e, fileItem) {
     }
     
     if (isFolder) {
+        // 폴더로 이동
         navigateToFolder(fileName);
     } else {
         // 파일 확장자에 따라 처리
@@ -1413,7 +1415,14 @@ function navigateToFolder(folderName) {
     // 폴더 이동 히스토리 상태 업데이트
     updateHistoryState(currentPath);
     
-    // 폴더 이동 후 더블클릭 이벤트가 제대로 인식되도록 비동기 지연 없이 바로 로드
+    // 이전 더블클릭 이벤트 리스너 제거를 위해 기존 파일 항목 캐시
+    const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
+    oldFileItems.forEach(item => {
+        const clonedItem = item.cloneNode(true);
+        item.parentNode.replaceChild(clonedItem, item);
+    });
+    
+    // 파일 목록 로드
     loadFiles(newPath);
     
     // 선택 초기화
@@ -3486,6 +3495,13 @@ function loadLockStatus() {
 // 파일 항목 초기화 - 각 파일/폴더에 이벤트 연결
 function initFileItem(fileItem) {
     const fileName = fileItem.getAttribute('data-name');
+    
+    // 이전 이벤트 리스너 제거 (클론된 요소에 새 이벤트 리스너 추가 전)
+    const newItem = fileItem.cloneNode(true);
+    if (fileItem.parentNode) {
+        fileItem.parentNode.replaceChild(newItem, fileItem);
+        fileItem = newItem;
+    }
     
     // 더블클릭 이벤트 연결
     fileItem.addEventListener('dblclick', (e) => {
