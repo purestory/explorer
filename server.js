@@ -7,60 +7,10 @@ const multer = require('multer');
 const { execSync } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3333;
-// 압축 라이브러리 추가
-const archiver = require('archiver');
 
 // 로깅 설정
 const logFile = fs.createWriteStream(path.join(__dirname, 'logs/server.log'), { flags: 'a' });
 const errorLogFile = fs.createWriteStream(path.join(__dirname, 'logs/error.log'), { flags: 'a' });
-
-// 폴더 잠금 상태 저장 배열
-let lockState = [];
-
-// 잠금 상태 파일 경로
-const LOCK_STATE_FILE = path.join(__dirname, 'locks.json');
-
-// 잠금 상태 불러오기
-function loadLockState() {
-  try {
-    if (fs.existsSync(LOCK_STATE_FILE)) {
-      const data = fs.readFileSync(LOCK_STATE_FILE, 'utf8');
-      lockState = JSON.parse(data);
-      log(`잠금 상태 로드됨: ${lockState.length}개 항목`);
-    }
-  } catch (error) {
-    errorLog('잠금 상태 로드 오류:', error);
-    lockState = [];
-  }
-}
-
-// 잠금 상태 저장하기
-function saveLockState() {
-  try {
-    fs.writeFileSync(LOCK_STATE_FILE, JSON.stringify(lockState, null, 2), 'utf8');
-    log(`잠금 상태 저장됨: ${lockState.length}개 항목`);
-  } catch (error) {
-    errorLog('잠금 상태 저장 오류:', error);
-  }
-}
-
-// 폴더 잠금 확인 함수
-function isFolderLocked(folderPath) {
-  // 현재 경로가 잠겨 있는지 확인
-  if (lockState.includes(folderPath)) {
-    return true;
-  }
-  
-  // 상위 경로가 잠겨 있는지 확인 (경로 계층 구조 고려)
-  return lockState.some(lockedPath => {
-    // 경로가 잠긴 폴더의 하위 경로인지 확인
-    // /parent/child가 /parent 안에 있는지 확인
-    return folderPath.startsWith(lockedPath + '/');
-  });
-}
-
-// 초기화 시 잠금 상태 로드
-loadLockState();
 
 function log(message) {
   const timestamp = new Date().toISOString();
@@ -263,55 +213,22 @@ app.get('/api/files/*', async (req, res) => {
         'css': 'text/css',
         'js': 'text/javascript',
         'json': 'application/json',
-        'xml': 'application/xml',
-        'zip': 'application/zip',
-        'rar': 'application/x-rar-compressed',
-        'tar': 'application/x-tar',
-        'gz': 'application/gzip'
+        'xml': 'application/xml'
       };
       
-      // 파일 크기
-      const fileSize = stats.size;
-      
-      // 직접 보기 요청인지 확인 (쿼리 파라미터로 확인)
-      const forceView = req.query.view === 'true';
-      
-      // 압축 파일인지 확인 (항상 다운로드 해야함)
-      const isZipFile = fileExt === 'zip' || fileExt === 'rar' || fileExt === 'tar' || fileExt === 'gz';
-      
-      // 직접 보기 요청이고 viewableTypes에 포함되는 파일 형식이면서 압축 파일이 아닌 경우만 직접 보기 제공
-      if (forceView && viewableTypes.includes(fileExt) && !isZipFile) {
-        log(`파일 열기 - 직접 보기 모드: ${fileName}`);
-        
+      // 직접 볼 수 있는 파일인지 확인
+      if (viewableTypes.includes(fileExt)) {
         // Content-Type 설정
         res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
         // 인라인 표시 설정 (브라우저에서 직접 열기)
         res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        res.setHeader('Content-Length', fileSize);
-        
         // 파일 스트림 전송
         fs.createReadStream(fullPath).pipe(res);
       } else {
-        // 강제 다운로드 모드
-        log(`파일 다운로드 모드: ${fileName}`);
-        
-        // Content-Type 설정
-        res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
-        // Content-Disposition 헤더에 attachment 설정으로 강제 다운로드
+        // 일반 다운로드 파일
+        // Content-Disposition 헤더에 UTF-8로 인코딩된 파일명 설정
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        res.setHeader('Content-Length', fileSize);
-        
-        // 추가 캐시 방지 헤더 설정
-        res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        
-        // CORS 헤더 추가
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET');
-        
-        // 파일 스트림 전송
-        fs.createReadStream(fullPath).pipe(res);
+        res.download(fullPath);
       }
       return;
     }
@@ -472,12 +389,6 @@ app.delete('/api/files/*', (req, res) => {
       return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
     }
 
-    // 잠금 상태 확인
-    if (isFolderLocked(itemPath)) {
-      errorLog(`잠금된 폴더 삭제 시도: ${itemPath}`);
-      return res.status(403).send('이 폴더는 잠겨 있어 삭제할 수 없습니다.');
-    }
-
     // 디렉토리인지 확인
     const stats = fs.statSync(fullPath);
     if (stats.isDirectory()) {
@@ -493,67 +404,6 @@ app.delete('/api/files/*', (req, res) => {
     res.status(200).send('삭제되었습니다.');
   } catch (error) {
     errorLog('삭제 오류:', error);
-    res.status(500).send('서버 오류가 발생했습니다.');
-  }
-});
-
-// 폴더 잠금/해제 API
-app.post('/api/lock/*', (req, res) => {
-  try {
-    // URL 디코딩하여 한글 경로 처리
-    const folderPath = decodeURIComponent(req.params[0] || '');
-    const fullPath = path.join(ROOT_DIRECTORY, folderPath);
-    
-    log(`폴더 잠금/해제 요청: ${fullPath}`);
-
-    // 폴더 존재 확인
-    if (!fs.existsSync(fullPath)) {
-      errorLog(`폴더를 찾을 수 없음: ${fullPath}`);
-      return res.status(404).send('폴더를 찾을 수 없습니다.');
-    }
-
-    // 디렉토리인지 확인
-    const stats = fs.statSync(fullPath);
-    if (!stats.isDirectory()) {
-      errorLog(`잠금 대상이 폴더가 아님: ${fullPath}`);
-      return res.status(400).send('폴더만 잠글 수 있습니다.');
-    }
-
-    // 현재 잠금 상태 확인
-    const isLocked = lockState.includes(folderPath);
-    
-    if (isLocked) {
-      // 잠금 해제
-      lockState = lockState.filter(path => path !== folderPath);
-      log(`폴더 잠금 해제됨: ${folderPath}`);
-    } else {
-      // 잠금 설정
-      lockState.push(folderPath);
-      log(`폴더 잠금 설정됨: ${folderPath}`);
-    }
-    
-    // 잠금 상태 저장
-    saveLockState();
-    
-    res.status(200).json({
-      path: folderPath,
-      locked: !isLocked,
-      message: isLocked ? '폴더 잠금이 해제되었습니다.' : '폴더가 잠겼습니다.'
-    });
-  } catch (error) {
-    errorLog('폴더 잠금/해제 오류:', error);
-    res.status(500).send('서버 오류가 발생했습니다.');
-  }
-});
-
-// 잠금 상태 조회 API
-app.get('/api/lock-status', (req, res) => {
-  try {
-    res.status(200).json({
-      lockState: lockState
-    });
-  } catch (error) {
-    errorLog('잠금 상태 조회 오류:', error);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
@@ -824,72 +674,36 @@ app.post('/api/compress', bodyParser.json(), (req, res) => {
       return res.status(409).json({ error: '같은 이름의 압축 파일이 이미 존재합니다.' });
     }
     
-    // 압축 파일 생성
-    const output = fs.createWriteStream(zipFilePath);
-    const archive = archiver('zip', {
-      zlib: { level: 0 } // 압축률 0 (가장 빠름)
-    });
+    // zip 명령어 구성 - 압축률 0 옵션 추가 (-0)
+    let zipCommand = `cd "${ROOT_DIRECTORY}" && zip -0 -r "${zipFilePath}"`;
     
-    // 압축 완료 이벤트 설정
-    output.on('close', () => {
-      log(`압축 완료: ${zipFilePath} (${archive.pointer()} 바이트)`);
-      
-      // 압축 파일 권한 설정
-      fs.chmodSync(zipFilePath, 0o666);
-      
-      res.status(200).json({ 
-        success: true, 
-        message: '압축이 완료되었습니다.',
-        zipFile: path.basename(zipFilePath),
-        zipPath: targetPath || '',
-        size: archive.pointer()
-      });
-    });
-    
-    // 압축 오류 이벤트 설정
-    archive.on('error', (err) => {
-      errorLog('압축 중 오류 발생:', err);
-      res.status(500).json({ error: '압축 중 오류가 발생했습니다.', message: err.message });
-    });
-    
-    // 파이프 연결
-    archive.pipe(output);
-    
-    // 파일/폴더 추가
-    let addedItems = 0;
-    
-    for (const file of files) {
+    // 파일 경로 추가
+    files.forEach(file => {
       const filePath = targetPath ? `${targetPath}/${file}` : file;
       const fullPath = path.join(ROOT_DIRECTORY, filePath);
       
       // 파일/폴더 존재 확인
       if (fs.existsSync(fullPath)) {
-        const stats = fs.statSync(fullPath);
-        
-        if (stats.isDirectory()) {
-          // 폴더인 경우 (모든 내용 포함)
-          log(`폴더 압축 중: ${filePath}`);
-          archive.directory(fullPath, file);
-        } else {
-          // 파일인 경우
-          log(`파일 압축 중: ${filePath}`);
-          archive.file(fullPath, { name: file });
-        }
-        
-        addedItems++;
-      } else {
-        log(`파일/폴더 없음 (무시됨): ${filePath}`);
+        // 상대 경로 추출 (ROOT_DIRECTORY 기준)
+        const relativePath = path.relative(ROOT_DIRECTORY, fullPath);
+        zipCommand += ` "${relativePath}"`;
       }
-    }
+    });
     
-    if (addedItems === 0) {
-      archive.abort();
-      return res.status(400).json({ error: '유효한 파일이나 폴더가 없습니다.' });
-    }
+    // 압축 실행
+    log(`실행 명령어: ${zipCommand}`);
+    execSync(zipCommand);
     
-    // 압축 종료
-    archive.finalize();
+    // 압축 파일 권한 설정
+    fs.chmodSync(zipFilePath, 0o666);
     
+    log(`압축 완료: ${zipFilePath}`);
+    res.status(200).json({ 
+      success: true, 
+      message: '압축이 완료되었습니다.',
+      zipFile: path.basename(zipFilePath),
+      zipPath: targetPath || ''
+    });
   } catch (error) {
     errorLog('압축 오류:', error);
     res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
