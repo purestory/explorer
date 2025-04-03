@@ -922,11 +922,11 @@ function loadFiles(path = '') {
             // 상태 업데이트
             statusInfo.textContent = `${data.length}개 항목`;
             
-            // 로딩 완료 후 더블클릭 이벤트 활성화
+            // 로딩 완료 후 더블클릭 이벤트 활성화 (타이머 시간 증가)
             setTimeout(() => {
                 window.doubleClickEnabled = true;
                 console.log('더블클릭 이벤트 활성화됨');
-            }, 100);
+            }, 300);
         })
         .catch(error => {
             console.error('Error:', error);
@@ -1395,17 +1395,15 @@ function handleFileClick(e, fileItem) {
 
 // 파일 더블클릭 처리
 function handleFileDblClick(e, fileItem) {
-    // 더블클릭 이벤트가 비활성화된 상태이면 무시
-    if (window.doubleClickEnabled === false) {
-        console.log('더블클릭 이벤트가 비활성화 상태입니다.');
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-    }
-    
     // 이벤트 버블링 방지
     e.preventDefault();
     e.stopPropagation();
+    
+    // 더블클릭 이벤트가 비활성화된 상태이면 무시
+    if (window.doubleClickEnabled === false) {
+        console.log('더블클릭 이벤트가 비활성화 상태입니다.');
+        return;
+    }
     
     const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
     const fileName = fileItem.getAttribute('data-name');
@@ -1415,6 +1413,8 @@ function handleFileDblClick(e, fileItem) {
     
     // 상위 폴더 처리
     if (isParentDir) {
+        // 더블클릭 이벤트를 비활성화하고 탐색 진행
+        window.doubleClickEnabled = false;
         navigateToParentFolder();
         return;
     }
@@ -3726,8 +3726,19 @@ function initFileItem(fileItem) {
         fileItem = newFileItem;
     }
     
-    // 더블클릭 이벤트 연결 - 캡처 단계에서 이벤트 리스너 등록
-    fileItem.addEventListener('dblclick', (e) => {
+    // 더블클릭 이벤트를 파일 항목에 직접 연결
+    fileItem.addEventListener('dblclick', function(e) {
+        // 이벤트 전파 중지
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 다른 파일 항목으로의 더블클릭 중복 처리 방지
+        if (!window.doubleClickEnabled) {
+            console.log('더블클릭 처리 무시: 이미 처리 중');
+            return;
+        }
+        
+        // 이벤트 처리 위임
         handleFileDblClick(e, fileItem);
     }, true);
     
