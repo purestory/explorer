@@ -253,8 +253,13 @@ function initContextMenu() {
     document.getElementById('ctxRename').addEventListener('click', showRenameDialog);
     document.getElementById('ctxDelete').addEventListener('click', deleteSelectedItems);
     
-    // 폴더 잠금 토글 이벤트 추가
-    document.getElementById('ctxLock').addEventListener('click', toggleFolderLock);
+    // 폴더 잠금 토글 이벤트 추가 (수정)
+    document.getElementById('ctxLock').addEventListener('click', (e) => {
+        // 메뉴 텍스트에서 명령 확인 (잠금 또는 해제)
+        const menuText = e.currentTarget.textContent.trim();
+        const action = menuText.includes('잠금 해제') ? 'unlock' : 'lock';
+        toggleFolderLock(action);
+    });
     
     document.getElementById('ctxNewFolder').addEventListener('click', () => {
         // 현재 폴더에 존재하는 파일 목록 확인
@@ -3030,8 +3035,8 @@ function isPathLocked(path) {
     });
 }
 
-// 폴더 잠금 토글 함수
-function toggleFolderLock() {
+// 폴더 잠금 토글 함수 (수정: 명령 인자 추가)
+function toggleFolderLock(action) {
     // 선택된 폴더 항목들 확인
     const selectedFolders = [];
     
@@ -3053,23 +3058,13 @@ function toggleFolderLock() {
         return;
     }
     
-    // 컨텍스트 메뉴에서 선택된 동작 확인 (잠금 또는 해제)
-    // 첫 번째 선택된 폴더의 잠금 상태를 확인하여 컨텍스트 메뉴의 동작 결정
-    const firstFolderLocked = selectedFolders[0].isLocked;
-    // 컨텍스트 메뉴가 "잠금 해제"였다면 잠금된 것을 해제해야 함
-    // 컨텍스트 메뉴가 "잠금"이었다면 잠금해제된 것을 잠금해야 함
-    const targetAction = firstFolderLocked ? "unlock" : "lock";
-    
-    // 처리할 폴더들의 필터링 (선택된 동작에 따라)
-    const foldersToProcess = selectedFolders.filter(folder => {
-        // 잠금 해제 동작이면 현재 잠겨 있는 폴더만 처리
-        if (targetAction === "unlock") return folder.isLocked;
-        // 잠금 동작이면 현재 잠겨 있지 않은 폴더만 처리
-        else return !folder.isLocked;
-    });
+    // 처리할 폴더들을 필터링 (선택된 동작에 따라)
+    const foldersToProcess = action === 'lock' 
+        ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
+        : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
     
     if (foldersToProcess.length === 0) {
-        if (targetAction === "lock") {
+        if (action === 'lock') {
             statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
         } else {
             statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
@@ -3085,7 +3080,7 @@ function toggleFolderLock() {
             // 모든 폴더 처리 완료
             loadLockStatus().then(() => {
                 loadFiles(currentPath); // 파일 목록 새로고침
-                const actionText = targetAction === "lock" ? "잠금" : "잠금 해제";
+                const actionText = action === 'lock' ? '잠금' : '잠금 해제';
                 statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
                 hideLoading();
             });
@@ -3100,7 +3095,7 @@ function toggleFolderLock() {
         })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`'${folder.name}' 폴더 ${targetAction === "lock" ? "잠금" : "잠금 해제"} 처리 실패`);
+                throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
             }
             return response.json();
         })
