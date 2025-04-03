@@ -2538,20 +2538,21 @@ function downloadSelectedItems() {
     // 단일 파일 다운로드
     if (selectedItems.size === 1) {
         const itemId = [...selectedItems][0];
-        const isFolder = document.querySelector(`.file-item[data-id="${itemId}"]`).getAttribute('data-is-folder') === 'true';
+        const element = document.querySelector(`.file-item[data-id="${itemId}"]`);
+        const isFolder = element.getAttribute('data-is-folder') === 'true';
         
-        // 폴더인 경우 무시
-        if (isFolder) {
-            alert('폴더는 다운로드할 수 없습니다.');
-            return;
-        }
-        
-        // 파일 경로 생성
+        // 단일 파일 경로 생성
         const filePath = currentPath ? `${currentPath}/${itemId}` : itemId;
         const encodedPath = encodeURIComponent(filePath);
         const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
         
-        // 강제로 다운로드 진행
+        // 폴더인 경우에도 압축하여 다운로드
+        if (isFolder) {
+            compressAndDownload([itemId]);
+            return;
+        }
+        
+        // 일반 파일은 직접 다운로드
         const link = document.createElement('a');
         link.href = fileUrl;
         link.setAttribute('download', itemId); // 다운로드 속성 추가
@@ -2567,49 +2568,93 @@ function downloadSelectedItems() {
         return;
     }
     
-    // 여러 파일 선택 시 각 파일을 개별적으로 다운로드
+    // 여러 항목 선택 시 압축하여 다운로드
+    compressAndDownload([...selectedItems]);
+}
+
+// 여러 파일/폴더를 압축하여 다운로드
+function compressAndDownload(itemList) {
+    if (!itemList || itemList.length === 0) return;
+    
     showLoading();
-    statusInfo.textContent = '다운로드 준비 중...';
+    statusInfo.textContent = '압축 패키지 준비 중...';
     
-    // 현재 선택된 모든 항목을 다운로드 큐에 추가
-    const downloadQueue = [];
-    selectedItems.forEach(itemId => {
-        const element = document.querySelector(`.file-item[data-id="${itemId}"]`);
-        const isFolder = element.getAttribute('data-is-folder') === 'true';
-        
-        // 폴더는 제외 (서버에서 지원하지 않는 경우)
-        if (!isFolder) {
-            downloadQueue.push(itemId);
+    // 기본 파일명 생성 (현재 폴더명 또는 기본명 + 날짜시간)
+    const now = new Date();
+    const dateTimeStr = now.getFullYear() +
+                        String(now.getMonth() + 1).padStart(2, '0') +
+                        String(now.getDate()).padStart(2, '0') + '_' +
+                        String(now.getHours()).padStart(2, '0') +
+                        String(now.getMinutes()).padStart(2, '0');
+    
+    // 현재 폴더명 또는 기본명으로 압축파일명 생성
+    const currentFolderName = currentPath ? currentPath.split('/').pop() : 'files';
+    const zipName = `${currentFolderName}_${dateTimeStr}.zip`;
+    
+    // API 요청 데이터
+    const requestData = {
+        files: itemList,
+        targetPath: '',  // 임시 압축 위치는 루트에 생성
+        zipName: zipName
+    };
+    
+    // 압축 API 호출
+    fetch(`${API_BASE_URL}/api/compress`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || '압축 중 오류가 발생했습니다.');
+            });
         }
-    });
-    
-    // 다운로드 큐가 비어있으면 종료
-    if (downloadQueue.length === 0) {
-        alert('다운로드할 파일이 없습니다. 폴더는 다운로드할 수 없습니다.');
-        hideLoading();
-        return;
-    }
-    
-    // 동시에 여러 파일 다운로드 시작
-    downloadQueue.forEach(fileName => {
-        const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        const encodedPath = encodeURIComponent(filePath);
-        const downloadUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+        return response.json();
+    })
+    .then(data => {
+        // 압축 성공 후 다운로드 시작
+        const zipPath = data.zipPath ? `${data.zipPath}/${data.zipFile}` : data.zipFile;
+        const encodedZipPath = encodeURIComponent(zipPath);
+        const zipUrl = `${API_BASE_URL}/api/files/${encodedZipPath}`;
         
-        // 링크 생성 및 클릭 이벤트 발생 (download 속성 명시)
+        // 압축 파일 다운로드
         const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.setAttribute('download', fileName); // 다운로드 속성 설정
+        link.href = zipUrl;
+        link.setAttribute('download', data.zipFile);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    });
-    
-    // 다운로드 완료 처리
-    setTimeout(() => {
+        
+        // 상태 업데이트
+        statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 중...`;
         hideLoading();
-        statusInfo.textContent = `${downloadQueue.length}개 파일 다운로드 시작됨`;
-    }, 1000);
+        
+        // 임시 압축 파일 삭제 (다운로드 시작 후 10초 후)
+        setTimeout(() => {
+            fetch(`${API_BASE_URL}/api/files/${encodedZipPath}`, {
+                method: 'DELETE'
+            })
+            .then(() => {
+                console.log(`임시 압축 파일 삭제됨: ${zipPath}`);
+            })
+            .catch(err => {
+                console.error('임시 압축 파일 삭제 오류:', err);
+            });
+            
+            // 상태 메시지 업데이트
+            statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 완료`;
+        }, 10000); // 10초 후 삭제
+    })
+    .catch(error => {
+        // 오류 처리
+        console.error('압축 및 다운로드 오류:', error);
+        alert(`압축 및 다운로드 중 오류가 발생했습니다: ${error.message}`);
+        hideLoading();
+        statusInfo.textContent = '다운로드 실패';
+    });
 }
 
 // 항목 이동
