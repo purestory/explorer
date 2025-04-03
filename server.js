@@ -269,8 +269,11 @@ app.get('/api/files/*', async (req, res) => {
       // 직접 보기 요청인지 확인 (쿼리 파라미터로 확인)
       const forceView = req.query.view === 'true';
       
-      // 직접 보기 요청이거나 viewableTypes에 포함되는 파일 형식인 경우 직접 보기 제공
-      if (forceView && viewableTypes.includes(fileExt)) {
+      // 압축 파일인지 확인 (항상 다운로드 해야함)
+      const isZipFile = fileExt === 'zip' || fileExt === 'rar' || fileExt === 'tar' || fileExt === 'gz';
+      
+      // 직접 보기 요청이고 viewableTypes에 포함되는 파일 형식이면서 압축 파일이 아닌 경우만 직접 보기 제공
+      if (forceView && viewableTypes.includes(fileExt) && !isZipFile) {
         // Content-Type 설정
         res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
         // 인라인 표시 설정 (브라우저에서 직접 열기)
@@ -282,6 +285,10 @@ app.get('/api/files/*', async (req, res) => {
         res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
         // Content-Disposition 헤더에 attachment 설정으로 항상 다운로드
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+        // 추가 캐시 방지 헤더 설정
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         // 파일 스트림 전송
         fs.createReadStream(fullPath).pipe(res);
       }

@@ -318,17 +318,17 @@ function openFile(fileName) {
         // 다운로드 모드 URL (쿼리 파라미터 없음)
         const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
         
-        // iframe을 사용한 다운로드 방식으로 변경
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = fileUrl;
-        document.body.appendChild(iframe);
+        // 원래 방식으로 복구
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.setAttribute('download', fileName); // 명시적으로 download 속성 설정
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         
-        // 5초 후 iframe 제거
         setTimeout(() => {
-            document.body.removeChild(iframe);
             statusInfo.textContent = `${fileName} 다운로드 완료`;
-        }, 5000);
+        }, 1000);
     }
 }
 
@@ -1141,19 +1141,18 @@ function downloadFile(fileName) {
     const encodedPath = encodeURIComponent(filePath);
     const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
     
-    // iframe을 사용한 다운로드 방식으로 변경
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = fileUrl;
-    document.body.appendChild(iframe);
+    // 원래 방식으로 복구
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.setAttribute('download', fileName); // 명시적으로 download 속성 설정
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     
     statusInfo.textContent = `${fileName} 다운로드 중...`;
-    
-    // 5초 후 iframe 제거
     setTimeout(() => {
-        document.body.removeChild(iframe);
         statusInfo.textContent = `${fileName} 다운로드 완료`;
-    }, 5000);
+    }, 1000);
 }
 
 // 모든 항목 선택
@@ -2562,19 +2561,18 @@ function downloadSelectedItems() {
             return;
         }
         
-        // 일반 파일은 직접 다운로드 (iframe 방식으로 변경)
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = fileUrl;
-        document.body.appendChild(iframe);
+        // 일반 파일은 직접 다운로드 (원래 방식으로 복구)
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.setAttribute('download', itemId); // 명시적으로 download 속성 설정
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         
         statusInfo.textContent = `${itemId} 다운로드 중...`;
-        
-        // 5초 후 iframe 제거
         setTimeout(() => {
-            document.body.removeChild(iframe);
             statusInfo.textContent = `${itemId} 다운로드 완료`;
-        }, 5000);
+        }, 1000);
         
         return;
     }
@@ -2631,11 +2629,13 @@ function compressAndDownload(itemList) {
         const encodedZipPath = encodeURIComponent(zipPath);
         const zipUrl = `${API_BASE_URL}/api/files/${encodedZipPath}`;
         
-        // 압축 파일 다운로드 (iframe 방식으로 변경)
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = zipUrl;
-        document.body.appendChild(iframe);
+        // 압축 파일 다운로드 (원래 방식으로 복구)
+        const link = document.createElement('a');
+        link.href = zipUrl;
+        link.setAttribute('download', data.zipFile); // 명시적으로 download 속성 설정
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         
         // 상태 업데이트
         statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 중...`;
@@ -2643,9 +2643,6 @@ function compressAndDownload(itemList) {
         
         // 임시 압축 파일 삭제 (다운로드 시작 후 10초 후)
         setTimeout(() => {
-            // iframe 제거
-            document.body.removeChild(iframe);
-            
             fetch(`${API_BASE_URL}/api/files/${encodedZipPath}`, {
                 method: 'DELETE'
             })
@@ -2779,39 +2776,41 @@ function downloadAndOpenFile(fileName) {
         // 사용자에게 알림
         statusInfo.textContent = `${fileName} 다운로드 중...`;
         
-        // iframe을 사용한 다운로드 방식으로 변경
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = fileUrl;
-        document.body.appendChild(iframe);
+        // 원래 방식으로 복구
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.setAttribute('download', fileName); // 명시적으로 download 속성 설정
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         
-        // 5초 후 iframe 제거
         setTimeout(() => {
-            document.body.removeChild(iframe);
             statusInfo.textContent = `${fileName} 다운로드 완료됨. 파일을 실행하세요.`;
-        }, 5000);
+        }, 1000);
     } 
     // 브라우저에서 볼 수 있는 파일인 경우
     else if (viewableTypes.includes(fileExt)) {
+        // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
+        const viewUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
         // 새 창에서 열기
-        window.open(fileUrl, '_blank');
+        window.open(viewUrl, '_blank');
         statusInfo.textContent = `${fileName} 파일 열기`;
     } 
     // 그 외 파일은 단순 다운로드
     else {
-        // iframe을 사용한 다운로드 방식으로 변경
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = fileUrl;
-        document.body.appendChild(iframe);
+        // 원래 방식으로 복구
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.setAttribute('download', fileName); // 명시적으로 download 속성 설정
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         
         statusInfo.textContent = `${fileName} 다운로드 중...`;
         
-        // 5초 후 iframe 제거
         setTimeout(() => {
-            document.body.removeChild(iframe);
             statusInfo.textContent = `${fileName} 다운로드 완료`;
-        }, 5000);
+        }, 1000);
     }
 }
 
