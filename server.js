@@ -389,7 +389,6 @@ app.delete('/api/files/*', (req, res) => {
       return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
     }
 
-    // 폴더가 잠겼는지 확인
     // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
     let lockedFolders = [];
     const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
@@ -402,19 +401,31 @@ app.delete('/api/files/*', (req, res) => {
       }
     }
 
+    // 디렉토리인지 확인
+    const stats = fs.statSync(fullPath);
+    const isDirectory = stats.isDirectory();
+
     // 현재 경로나 그 상위 경로가 잠겨있는지 확인
     const isLocked = lockedFolders.some(lockedPath => {
       return itemPath === lockedPath || itemPath.startsWith(lockedPath + '/');
     });
 
-    if (isLocked) {
-      errorLog(`잠긴 폴더 삭제 시도: ${fullPath}`);
-      return res.status(403).send('잠긴 폴더는 삭제할 수 없습니다.');
+    // 현재 폴더 내에 잠긴 폴더가 있는지 확인 (폴더인 경우만)
+    let hasLockedSubfolders = false;
+    if (isDirectory) {
+      hasLockedSubfolders = lockedFolders.some(lockedPath => {
+        // 현재 삭제하려는 경로가 잠긴 폴더의 상위 경로인지 확인
+        return lockedPath.startsWith(itemPath + '/');
+      });
     }
 
-    // 디렉토리인지 확인
-    const stats = fs.statSync(fullPath);
-    if (stats.isDirectory()) {
+    // 잠금 확인
+    if (isLocked || hasLockedSubfolders) {
+      errorLog(`잠긴 폴더 혹은 내부에 잠긴 폴더가 있는 폴더 삭제 시도: ${fullPath}`);
+      return res.status(403).send('잠긴 폴더 또는 잠긴 폴더를 포함한 폴더는 삭제할 수 없습니다.');
+    }
+
+    if (isDirectory) {
       // 폴더 삭제 (재귀적)
       fs.rmdirSync(fullPath, { recursive: true });
       log(`폴더 삭제 완료: ${fullPath}`);
