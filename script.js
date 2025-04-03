@@ -25,8 +25,6 @@ let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 �
 let lockedFolders = [];
 // 폴더 잠금 기능 사용 가능 여부
 let lockFeatureAvailable = true;
-// 파일 항목 클릭 감지용 플래그
-let clickInsideFileItem = false;
 
 // 드래그 선택 상태 관련 전역 변수 추가
 window.dragSelectState = {
@@ -446,18 +444,6 @@ function initDragSelect() {
             || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT'
             || e.target.tagName === 'SELECT' || e.target.tagName === 'A') {
             return;
-        }
-        
-        // 파일 목록 영역에서만 작동하도록 처리
-        const filesContainer = document.getElementById('fileList');
-        if (!filesContainer.contains(e.target)) {
-            return;
-        }
-        
-        // 파일 항목이 아닌 빈 영역을 클릭한 경우에도 선택 해제 처리
-        if (!window.dragSelectState.startedOnFileItem && !e.ctrlKey && !e.shiftKey) {
-            clearSelection();
-            updateButtonStates();
         }
         
         // 자동 스크롤 취소 (이전에 진행 중인 것이 있다면)
@@ -1075,35 +1061,21 @@ function renderFiles(files) {
             
             // 파일 컨테이너 추가
             const filesContainer = document.createElement('div');
-            filesContainer.className = 'files-container';
+            filesContainer.id = 'fileList';
+            
+            // 목록 스타일 설정 (그리드 또는 리스트)
+            filesContainer.className = listView ? 'file-list' : 'file-grid';
             fileView.appendChild(filesContainer);
             
-            // 파일 정렬
-            const sortedFiles = [...files].sort((a, b) => {
-                // 폴더 우선 정렬
-                if (a.isFolder && !b.isFolder) return -1;
-                if (!a.isFolder && b.isFolder) return 1;
-                
-                // 선택된 필드로 정렬
-                if (sortField === 'name') {
-                    return sortDirection === 'asc' 
-                        ? a.name.localeCompare(b.name) 
-                        : b.name.localeCompare(a.name);
-                } else if (sortField === 'size') {
-                    return sortDirection === 'asc' 
-                        ? a.size - b.size 
-                        : b.size - a.size;
-                } else if (sortField === 'date') {
-                    return sortDirection === 'asc' 
-                        ? new Date(a.modifiedTime) - new Date(b.modifiedTime) 
-                        : new Date(b.modifiedTime) - new Date(a.modifiedTime);
-                }
-                
-                return 0;
-            });
+            // 정렬된 파일 목록
+            const sortedFiles = sortFiles(files);
             
-            // 숨김 파일 제외 (점으로 시작하는 파일)
+            // 숨김 파일 필터링 (추가된 부분)
+            // 이름이 .으로 시작하는 파일은 숨김 파일로 간주
             const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
+            
+            // 잠금 상태 디버그 로깅
+            console.log('현재 잠금 폴더 목록:', lockedFolders);
             
             // 상위 폴더로 이동 항목 추가 (루트 폴더가 아닌 경우)
             if (currentPath) {
@@ -1152,9 +1124,6 @@ function renderFiles(files) {
                 noFilesDiv.textContent = '파일이 없습니다.';
                 filesContainer.appendChild(noFilesDiv);
             } else {
-                // 잠금 상태 디버그 로깅
-                console.log('현재 잠금 폴더 목록:', lockedFolders);
-                
                 visibleFiles.forEach(file => {
                     // 파일 항목 생성
                     const fileItem = document.createElement('div');
@@ -1175,81 +1144,71 @@ function renderFiles(files) {
                     const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
                     fileItem.setAttribute('data-path', filePath);
                     
-                    // 잠금 상태 확인 및 표시
-                    const isLocked = isPathLocked(filePath);
-                    console.log(`파일/폴더: ${filePath}, 잠금 상태: ${isLocked}`);
+                    // 잠금 상태 확인 및 표시 - 직접 잠긴 폴더만 표시
+                    const isDirectlyLocked = isPathLocked(filePath);
+                    // 접근 제한 (상위 폴더가 잠겨있는 경우) 확인
+                    const isRestricted = isPathAccessRestricted(filePath) && !isDirectlyLocked;
                     
-                    if (file.isFolder && isLocked) {
+                    if (file.isFolder && isDirectlyLocked) {
                         fileItem.classList.add('locked-folder');
+                    } else if (file.isFolder && isRestricted) {
+                        fileItem.classList.add('restricted-folder');
                     }
                     
-                    // 파일 아이콘 및 미리보기 설정
+                    // 아이콘 생성
                     const fileIcon = document.createElement('div');
                     fileIcon.className = 'file-icon';
                     
+                    // 폴더/파일 아이콘 설정
                     if (file.isFolder) {
                         fileIcon.innerHTML = '<i class="fas fa-folder"></i>';
                     } else {
-                        const fileExt = file.name.split('.').pop().toLowerCase();
-                        // 아이콘 선택
-                        switch (fileExt) {
-                            case 'pdf': fileIcon.innerHTML = '<i class="fas fa-file-pdf"></i>'; break;
-                            case 'doc': case 'docx': fileIcon.innerHTML = '<i class="fas fa-file-word"></i>'; break;
-                            case 'xls': case 'xlsx': fileIcon.innerHTML = '<i class="fas fa-file-excel"></i>'; break;
-                            case 'ppt': case 'pptx': fileIcon.innerHTML = '<i class="fas fa-file-powerpoint"></i>'; break;
-                            case 'zip': case 'rar': case 'tar': case 'gz': fileIcon.innerHTML = '<i class="fas fa-file-archive"></i>'; break;
-                            case 'jpg': case 'jpeg': case 'png': case 'gif': case 'bmp': 
-                                fileIcon.innerHTML = '<i class="fas fa-file-image"></i>'; break;
-                            case 'mp3': case 'wav': case 'ogg': fileIcon.innerHTML = '<i class="fas fa-file-audio"></i>'; break;
-                            case 'mp4': case 'avi': case 'mov': case 'wmv': fileIcon.innerHTML = '<i class="fas fa-file-video"></i>'; break;
-                            case 'txt': case 'rtf': fileIcon.innerHTML = '<i class="fas fa-file-alt"></i>'; break;
-                            case 'html': case 'htm': case 'css': case 'js': fileIcon.innerHTML = '<i class="fas fa-file-code"></i>'; break;
-                            case 'exe': case 'msi': fileIcon.innerHTML = '<i class="fas fa-cog"></i>'; break;
-                            default: fileIcon.innerHTML = '<i class="fas fa-file"></i>';
-                        }
+                        const iconClass = getFileIconClass(file.name);
+                        fileIcon.innerHTML = `<i class="${iconClass}"></i>`;
                     }
                     
-                    // 파일 이름
+                    // 파일명 생성
                     const fileName = document.createElement('div');
                     fileName.className = 'file-name';
                     fileName.innerText = file.name;
                     
-                    // 이름 변경 입력 필드
-                    const renameInput = document.createElement('input');
-                    renameInput.type = 'text';
-                    renameInput.className = 'rename-input';
-                    renameInput.value = file.name;
-                    
-                    // 파일 세부 정보
+                    // 파일 정보 생성
                     const fileDetails = document.createElement('div');
                     fileDetails.className = 'file-details';
                     
-                    // 파일 크기
+                    // 파일 크기 생성
                     const fileSize = document.createElement('div');
                     fileSize.className = 'file-size';
                     fileSize.innerText = file.isFolder ? '--' : formatFileSize(file.size);
                     
-                    // 파일 날짜
+                    // 수정일 생성
                     const fileDate = document.createElement('div');
                     fileDate.className = 'file-date';
                     fileDate.innerText = formatDate(file.modifiedTime);
                     
-                    // 세부 정보에 추가
+                    // 파일 정보 추가
                     fileDetails.appendChild(fileSize);
                     fileDetails.appendChild(fileDate);
                     
-                    // 파일 항목에 추가
+                    // 파일 항목에 요소 추가
                     fileItem.appendChild(fileIcon);
                     fileItem.appendChild(fileName);
-                    fileItem.appendChild(renameInput);
                     fileItem.appendChild(fileDetails);
                     
                     // 잠긴 폴더에 잠금 아이콘 추가
-                    if (file.isFolder && isLocked) {
+                    if (file.isFolder && isDirectlyLocked) {
                         const lockIcon = document.createElement('div');
                         lockIcon.className = 'lock-icon';
                         lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
                         fileItem.appendChild(lockIcon);
+                    }
+                    
+                    // 접근 제한된 폴더에 표시 추가
+                    if (file.isFolder && isRestricted) {
+                        const restrictedIcon = document.createElement('div');
+                        restrictedIcon.className = 'restricted-icon';
+                        restrictedIcon.innerHTML = '<i class="fas fa-shield-alt"></i>';
+                        fileItem.appendChild(restrictedIcon);
                     }
                     
                     // 이벤트 리스너 설정
@@ -1473,6 +1432,14 @@ function handleFileDblClick(e, fileItem) {
     }
     
     if (isFolder) {
+        // 폴더로 이동 전 접근 제한 확인
+        const folderPath = currentPath ? `${currentPath}/${fileName}` : fileName;
+        if (isPathAccessRestricted(folderPath) && !isPathLocked(folderPath)) {
+            // 직접 잠기지 않았지만 상위 폴더가 잠긴 경우
+            alert(`'${fileName}' 폴더의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
+            return;
+        }
+        
         // 폴더로 이동 전에 더블클릭 비활성화
         window.doubleClickEnabled = false;
         // 폴더로 이동
@@ -1481,6 +1448,13 @@ function handleFileDblClick(e, fileItem) {
         // 파일 확장자에 따라 처리
         const fileExt = fileName.split('.').pop().toLowerCase();
         const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+        
+        // 파일 접근 제한 확인
+        if (isPathAccessRestricted(filePath)) {
+            alert(`'${fileName}' 파일의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
+            return;
+        }
+        
         const encodedPath = encodeURIComponent(filePath);
         
         // 이미지, 비디오, PDF 등 브라우저에서 열 수 있는 파일 형식
@@ -1613,93 +1587,82 @@ function showRenameDialog() {
 
 // 선택 항목 삭제
 function deleteSelectedItems() {
-    if (selectedItems.size === 0) return;
-    
-    // 선택항목에서 상위 디렉토리(..) 제거
-    const itemsToDelete = new Set(selectedItems);
-    itemsToDelete.delete('..');
-    
-    if (itemsToDelete.size === 0) {
-        alert('삭제할 항목이 없습니다. 상위 폴더는 삭제할 수 없습니다.');
+    // 선택된 항목이 없으면 무시
+    if (selectedItems.size === 0) {
         return;
     }
     
-    // 잠긴 폴더에 속한 항목들 확인
-    const lockedItems = [];
-    const deleteableItems = [];
+    // 선택된 항목 목록 생성
+    const itemList = Array.from(selectedItems);
+    const itemCount = itemList.length;
     
-    itemsToDelete.forEach(itemId => {
-        const path = currentPath ? `${currentPath}/${itemId}` : itemId;
+    // 관리자 권한이 필요한 항목이 있는지 확인
+    const hasRestrictedItems = itemList.some(itemName => {
+        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
+        if (!element) return false;
         
-        // 잠긴 폴더 확인
-        if (isPathLocked(path)) {
-            lockedItems.push(itemId);
-        } else {
-            deleteableItems.push(itemId);
-        }
+        const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+        return isPathAccessRestricted(itemPath);
     });
     
-    // 잠긴 폴더에 속한 항목이 있으면 경고창 한 번만 표시
-    if (lockedItems.length > 0) {
-        const message = lockedItems.length === 1 
-            ? `'${lockedItems[0]}'은(는) 잠긴 폴더이므로 삭제할 수 없습니다.` 
-            : `${lockedItems.length}개 항목은 잠긴 폴더이므로 삭제할 수 없습니다.`;
-        alert(message);
-        
-        // 삭제 가능한 항목이 없으면 종료
-        if (deleteableItems.length === 0) {
+    // 관리자 권한이 필요한 항목이 있으면 삭제를 중단하고 경고 표시
+    if (hasRestrictedItems) {
+        alert('잠긴 폴더 또는 파일은 삭제할 수 없습니다.');
+        return;
+    }
+    
+    // 삭제 확인
+    if (!confirm(`선택한 ${itemCount}개 항목을 삭제하시겠습니까?`)) {
+        return;
+    }
+    
+    // 삭제 처리
+    showLoading();
+    statusInfo.textContent = '파일 삭제 중...';
+    
+    // 재귀적으로 항목 삭제
+    const deleteNextItem = (index) => {
+        if (index >= itemList.length) {
+            // 모든 항목 삭제 완료
+            loadFiles(currentPath);
             return;
         }
-    }
-    
-    const itemsText = deleteableItems.length > 1 
-        ? `${deleteableItems.length}개 항목` 
-        : document.querySelector(`.file-item.selected[data-name="${deleteableItems[0]}"]`).getAttribute('data-name');
-    
-    if (confirm(`정말 ${itemsText}을(를) 삭제하시겠습니까?`)) {
-        // 선택된 모든 항목 삭제
-        const promises = [];
         
-        deleteableItems.forEach(itemId => {
-            const path = currentPath ? `${currentPath}/${itemId}` : itemId;
-            // 경로에 한글이 포함된 경우를 위해 인코딩 처리
-            const encodedPath = encodeURIComponent(path);
-            
-            promises.push(
-                fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
-                    method: 'DELETE'
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        if (response.status === 403) {
-                            throw new Error(`${itemId}는 잠긴 폴더이므로 삭제할 수 없습니다.`);
-                        } else {
-                            throw new Error(`${itemId} 삭제 실패`);
-                        }
-                    }
-                    return itemId;
-                })
-            );
-        });
+        const itemName = itemList[index];
+        const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+        const encodedPath = encodeURIComponent(itemPath);
         
-        if (promises.length === 0) {
-            return; // 모든 항목이 잠긴 폴더인 경우
+        // 이 항목이 잠긴 폴더인지 다시 확인
+        if (isPathAccessRestricted(itemPath)) {
+            console.error(`'${itemName}'은(는) 잠긴 폴더이므로 삭제할 수 없습니다.`);
+            deleteNextItem(index + 1);
+            return;
         }
         
-        showLoading();
-        statusInfo.textContent = '삭제 중...';
-        
-        Promise.all(promises)
-            .then(() => {
-                loadFiles(currentPath); // 파일 목록 새로고침
-                statusInfo.textContent = `${promises.length}개 항목 삭제됨`;
-            })
-            .catch(error => {
-                alert(`오류 발생: ${error.message}`);
-                hideLoading();
-                loadFiles(currentPath);
-            });
-    }
+        fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`${itemName} 삭제 실패: ${response.status} ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log(`'${itemName}' 삭제 완료`);
+            // 다음 항목 삭제
+            deleteNextItem(index + 1);
+        })
+        .catch(error => {
+            console.error(`'${itemName}' 삭제 오류:`, error);
+            alert(`'${itemName}' 삭제 오류: ${error.message}`);
+            // 오류가 있더라도 다음 항목 삭제 시도
+            deleteNextItem(index + 1);
+        });
+    };
+    
+    // 첫 번째 항목부터 삭제 시작
+    deleteNextItem(0);
 }
 
 // 선택 항목 잘라내기
@@ -3242,59 +3205,868 @@ function downloadAndOpenFile(fileName) {
 
 // 애플리케이션 초기화
 function init() {
-    // 초기화 함수 내 기존 코드
-    initDragSelect();
+    // 혹시 이전 상태의 드래그 클래스가 있으면 초기화
+    (function cleanupDragClasses() {
+        console.log('초기화 시 드래그 클래스 정리');
+        document.querySelectorAll('.dragging, .drag-over').forEach(el => {
+            el.classList.remove('dragging');
+            el.classList.remove('drag-over');
+        });
+    })();
+    
+    // 기본 기능 초기화
     initModals();
     initContextMenu();
+    initDragSelect();
+    initDragAndDrop();
+    initShortcuts();
     initViewModes();
+    initHistoryNavigation(); // 히스토리 네비게이션 초기화 추가
+    setupGlobalDragCleanup(); // 드래그 상태 정리 기능 초기화
+    
+    // 파일 관리 기능 초기화
     initFolderCreation();
     initRenaming();
     initFileUpload();
     initClipboardOperations();
     initDeletion();
     initSearch();
-    initShortcuts();
-    initDragAndDrop();
-    initHistoryNavigation();
     
-    // 전역 드래그 상태 정리 기능 설정
-    setupGlobalDragCleanup();
+    // 다운로드 버튼 이벤트 추가
+    downloadBtn.addEventListener('click', downloadSelectedItems);
+    
+    // 새로고침 버튼 이벤트 추가
+    document.getElementById('refreshStorageBtn').addEventListener('click', () => {
+        loadDiskUsage();
+    });
     
     // 초기 파일 목록 로드
     loadFiles(currentPath);
-    
-    // 파일 목록 영역 클릭 시 파일 선택 해제 기능 추가
-    const filesContainer = document.getElementById('fileList');
-    filesContainer.addEventListener('click', (e) => {
-        // 클릭 이벤트가 파일 항목 내부에서 발생하지 않았고,
-        // 다른 UI 요소(버튼, 드롭다운 등)를 클릭한 것이 아닌 경우에만 처리
-        if (!clickInsideFileItem && 
-            !e.target.closest('button, input, select, a, .modal, .dropdown-menu, .file-item, .file-item-grid')) {
-            console.log('파일창 빈 영역 클릭: 모든 선택 해제');
-            clearSelection();
-            updateButtonStates();
-        }
-        
-        // 다음 클릭을 위해 플래그 초기화
-        clickInsideFileItem = false;
-    });
-    
-    // 초기화 시 모든 파일 선택 해제
-    clearSelection();
-    updateButtonStates();
-    
-    // 자동 정리 함수 실행 - 페이지 로드 후 남아있을 수 있는 드래그 관련 클래스 정리
-    (function cleanupDragClasses() {
-        document.querySelectorAll('.dragging, .drag-over').forEach(el => {
-            el.classList.remove('dragging', 'drag-over');
-        });
-    })();
 }
 
 // 페이지 로드 시 애플리케이션 초기화
 document.addEventListener('DOMContentLoaded', init);
 
 // 선택한 파일 압축
+function compressSelectedItems() {
+    if (selectedItems.size === 0) return;
+    
+    // 선택된 파일/폴더 중 첫 번째 항목의 이름 가져오기
+    const selectedItemsArray = Array.from(selectedItems);
+    const firstItemName = selectedItemsArray[0];
+    
+    // 파일 크기 확인
+    let hasLargeFile = false;
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+    
+    for (const item of selectedItemsArray) {
+        const fileInfo = fileInfoMap.get(item);
+        if (fileInfo && fileInfo.type === 'file' && fileInfo.size > MAX_FILE_SIZE) {
+            hasLargeFile = true;
+            break;
+        }
+    }
+    
+    if (hasLargeFile) {
+        alert('500MB 이상의 파일이 포함되어 있어 압축할 수 없습니다.');
+        return;
+    }
+    
+    // 현재 날짜와 시간을 문자열로 변환
+    const now = new Date();
+    const dateTimeStr = now.getFullYear() +
+                        String(now.getMonth() + 1).padStart(2, '0') +
+                        String(now.getDate()).padStart(2, '0') + '_' +
+                        String(now.getHours()).padStart(2, '0') +
+                        String(now.getMinutes()).padStart(2, '0') +
+                        String(now.getSeconds()).padStart(2, '0');
+    
+    // 기본 압축 파일 이름 설정 (첫 번째 선택 항목 + 날짜시간)
+    const defaultZipName = `${firstItemName}_${dateTimeStr}`;
+    
+    // 압축 파일 이름 입력 받기
+    const zipName = prompt('압축 파일 이름을 입력하세요:', defaultZipName);
+    if (!zipName) return; // 취소한 경우
+    
+    showLoading();
+    statusInfo.textContent = '압축 중...';
+    
+    // 압축할 파일 목록 생성
+    const filesToCompress = selectedItemsArray;
+    
+    // API 요청 데이터
+    const requestData = {
+        files: filesToCompress,
+        targetPath: currentPath,
+        zipName: zipName
+    };
+    
+    // 압축 API 호출
+    fetch(`${API_BASE_URL}/api/compress`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || '압축 중 오류가 발생했습니다.');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        // 성공 처리
+        statusInfo.textContent = `${filesToCompress.length}개 항목이 ${data.zipFile}로 압축되었습니다.`;
+        hideLoading();
+        
+        // 압축 후 파일 목록 새로고침
+        loadFiles(currentPath);
+    })
+    .catch(error => {
+        // 오류 처리
+        console.error('압축 오류:', error);
+        statusInfo.textContent = `압축 실패: ${error.message}`;
+        alert(`압축 실패: ${error.message}`);
+        hideLoading();
+    });
+}
+
+// 파일 또는 폴더를 지정된 대상 폴더로 이동하는 함수
+function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
+    // 이동 중복 호출 방지 상태 확인
+    if (window.isMovingFiles) {
+        console.log('이미 파일 이동 작업이 진행 중입니다.');
+        return Promise.reject('이미 파일 이동 작업이 진행 중입니다.');
+    }
+    
+    // 이동할 항목이 없으면 무시
+    if (!itemsToMove || itemsToMove.length === 0) {
+        console.log('이동할 항목이 없습니다.');
+        return Promise.reject('이동할 항목이 없습니다.');
+    }
+    
+    // 드롭된 폴더 경로 계산
+    const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+    
+    // 호출 카운터 증가 - 함수 호출 추적
+    dragDropMoveCounter++;
+    console.log(`[moveToFolder] 파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`);
+    statusInfo.textContent = `파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`;
+    
+    // 이동 중 상태 설정
+    window.isMovingFiles = true;
+    
+    // 이동 전 충돌 항목 확인 (모든 항목에 대해 한 번만 확인)
+    const conflictCheckPromises = itemsToMove.map(item => {
+        const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+        const fileName = item;
+        
+        // 소스와 타겟이 같은 경로인지 확인
+        if (sourceFullPath === `${targetPath}/${fileName}`) {
+            console.log(`[${fileName}] 소스와 타겟이 동일합니다. 무시합니다.`);
+            return { item, exists: false, skip: true };
+        }
+        
+        // 대상 경로에 파일이 존재하는지 확인
+        return fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(targetPath)}/${encodeURIComponent(fileName)}`, {
+            method: 'HEAD'
+        })
+        .then(response => {
+            return { item, exists: response.ok, skip: false };
+        })
+        .catch(error => {
+            console.error(`[${fileName}] 충돌 확인 오류:`, error);
+            return { item, exists: false, skip: false, error };
+        });
+    });
+    
+    return Promise.all(conflictCheckPromises)
+        .then(results => {
+            // 충돌 항목만 필터링
+            const conflictItems = results.filter(result => result.exists && !result.skip);
+            const skipItems = results.filter(result => result.skip);
+            const nonConflictItems = results.filter(result => !result.exists && !result.skip);
+            
+            // 로그 정보
+            console.log(`충돌 항목: ${conflictItems.length}, 동일 경로 무시: ${skipItems.length}, 비충돌 항목: ${nonConflictItems.length}`);
+            
+            // 자동 이동 모드일 경우, 또는 충돌이 없는 경우 확인 메시지 없이 진행
+            let shouldOverwrite = autoMove;
+            
+            // 충돌 항목이 있고 자동 이동 모드가 아닌 경우만 확인
+            if (conflictItems.length > 0 && !autoMove) {
+                const confirmMsg = 
+                    conflictItems.length === 1 
+                    ? `'${targetFolder}' 폴더에 이미 '${conflictItems[0].item}'이(가) 존재합니다. 덮어쓰시겠습니까?` 
+                    : `'${targetFolder}' 폴더에 ${conflictItems.length}개의 항목이 이미 존재합니다. 모두 덮어쓰시겠습니까?`;
+                
+                shouldOverwrite = confirm(confirmMsg);
+                
+                // 덮어쓰기 거부시
+                if (!shouldOverwrite) {
+                    console.log('사용자가 덮어쓰기를 거부했습니다.');
+                    
+                    // 비충돌 항목만 이동하도록 필터링
+                    itemsToMove = nonConflictItems.map(item => item.item);
+                    
+                    // 이동할 항목이 없으면 작업 중단
+                    if (itemsToMove.length === 0) {
+                        window.isMovingFiles = false;
+                        return Promise.reject('모든 이동 작업이 취소되었습니다.');
+                    }
+                }
+            }
+            
+            // 로딩 표시
+            showLoading();
+            statusInfo.textContent = '파일 이동 중...';
+            
+            // 이동할 최종 항목 목록 (충돌 항목 포함 여부는 사용자 선택에 따름)
+            const finalItemsToMove = shouldOverwrite 
+                ? [...nonConflictItems, ...conflictItems].map(item => item.item) 
+                : nonConflictItems.map(item => item.item);
+            
+            // 무시할 항목은 이미 제외됨
+            
+            // 선택된 모든 항목 이동
+            const movePromises = finalItemsToMove.map(item => {
+                const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                return moveItem(sourceFullPath, targetPath, shouldOverwrite);
+            });
+            
+            return Promise.allSettled(movePromises)
+                .then(moveResults => {
+                    // 결과 분석
+                    const fulfilled = moveResults.filter(result => result.status === 'fulfilled').length;
+                    const rejected = moveResults.filter(result => result.status === 'rejected').length;
+                    
+                    // 이동 결과 메시지
+                    let resultMessage = `${fulfilled}개 항목을 이동했습니다.`;
+                    if (rejected > 0) {
+                        resultMessage += ` ${rejected}개 항목 이동 실패.`;
+                    }
+                    if (skipItems.length > 0) {
+                        resultMessage += ` ${skipItems.length}개 항목 동일 경로로 무시됨.`;
+                    }
+                    
+                    // 화면에 결과 표시
+                    statusInfo.textContent = resultMessage;
+                    
+                    // 선택 초기화
+                    clearSelection();
+                    
+                    // 목록 새로고침
+                    return loadFiles(currentPath);
+                })
+                .catch(error => {
+                    // 이동 실패
+                    statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error}`;
+                    console.error('Move error:', error);
+                    return Promise.reject(error);
+                })
+                .finally(() => {
+                    // 이동 상태 초기화 및 로딩 숨김
+                    window.isMovingFiles = false;
+                    hideLoading();
+                });
+        })
+        .catch(error => {
+            window.isMovingFiles = false;
+            statusInfo.textContent = `이동 준비 중 오류: ${error}`;
+            console.error('Move preparation error:', error);
+            return Promise.reject(error);
+    });
+}
+
+// 폴더 잠금 상태 확인
+function isPathLocked(path) {
+    // 잠금 기능을 사용할 수 없으면 항상 false 반환
+    if (!lockFeatureAvailable) {
+        return false;
+    }
+    
+    if (!lockedFolders || lockedFolders.length === 0) {
+        return false;
+    }
+    
+    // 직접 잠긴 폴더인지만 확인 (하위 폴더는 직접 잠기지 않음)
+    // 단, 폴더 조작 시 상위 폴더가 잠겨 있으면 하위 폴더도 접근 불가
+    return lockedFolders.includes(path);
+}
+
+// 경로 또는 그 상위 폴더가 잠겨 있어 접근이 제한되는지 확인
+function isPathAccessRestricted(path) {
+    // 잠금 기능을 사용할 수 없으면 항상 false 반환
+    if (!lockFeatureAvailable) {
+        return false;
+    }
+    
+    if (!lockedFolders || lockedFolders.length === 0) {
+        return false;
+    }
+    
+    return lockedFolders.some(lockedPath => {
+        // 경로가 잠긴 폴더 자체인 경우
+        if (path === lockedPath) {
+            return true;
+        }
+        
+        // 경로가 잠긴 폴더의 하위 경로인 경우 (접근 제한)
+        if (path.startsWith(lockedPath + '/')) {
+            return true;
+        }
+        
+        return false;
+    });
+}
+
+// 폴더 잠금 토글 함수 (수정: 명령 인자 추가)
+function toggleFolderLock(action) {
+    // 잠금 기능을 사용할 수 없으면 경고 표시
+    if (!lockFeatureAvailable) {
+        console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+        // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
+        return;
+    }
+    
+    // 선택된 폴더 항목들 확인
+    const selectedFolders = [];
+    
+    // 선택된 항목들 중에서 폴더만 필터링
+    selectedItems.forEach(itemName => {
+        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
+        if (element && element.getAttribute('data-is-folder') === 'true') {
+            const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+            selectedFolders.push({
+                name: itemName,
+                path: folderPath,
+                isLocked: isPathLocked(folderPath)
+            });
+        }
+    });
+    
+    if (selectedFolders.length === 0) {
+        // 폴더가 선택되지 않았으면 조용히 리턴
+        return;
+    }
+    
+    // 처리할 폴더들을 필터링 (선택된 동작에 따라)
+    const foldersToProcess = action === 'lock' 
+        ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
+        : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
+    
+    if (foldersToProcess.length === 0) {
+        if (action === 'lock') {
+            statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
+        } else {
+            statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
+        }
+        return;
+    }
+    
+    showLoading();
+    
+    // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
+    const processNextFolder = (index) => {
+        if (index >= foldersToProcess.length) {
+            // 모든 폴더 처리 완료
+            loadLockStatus().then(() => {
+                loadFiles(currentPath); // 파일 목록 새로고침
+                const actionText = action === 'lock' ? '잠금' : '잠금 해제';
+                statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
+                hideLoading();
+            });
+            return;
+        }
+        
+        const folder = foldersToProcess[index];
+        const encodedPath = encodeURIComponent(folder.path);
+        
+        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ action: action })
+        })
+        .then(response => {
+            if (!response.ok) {
+                // 404 에러인 경우 기능을 사용할 수 없다고 설정
+                if (response.status === 404) {
+                    lockFeatureAvailable = false;
+                    console.log('폴더 잠금 API가 서버에 구현되어 있지 않습니다.');
+                    throw new Error('폴더 잠금 기능을 사용할 수 없습니다.');
+                }
+                throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
+            }
+            return response.json();
+        })
+        .then(() => {
+            // 다음 폴더 처리
+            processNextFolder(index + 1);
+        })
+        .catch(error => {
+            // 서버에 API가 구현되어 있지 않은 경우 조용히 처리
+            if (!lockFeatureAvailable) {
+                console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+                hideLoading();
+                loadFiles(currentPath);
+                return;
+            }
+            
+            // 일반 오류 발생 시 알림 표시
+            console.error('폴더 잠금/해제 오류:', error);
+            alert(`오류 발생: ${error.message}`);
+            hideLoading();
+            loadFiles(currentPath);
+        });
+    };
+    
+    // 첫 번째 폴더부터 처리 시작
+    processNextFolder(0);
+}
+
+// 잠금 상태 로드 함수
+function loadLockStatus() {
+    // 이미 잠금 기능을 사용할 수 없다고 판단되면 바로 빈 배열 반환
+    if (!lockFeatureAvailable) {
+        console.log('잠금 기능을 사용할 수 없습니다.');
+        return Promise.resolve([]);
+    }
+    
+    return fetch(`${API_BASE_URL}/api/lock-status`)
+        .then(response => {
+            if (!response.ok) {
+                // 404 에러인 경우 기능을 사용할 수 없다고 표시
+                if (response.status === 404) {
+                    lockFeatureAvailable = false;
+                    console.log('잠금 기능이 서버에 구현되어 있지 않습니다.');
+                }
+                // 오류이지만 처리는 계속하기 위해 빈 배열 반환
+                return { lockState: [] };
+            }
+            return response.json();
+        })
+        .then(data => {
+            // data가 null이거나 lockState가 없는 경우 빈 배열로 처리
+            if (!data || !data.lockState) {
+                lockedFolders = [];
+            } else {
+                lockedFolders = data.lockState;
+            }
+            console.log('잠금 폴더 목록:', lockedFolders);
+            return lockedFolders;
+        })
+        .catch(error => {
+            // 콘솔 에러 메시지를 한 번만 표시
+            if (lockFeatureAvailable) {
+                console.error('잠금 상태 조회 오류:', error);
+                // 서버가 기능을 지원하지 않으므로 기능 비활성화
+                lockFeatureAvailable = false;
+            }
+            lockedFolders = [];
+            return [];
+        });
+}
+
+// 경로가 잠긴 폴더인지 확인하는 함수
+function isPathLocked(path) {
+    // 잠금 기능을 사용할 수 없으면 항상 false 반환
+    if (!lockFeatureAvailable) {
+        return false;
+    }
+    
+    if (!lockedFolders || lockedFolders.length === 0) {
+        return false;
+    }
+    
+    return lockedFolders.some(lockedPath => {
+        // 경로가 잠긴 폴더 자체인 경우
+        if (path === lockedPath) {
+            return true;
+        }
+        
+        // 경로가 잠긴 폴더의 하위 경로인 경우 (접근 제한)
+        if (path.startsWith(lockedPath + '/')) {
+            return true;
+        }
+        
+        return false;
+    });
+}
+
+// 폴더 잠금 토글 기능
+function toggleFolderLock(action = 'lock') {
+    // 잠금 기능을 사용할 수 없으면 경고 표시
+    if (!lockFeatureAvailable) {
+        console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+        // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
+        return;
+    }
+    
+    // 선택된 폴더 항목들 확인
+    const selectedFolders = [];
+    
+    // 선택된 항목들 중에서 폴더만 필터링
+    selectedItems.forEach(itemName => {
+        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
+        if (element && element.getAttribute('data-is-folder') === 'true') {
+            const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+            
+            // 상위 폴더가 잠겨있는지 확인 (잠금 동작인 경우)
+            if (action === 'lock' && isPathAccessRestricted(folderPath) && !isPathLocked(folderPath)) {
+                statusInfo.textContent = `상위 폴더가 잠겨 있어 '${itemName}' 폴더는 잠글 수 없습니다.`;
+                return; // 이 폴더는 건너뜀
+            }
+            
+            selectedFolders.push({
+                name: itemName,
+                path: folderPath,
+                isLocked: isPathLocked(folderPath)
+            });
+        }
+    });
+    
+    if (selectedFolders.length === 0) {
+        // 폴더가 선택되지 않았으면 조용히 리턴
+        return;
+    }
+    
+    // 처리할 폴더들을 필터링 (선택된 동작에 따라)
+    const foldersToProcess = action === 'lock' 
+        ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
+        : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
+    
+    if (foldersToProcess.length === 0) {
+        if (action === 'lock') {
+            statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
+        } else {
+            statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
+        }
+        return;
+    }
+    
+    showLoading();
+    
+    // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
+    const processNextFolder = (index) => {
+        if (index >= foldersToProcess.length) {
+            // 모든 폴더 처리 완료
+            loadLockStatus().then(() => {
+                loadFiles(currentPath); // 파일 목록 새로고침
+                const actionText = action === 'lock' ? '잠금' : '잠금 해제';
+                statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
+                hideLoading();
+            });
+            return;
+        }
+        
+        const folder = foldersToProcess[index];
+        const encodedPath = encodeURIComponent(folder.path);
+        
+        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ action: action })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // 서버에서 건너뛴 경우 처리
+            if (data.status === 'skipped') {
+                statusInfo.textContent = data.message;
+            }
+            // 다음 폴더 처리
+            processNextFolder(index + 1);
+        })
+        .catch(error => {
+            alert(`오류 발생: ${error.message}`);
+            hideLoading();
+            loadFiles(currentPath);
+        });
+    };
+    
+    // 첫 번째 폴더부터 처리 시작
+    processNextFolder(0);
+}
+
+// 파일 항목 초기화 - 각 파일/폴더에 이벤트 연결
+function initFileItem(fileItem) {
+    const fileName = fileItem.getAttribute('data-name');
+    
+    // 기존 이벤트 리스너 제거
+    const newFileItem = fileItem.cloneNode(true);
+    if (fileItem.parentNode) {
+        fileItem.parentNode.replaceChild(newFileItem, fileItem);
+        fileItem = newFileItem;
+    }
+    
+    // 더블클릭 이벤트를 파일 항목에 직접 연결
+    fileItem.addEventListener('dblclick', function(e) {
+        // 이벤트 전파 중지
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 다른 파일 항목으로의 더블클릭 중복 처리 방지
+        if (!window.doubleClickEnabled) {
+            console.log('더블클릭 처리 무시: 이미 처리 중');
+            return;
+        }
+        
+        try {
+            // 요소 검증 추가 - 현재 마우스 위치에 있는 파일 항목이 맞는지 확인
+            const elementAtPoint = document.elementFromPoint(window.mouseX || e.clientX, window.mouseY || e.clientY);
+            
+            // elementAtPoint가 유효하고, closest 메서드가 있는지 확인
+            if (elementAtPoint && typeof elementAtPoint.closest === 'function') {
+                const targetFileItem = elementAtPoint.closest('.file-item, .file-item-grid');
+                
+                // 실제 마우스 위치의 항목과 이벤트 대상이 다른 경우
+                if (targetFileItem && targetFileItem !== fileItem) {
+                    console.log('마우스 위치와 이벤트 대상 불일치, 실제 대상으로 재지정');
+                    // 실제 마우스 위치의 대상으로 이벤트 처리
+                    handleFileDblClick(e, targetFileItem);
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('요소 검증 중 오류 발생:', error);
+            // 오류가 발생해도 계속 진행
+        }
+        
+        // 이벤트 처리 위임
+        handleFileDblClick(e, fileItem);
+    }, true);
+    
+    // 컨텍스트 메뉴 (우클릭) 이벤트 연결
+    fileItem.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showContextMenu(e, fileItem);
+    });
+    
+    // 클릭 이벤트 연결 (mousedown 대신 click 이벤트 사용)
+    fileItem.addEventListener('click', (e) => {
+        // 우클릭은 여기서 처리하지 않음 (contextmenu 이벤트에서 처리)
+        if (e.button !== 0) return;
+        
+        // 이름 변경 중이면 무시
+        if (fileItem.classList.contains('renaming')) return;
+        
+        // Ctrl+클릭은 다중 선택을 위해 처리
+        if (e.ctrlKey) {
+            toggleSelection(fileItem);
+        } 
+        // Shift+클릭은 범위 선택을 위해 처리
+        else if (e.shiftKey) {
+            handleShiftSelect(fileItem);
+        } 
+        // 일반 클릭은 단일 선택을 위해 처리
+        else {
+            // 상위 폴더(..)는 선택 로직을 다르게 처리
+            if (fileItem.getAttribute('data-parent-dir') === 'true') {
+                return; // 상위 폴더는 선택하지 않음
+            }
+            
+            // 모든 선택 해제 후 현재 항목 선택
+            clearSelection();
+            selectItem(fileItem);
+        }
+        
+        // 이벤트 전파 중지 (드래그 선택 이벤트와 충돌 방지)
+        e.stopPropagation();
+    });
+    
+    // 드래그 시작 처리를 위한 mousedown 이벤트 유지
+    fileItem.addEventListener('mousedown', (e) => {
+        // 우클릭은 여기서 처리하지 않음
+        if (e.button !== 0) return;
+        
+        // 상위 폴더는 드래그되지 않도록
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            return;
+        }
+        
+        // 이름 변경 중이면 무시
+        if (fileItem.classList.contains('renaming')) return;
+        
+        // 파일 아이템 드래그 가능하도록 설정
+        fileItem.setAttribute('draggable', 'true');
+        
+        // 선택된 항목을 클릭한 경우 선택 상태 유지 (드래그 시작 가능)
+        if (fileItem.classList.contains('selected')) {
+            // mousedown 이벤트의 기본 동작을 멈추지 않음 (drag 이벤트 발생 허용)
+            // 대신 e.stopPropagation()만 호출하여 document의 mousedown 핸들러가 호출되지 않도록 함
+            e.stopPropagation();
+            return;
+        }
+        
+        // 선택되지 않은 항목을 클릭한 경우 새로 선택 (mousedown에서 즉시 선택)
+        if (!e.ctrlKey && !e.shiftKey) {
+            clearSelection();
+            selectItem(fileItem);
+            // 드래그를 허용하기 위해 기본 동작은 막지 않음
+            e.stopPropagation();
+        }
+    });
+    
+    // 드래그 이벤트 연결
+    fileItem.addEventListener('dragstart', (e) => {
+        // 상위 폴더는 드래그되지 않도록
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            e.preventDefault();
+            return;
+        }
+        
+        // 선택된 항목이 아니면 드래그 취소
+        if (!fileItem.classList.contains('selected')) {
+            // 선택되지 않은 항목은 먼저 선택
+            clearSelection();
+            selectItem(fileItem);
+        }
+        
+        // 드래그 데이터 설정
+        if (selectedItems.size > 1) {
+            // 여러 항목 선택 시 모든 선택 항목 ID 저장
+            e.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedItems)));
+        } else {
+            // 단일 항목 드래그
+            e.dataTransfer.setData('text/plain', fileItem.getAttribute('data-name'));
+        }
+        
+        // 내부 드래그 표시
+        e.dataTransfer.setData('application/webdav-internal', 'true');
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // 글로벌 드래그 상태 추적 시작
+        window.startFileDrag(selectedItems);
+        
+        // 드래그 중 스타일 적용
+        setTimeout(() => {
+            document.querySelectorAll('.file-item.selected, .file-item-grid.selected').forEach(item => {
+                item.classList.add('dragging');
+            });
+        }, 0);
+    });
+    
+    // 드래그 종료 이벤트
+    fileItem.addEventListener('dragend', (e) => {
+        console.log('파일 항목 dragend 이벤트 발생');
+        
+        // 보편적인 드래그 상태 정리 함수 호출
+        handleDragEnd();
+        
+        // 이벤트 캡처링이 진행되도록 중단하지 않음
+    });
+}
+
+// 파일/폴더 목록 화면에 표시
+function displayFiles(files, parentPath = '') {
+    const fileList = document.getElementById('fileList');
+    const fileGrid = document.getElementById('fileGrid');
+    
+    // 목록 초기화
+    fileList.innerHTML = '';
+    fileGrid.innerHTML = '';
+    
+    // 필터링된 파일 목록 가져오기
+    const filteredFiles = getFilteredFiles(files);
+    sortFiles(filteredFiles);
+    
+    // 상위 폴더로 이동 항목 추가 (루트가 아닌 경우)
+    if (currentPath) {
+        // 상위 폴더 경로 계산
+        const parentDir = getParentPath(currentPath);
+        
+        // 목록 뷰에 상위 폴더 추가
+        const parentItem = document.createElement('div');
+        parentItem.className = 'file-item parent-dir';
+        parentItem.setAttribute('data-name', '..');
+        parentItem.setAttribute('data-is-folder', 'true');
+        parentItem.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시
+        parentItem.setAttribute('data-id', '..');
+        parentItem.innerHTML = `
+            <div class="file-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="file-name">..</div>
+            <div class="file-size"></div>
+            <div class="file-date"></div>
+        `;
+        fileList.appendChild(parentItem);
+        
+        // 그리드 뷰에 상위 폴더 추가
+        const parentItemGrid = document.createElement('div');
+        parentItemGrid.className = 'file-item-grid parent-dir';
+        parentItemGrid.setAttribute('data-name', '..');
+        parentItemGrid.setAttribute('data-is-folder', 'true');
+        parentItemGrid.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시
+        parentItemGrid.innerHTML = `
+            <div class="file-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="file-name">..</div>
+        `;
+        fileGrid.appendChild(parentItemGrid);
+        
+        // 초기화 함수 호출 (직접 이벤트를 연결하지 않고 initFileItem을 통해서만 처리)
+        initFileItem(parentItem);
+        initFileItem(parentItemGrid);
+    }
+    
+    // 각 파일/폴더 항목 생성
+    filteredFiles.forEach(file => {
+        // 파일 정보 맵에 저장 (나중에 참조하기 위함)
+        fileInfoMap.set(file.name, file);
+        
+        // 파일/폴더 아이콘 결정
+        const icon = getFileIcon(file);
+        
+        // 목록 뷰용 항목 생성
+        const listItem = document.createElement('div');
+        listItem.className = 'file-item';
+        listItem.setAttribute('data-name', file.name);
+        listItem.setAttribute('data-is-folder', file.isFolder.toString());
+        listItem.setAttribute('data-id', file.name);
+        listItem.setAttribute('draggable', 'true');
+        listItem.innerHTML = `
+            <div class="file-icon">${icon}</div>
+            <div class="file-name">${file.name}</div>
+            <div class="file-size">${file.isFolder ? '' : formatFileSize(file.size)}</div>
+            <div class="file-date">${formatDate(file.modifiedTime)}</div>
+        `;
+        fileList.appendChild(listItem);
+        
+        // 그리드 뷰용 항목 생성
+        const gridItem = document.createElement('div');
+        gridItem.className = 'file-item-grid';
+        gridItem.setAttribute('data-name', file.name);
+        gridItem.setAttribute('data-is-folder', file.isFolder.toString());
+        gridItem.setAttribute('draggable', 'true');
+        gridItem.innerHTML = `
+            <div class="file-icon">${icon}</div>
+            <div class="file-name">${file.name}</div>
+        `;
+        fileGrid.appendChild(gridItem);
+        
+        // 각 항목 초기화 (이벤트 연결)
+        initFileItem(listItem);
+        initFileItem(gridItem);
+    });
+    
+    // 선택 가능한 항목으로 만들기
+    const fileItems = document.querySelectorAll('.file-item, .file-item-grid');
+    
+    // 현재 폴더에 있는 파일 개수 표시
+    updateFileCount(filteredFiles.length);
+    
+    // 버튼 상태 업데이트
+    updateButtonStates();
+}
 
 // 마우스 위치 추적 기능 추가
 document.addEventListener('mousemove', function(e) {

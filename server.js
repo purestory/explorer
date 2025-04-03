@@ -813,6 +813,33 @@ app.post('/api/lock/:path(*)', (req, res) => {
     if (action === 'lock') {
       // 이미 잠겨있는지 확인
       if (!lockedFolders.lockState.includes(folderPath)) {
+        // 상위 경로가 이미 잠겨 있는지 확인
+        const isParentLocked = lockedFolders.lockState.some(lockedPath => 
+          folderPath.startsWith(lockedPath + '/'));
+        
+        if (isParentLocked) {
+          log(`상위 폴더가 이미 잠겨 있어 ${folderPath} 폴더는 잠그지 않습니다.`);
+          return res.status(200).json({
+            success: true,
+            message: "상위 폴더가 이미 잠겨 있습니다.",
+            path: folderPath,
+            action: action,
+            status: 'skipped'
+          });
+        }
+        
+        // 현재 폴더의 하위 폴더 중 이미 잠긴 폴더가 있는지 확인하고 해제
+        const subLockedFolders = lockedFolders.lockState.filter(lockedPath => 
+          lockedPath.startsWith(folderPath + '/'));
+        
+        if (subLockedFolders.length > 0) {
+          log(`${folderPath} 폴더 잠금으로 인해 ${subLockedFolders.length}개의 하위 폴더 잠금이 해제됩니다.`);
+          // 하위 폴더는 잠금 해제
+          lockedFolders.lockState = lockedFolders.lockState.filter(path => 
+            !path.startsWith(folderPath + '/'));
+        }
+        
+        // 현재 폴더 잠금
         lockedFolders.lockState.push(folderPath);
         log(`폴더 잠금 완료: ${folderPath}`);
       } else {

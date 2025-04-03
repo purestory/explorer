@@ -1008,36 +1008,40 @@ h1 {
 
 /* 잠긴 폴더 스타일 */
 .locked-folder {
+    background-color: rgba(255, 165, 0, 0.1);
     position: relative;
-    background-color: rgba(255, 240, 240, 0.5);
 }
 
-.locked-folder::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border: 2px solid #ff6b6b;
-    border-radius: 5px;
-    pointer-events: none;
+.locked-folder .file-icon i {
+    color: #ff9800;
 }
 
 .lock-icon {
     position: absolute;
-    top: 5px;
-    right: 5px;
-    width: 20px;
-    height: 20px;
-    background-color: #ff6b6b;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 10px;
-    z-index: 1;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #ff9800;
+    font-size: 14px;
+}
+
+/* 접근 제한된 폴더 스타일 (상위 폴더가 잠긴 경우) */
+.restricted-folder {
+    background-color: rgba(158, 158, 158, 0.1);
+    position: relative;
+}
+
+.restricted-folder .file-icon i {
+    color: #9e9e9e;
+}
+
+.restricted-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9e9e9e;
+    font-size: 14px;
 }
 
 /* 목록 보기에서 잠긴 폴더 스타일 */
