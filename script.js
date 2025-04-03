@@ -3526,9 +3526,20 @@ function toggleFolderLock(action) {
 
 // 잠금 상태 로드 함수
 function loadLockStatus() {
+    // 이미 잠금 기능을 사용할 수 없다고 판단되면 바로 빈 배열 반환
+    if (!lockFeatureAvailable) {
+        console.log('잠금 기능을 사용할 수 없습니다.');
+        return Promise.resolve([]);
+    }
+    
     return fetch(`${API_BASE_URL}/api/lock-status`)
         .then(response => {
             if (!response.ok) {
+                // 404 에러인 경우 기능을 사용할 수 없다고 표시
+                if (response.status === 404) {
+                    lockFeatureAvailable = false;
+                    console.log('잠금 기능이 서버에 구현되어 있지 않습니다.');
+                }
                 throw new Error('잠금 상태 조회 실패');
             }
             return response.json();
@@ -3539,9 +3550,125 @@ function loadLockStatus() {
             return lockedFolders;
         })
         .catch(error => {
-            console.error('잠금 상태 조회 오류:', error);
+            // 콘솔 에러 메시지를 한 번만 표시
+            if (lockFeatureAvailable) {
+                console.error('잠금 상태 조회 오류:', error);
+                // 첫 번째 오류 발생 시 잠금 기능 비활성화 고려
+                // 단, 네트워크 오류 등의 일시적 문제일 수 있으므로 3회 연속 실패 시 비활성화하는 방식도 고려 가능
+            }
             return [];
         });
+}
+
+// 경로가 잠긴 폴더인지 확인하는 함수
+function isPathLocked(path) {
+    // 잠금 기능을 사용할 수 없으면 항상 false 반환
+    if (!lockFeatureAvailable) {
+        return false;
+    }
+    
+    if (!lockedFolders || lockedFolders.length === 0) {
+        return false;
+    }
+    
+    return lockedFolders.some(lockedPath => {
+        // 경로가 잠긴 폴더 자체인 경우
+        if (path === lockedPath) {
+            return true;
+        }
+        
+        // 경로가 잠긴 폴더의 하위 경로인 경우
+        if (path.startsWith(lockedPath + '/')) {
+            return true;
+        }
+        
+        return false;
+    });
+}
+
+// 폴더 잠금 토글 기능
+function toggleFolderLock(action = 'lock') {
+    // 잠금 기능을 사용할 수 없으면 경고 표시
+    if (!lockFeatureAvailable) {
+        alert('폴더 잠금 기능을 사용할 수 없습니다.');
+        return;
+    }
+    
+    // 선택된 폴더 항목들 확인
+    const selectedFolders = [];
+    
+    // 선택된 항목들 중에서 폴더만 필터링
+    selectedItems.forEach(itemName => {
+        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
+        if (element && element.getAttribute('data-is-folder') === 'true') {
+            const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+            selectedFolders.push({
+                name: itemName,
+                path: folderPath,
+                isLocked: isPathLocked(folderPath)
+            });
+        }
+    });
+    
+    if (selectedFolders.length === 0) {
+        alert('잠금/해제할 폴더를 선택해주세요.');
+        return;
+    }
+    
+    // 처리할 폴더들을 필터링 (선택된 동작에 따라)
+    const foldersToProcess = action === 'lock' 
+        ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
+        : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
+    
+    if (foldersToProcess.length === 0) {
+        if (action === 'lock') {
+            statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
+        } else {
+            statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
+        }
+        return;
+    }
+    
+    showLoading();
+    
+    // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
+    const processNextFolder = (index) => {
+        if (index >= foldersToProcess.length) {
+            // 모든 폴더 처리 완료
+            loadLockStatus().then(() => {
+                loadFiles(currentPath); // 파일 목록 새로고침
+                const actionText = action === 'lock' ? '잠금' : '잠금 해제';
+                statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
+                hideLoading();
+            });
+            return;
+        }
+        
+        const folder = foldersToProcess[index];
+        const encodedPath = encodeURIComponent(folder.path);
+        
+        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
+            }
+            return response.json();
+        })
+        .then(() => {
+            // 다음 폴더 처리
+            processNextFolder(index + 1);
+        })
+        .catch(error => {
+            alert(`오류 발생: ${error.message}`);
+            hideLoading();
+            loadFiles(currentPath);
+        });
+    };
+    
+    // 첫 번째 폴더부터 처리 시작
+    processNextFolder(0);
 }
 
 // 파일 항목 초기화 - 각 파일/폴더에 이벤트 연결
