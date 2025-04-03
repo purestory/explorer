@@ -3496,13 +3496,6 @@ function loadLockStatus() {
 function initFileItem(fileItem) {
     const fileName = fileItem.getAttribute('data-name');
     
-    // 이전 이벤트 리스너 제거 (클론된 요소에 새 이벤트 리스너 추가 전)
-    const newItem = fileItem.cloneNode(true);
-    if (fileItem.parentNode) {
-        fileItem.parentNode.replaceChild(newItem, fileItem);
-        fileItem = newItem;
-    }
-    
     // 더블클릭 이벤트 연결
     fileItem.addEventListener('dblclick', (e) => {
         handleFileDblClick(e, fileItem);
