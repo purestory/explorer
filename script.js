@@ -2684,95 +2684,147 @@ function downloadFile(fileInfo) {
         return;
     }
     
-    // 시작 시간 기록 (속도 계산용)
-    const startTime = new Date().getTime();
+    // 다운로드 상태 업데이트
+    downloadStatus.textContent = `${fileName} 다운로드 중...`;
+    statusInfo.textContent = `${fileName} 다운로드 중...`;
     
-    // XHR로 다운로드 수행
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', fileUrl, true);
-    xhr.responseType = 'blob';
-    currentDownloadXHR = xhr;
+    try {
+        // 먼저 브라우저 기본 다운로드 메서드 사용 시도
+        const downloadLink = document.createElement('a');
+        downloadLink.href = fileUrl;
+        downloadLink.download = fileName;
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        
+        // 클릭 이벤트 발생 전에 상태 바 업데이트
+        downloadProgressBar.style.width = '10%';
+        
+        // 링크 클릭 및 제거
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // 다운로드 시작된 것으로 간주하고 상태 바 업데이트
+        downloadProgressBar.style.width = '100%';
+        
+        // 잠시 후 다음 파일로 진행
+        setTimeout(() => {
+            processNextDownload();
+        }, 1500);
+        
+        return;
+    } catch (error) {
+        console.log('기본 다운로드 방식 실패, XHR 시도:', error);
+        downloadProgressBar.style.width = '0%';
+    }
     
-    // 진행 상황 모니터링
-    xhr.onprogress = (e) => {
-        if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            downloadProgressBar.style.width = `${percent}%`;
-            
-            // 다운로드 속도 계산
-            const currentTime = new Date().getTime();
-            const elapsedSeconds = (currentTime - startTime) / 1000;
-            const bytesPerSecond = e.loaded / elapsedSeconds;
-            const speed = formatFileSize(bytesPerSecond) + '/s';
-            
-            // 남은 시간 계산
-            const remainingBytes = e.total - e.loaded;
-            const remainingSeconds = remainingBytes / bytesPerSecond;
-            let timeDisplay = '';
-            
-            if (remainingSeconds < 60) {
-                timeDisplay = `${Math.round(remainingSeconds)}초`;
-            } else if (remainingSeconds < 3600) {
-                timeDisplay = `${Math.floor(remainingSeconds / 60)}분 ${Math.round(remainingSeconds % 60)}초`;
-            } else {
-                timeDisplay = `${Math.floor(remainingSeconds / 3600)}시간 ${Math.floor((remainingSeconds % 3600) / 60)}분`;
-            }
-            
-            // 상태 업데이트
-            downloadStatus.textContent = `${fileName} 다운로드 중: ${percent}% (${speed}, 남은 시간: ${timeDisplay})`;
-            statusInfo.textContent = `${fileName} 다운로드 중: ${percent}%`;
-        }
-    };
-    
-    // 다운로드 완료
-    xhr.onload = function() {
-        if (this.status === 200) {
-            // Blob URL 생성
-            const blob = new Blob([this.response]);
-            const url = window.URL.createObjectURL(blob);
-            
-            // 다운로드 링크 생성 및 클릭
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            
-            // 지연 후 Blob URL 해제
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
+    // 기본 방식 실패 시 대체 방법: XHR 다운로드 시도
+    try {
+        // 시작 시간 기록 (속도 계산용)
+        const startTime = new Date().getTime();
+        
+        // XHR로 다운로드 수행
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', fileUrl, true);
+        xhr.responseType = 'blob';
+        currentDownloadXHR = xhr;
+        
+        // 진행 상황 모니터링
+        xhr.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                downloadProgressBar.style.width = `${percent}%`;
                 
-                // 다음 파일 다운로드 진행
+                // 다운로드 속도 계산
+                const currentTime = new Date().getTime();
+                const elapsedSeconds = (currentTime - startTime) / 1000;
+                const bytesPerSecond = e.loaded / elapsedSeconds;
+                const speed = formatFileSize(bytesPerSecond) + '/s';
+                
+                // 남은 시간 계산
+                const remainingBytes = e.total - e.loaded;
+                const remainingSeconds = remainingBytes / bytesPerSecond;
+                let timeDisplay = '';
+                
+                if (remainingSeconds < 60) {
+                    timeDisplay = `${Math.round(remainingSeconds)}초`;
+                } else if (remainingSeconds < 3600) {
+                    timeDisplay = `${Math.floor(remainingSeconds / 60)}분 ${Math.round(remainingSeconds % 60)}초`;
+                } else {
+                    timeDisplay = `${Math.floor(remainingSeconds / 3600)}시간 ${Math.floor((remainingSeconds % 3600) / 60)}분`;
+                }
+                
+                // 상태 업데이트
+                downloadStatus.textContent = `${fileName} 다운로드 중: ${percent}% (${speed}, 남은 시간: ${timeDisplay})`;
+                statusInfo.textContent = `${fileName} 다운로드 중: ${percent}%`;
+            }
+        };
+        
+        // 다운로드 완료
+        xhr.onload = function() {
+            if (this.status === 200) {
+                // Blob URL 생성
+                const blob = new Blob([this.response]);
+                const url = window.URL.createObjectURL(blob);
+                
+                // 다운로드 링크 생성 및 클릭
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                
+                // 지연 후 Blob URL 해제
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    // 다음 파일 다운로드 진행
+                    processNextDownload();
+                }, 100);
+            } else {
+                console.error(`파일 다운로드 오류: ${fileName} (${this.status})`);
+                downloadStatus.textContent = `${fileName} 다운로드 실패: ${this.status}`;
+                
+                // 다음 파일로 진행
                 processNextDownload();
-            }, 100);
-        } else {
-            console.error(`파일 다운로드 오류: ${fileName} (${this.status})`);
-            downloadStatus.textContent = `${fileName} 다운로드 실패: ${this.status}`;
+            }
+        };
+        
+        // 다운로드 오류
+        xhr.onerror = function() {
+            console.error(`파일 다운로드 네트워크 오류: ${fileName}`);
+            downloadStatus.textContent = `${fileName} 다운로드 실패: 네트워크 오류`;
+            
+            // XHR 방식 실패 시 마지막 시도로 새 창에서 직접 다운로드
+            downloadStatus.textContent = `${fileName} 직접 다운로드 시도 중...`;
+            window.open(fileUrl, '_blank');
             
             // 다음 파일로 진행
-            processNextDownload();
-        }
-    };
-    
-    // 다운로드 오류
-    xhr.onerror = function() {
-        console.error(`파일 다운로드 네트워크 오류: ${fileName}`);
-        downloadStatus.textContent = `${fileName} 다운로드 실패: 네트워크 오류`;
+            setTimeout(() => {
+                processNextDownload();
+            }, 1500);
+        };
+        
+        // 취소
+        xhr.onabort = function() {
+            console.log(`${fileName} 다운로드 취소됨`);
+            // 취소된 경우 이미 cancleDownload 함수에서 처리
+        };
+        
+        // 다운로드 시작
+        xhr.send();
+        
+    } catch (finalError) {
+        console.error('모든 다운로드 방식 실패:', finalError);
+        downloadStatus.textContent = `${fileName} 다운로드 실패: 브라우저 제한`;
+        statusInfo.textContent = `다운로드 오류: 브라우저 보안 정책 또는 광고 차단기 확인 필요`;
         
         // 다음 파일로 진행
-        processNextDownload();
-    };
-    
-    // 취소
-    xhr.onabort = function() {
-        console.log(`${fileName} 다운로드 취소됨`);
-        // 취소된 경우 이미 cancleDownload 함수에서 처리
-    };
-    
-    // 다운로드 시작
-    xhr.send();
+        setTimeout(() => {
+            processNextDownload();
+        }, 1500);
+    }
 }
 
 // 항목 이동
