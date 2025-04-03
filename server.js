@@ -515,6 +515,11 @@ app.post('/api/upload', (req, res) => {
                 log(`하위 디렉토리 생성됨: ${destinationDir}`);
             }
 
+            // 파일 시스템에 저장하기 전 상세 로그 추가
+            log(`[Upload Detail] Original Relative Path: ${fileInfo.relativePath}`);
+            log(`[Upload Detail] Final Filename: ${finalFileName} (Length: ${finalFileName.length}, Bytes: ${Buffer.byteLength(finalFileName)})`);
+            log(`[Upload Detail] Destination Path: ${destinationPath} (Length: ${destinationPath.length}, Bytes: ${Buffer.byteLength(destinationPath)})`);
+
             // 파일 시스템에 저장 (메모리 버퍼 사용)
             fs.writeFileSync(destinationPath, file.buffer);
             fs.chmodSync(destinationPath, 0o666); // 저장된 파일 권한 설정
