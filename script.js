@@ -1220,6 +1220,9 @@ function renderFiles(files) {
                     
                     // 파일 항목을 목록에 추가
                     filesContainer.appendChild(fileItem);
+                    
+                    // 파일 항목 초기화 (이벤트 리스너 연결)
+                    initFileItem(fileItem);
                 });
             }
             
