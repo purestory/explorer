@@ -19,6 +19,8 @@ let dragDropCounter = 0;
 let dragDropMoveCounter = 0; // 드래그앤드롭 파일 이동 호출 카운터 추가
 let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
 let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 추가
+// 폴더 잠금 상태 저장
+let lockedFolders = [];
 
 // DOM 요소
 const fileView = document.getElementById('fileView');
@@ -154,13 +156,27 @@ function initContextMenu() {
             const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
             const ctxOpen = document.getElementById('ctxOpen');
             const ctxDownload = document.getElementById('ctxDownload');
+            const ctxLock = document.getElementById('ctxLock'); // 잠금 메뉴 항목
             
             if (isFolder) {
                 ctxOpen.innerHTML = '<i class="fas fa-folder-open"></i> 열기';
                 ctxDownload.style.display = 'none';
+                ctxLock.style.display = 'flex'; // 폴더인 경우에만 잠금 메뉴 표시
+                
+                // 경로 가져오기
+                const itemName = fileItem.getAttribute('data-name');
+                const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+                
+                // 잠금 상태에 따라 메뉴 텍스트 변경
+                if (isPathLocked(itemPath)) {
+                    ctxLock.innerHTML = '<i class="fas fa-unlock"></i> 잠금 해제';
+                } else {
+                    ctxLock.innerHTML = '<i class="fas fa-lock"></i> 잠금';
+                }
             } else {
                 ctxOpen.innerHTML = '<i class="fas fa-external-link-alt"></i> 열기';
                 ctxDownload.style.display = 'flex';
+                ctxLock.style.display = 'none'; // 파일인 경우 잠금 메뉴 숨김
             }
             
             // 압축 메뉴 표시
@@ -236,6 +252,10 @@ function initContextMenu() {
     document.getElementById('ctxPaste').addEventListener('click', pasteItems);
     document.getElementById('ctxRename').addEventListener('click', showRenameDialog);
     document.getElementById('ctxDelete').addEventListener('click', deleteSelectedItems);
+    
+    // 폴더 잠금 토글 이벤트 추가
+    document.getElementById('ctxLock').addEventListener('click', toggleFolderLock);
+    
     document.getElementById('ctxNewFolder').addEventListener('click', () => {
         // 현재 폴더에 존재하는 파일 목록 확인
         const fileItems = document.querySelectorAll('.file-item');
@@ -634,6 +654,9 @@ function renderFiles(files) {
     // 파일 목록 초기화
     fileView.innerHTML = '';
     
+    // 잠금 상태 로드
+    loadLockStatus();
+    
     // 목록 보기인 경우 헤더 추가
     if (listView) {
         // 헤더 추가
@@ -745,10 +768,26 @@ function renderFiles(files) {
             // 파일 항목 생성
             const fileItem = document.createElement('div');
             fileItem.className = 'file-item';
-            fileItem.setAttribute('data-id', file.name);
             fileItem.setAttribute('data-name', file.name);
-            fileItem.setAttribute('data-is-folder', file.isFolder);
-            fileItem.setAttribute('draggable', 'true'); // 드래그 가능하도록 설정
+            fileItem.setAttribute('data-id', file.name); // ID 속성 추가
+            fileItem.setAttribute('data-is-folder', file.isFolder.toString());
+            fileItem.setAttribute('data-size', file.size);
+            fileItem.setAttribute('data-date', file.modifiedTime);
+            fileItem.setAttribute('draggable', 'true');
+            
+            // 상위 폴더인 경우 (..) 추가 속성 설정
+            if (file.name === '..') {
+                fileItem.setAttribute('data-parent-dir', 'true');
+            }
+            
+            // 파일 경로 계산
+            const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+            fileItem.setAttribute('data-path', filePath);
+            
+            // 잠금 상태 표시
+            if (file.isFolder && isPathLocked(filePath)) {
+                fileItem.classList.add('locked-folder');
+            }
             
             // 파일 아이콘 및 미리보기 설정
             const fileIcon = document.createElement('div');
@@ -810,6 +849,14 @@ function renderFiles(files) {
             fileItem.appendChild(fileName);
             fileItem.appendChild(renameInput);
             fileItem.appendChild(fileDetails);
+            
+            // 잠긴 폴더에 잠금 아이콘 추가
+            if (file.isFolder && isPathLocked(filePath)) {
+                const lockIcon = document.createElement('div');
+                lockIcon.className = 'lock-icon';
+                lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
+                fileItem.appendChild(lockIcon);
+            }
             
             // 이벤트 리스너 설정
             fileItem.addEventListener('click', (e) => {
@@ -1170,15 +1217,43 @@ function deleteSelectedItems() {
         return;
     }
     
-    const itemsText = itemsToDelete.size > 1 
-        ? `${itemsToDelete.size}개 항목` 
-        : document.querySelector(`.file-item.selected[data-name="${[...itemsToDelete][0]}"]`).getAttribute('data-name');
+    // 잠긴 폴더에 속한 항목들 확인
+    const lockedItems = [];
+    const deleteableItems = [];
+    
+    itemsToDelete.forEach(itemId => {
+        const path = currentPath ? `${currentPath}/${itemId}` : itemId;
+        
+        // 잠긴 폴더 확인
+        if (isPathLocked(path)) {
+            lockedItems.push(itemId);
+        } else {
+            deleteableItems.push(itemId);
+        }
+    });
+    
+    // 잠긴 폴더에 속한 항목이 있으면 경고창 한 번만 표시
+    if (lockedItems.length > 0) {
+        const message = lockedItems.length === 1 
+            ? `'${lockedItems[0]}'은(는) 잠긴 폴더이므로 삭제할 수 없습니다.` 
+            : `${lockedItems.length}개 항목은 잠긴 폴더이므로 삭제할 수 없습니다.`;
+        alert(message);
+        
+        // 삭제 가능한 항목이 없으면 종료
+        if (deleteableItems.length === 0) {
+            return;
+        }
+    }
+    
+    const itemsText = deleteableItems.length > 1 
+        ? `${deleteableItems.length}개 항목` 
+        : document.querySelector(`.file-item.selected[data-name="${deleteableItems[0]}"]`).getAttribute('data-name');
     
     if (confirm(`정말 ${itemsText}을(를) 삭제하시겠습니까?`)) {
         // 선택된 모든 항목 삭제
         const promises = [];
         
-        itemsToDelete.forEach(itemId => {
+        deleteableItems.forEach(itemId => {
             const path = currentPath ? `${currentPath}/${itemId}` : itemId;
             // 경로에 한글이 포함된 경우를 위해 인코딩 처리
             const encodedPath = encodeURIComponent(path);
@@ -1189,12 +1264,20 @@ function deleteSelectedItems() {
                 })
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error(`${itemId} 삭제 실패`);
+                        if (response.status === 403) {
+                            throw new Error(`${itemId}는 잠긴 폴더이므로 삭제할 수 없습니다.`);
+                        } else {
+                            throw new Error(`${itemId} 삭제 실패`);
+                        }
                     }
                     return itemId;
                 })
             );
         });
+        
+        if (promises.length === 0) {
+            return; // 모든 항목이 잠긴 폴더인 경우
+        }
         
         showLoading();
         statusInfo.textContent = '삭제 중...';
@@ -2949,4 +3032,100 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
             console.error('Move preparation error:', error);
             return Promise.reject(error);
     });
+}
+
+// 폴더 잠금 상태 확인
+function isPathLocked(path) {
+    // 직접 잠긴 폴더인지 확인
+    if (lockedFolders.includes(path)) {
+        return true;
+    }
+    
+    // 상위 폴더가 잠겨 있는지 확인
+    return lockedFolders.some(lockedPath => {
+        return path.startsWith(lockedPath + '/');
+    });
+}
+
+// 폴더 잠금 토글 함수
+function toggleFolderLock() {
+    // 선택된 폴더 항목들 확인
+    const selectedFolders = [];
+    
+    // 선택된 항목들 중에서 폴더만 필터링
+    selectedItems.forEach(itemName => {
+        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
+        if (element && element.getAttribute('data-is-folder') === 'true') {
+            const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+            selectedFolders.push({
+                name: itemName,
+                path: folderPath
+            });
+        }
+    });
+    
+    if (selectedFolders.length === 0) {
+        alert('잠금/해제할 폴더를 선택해주세요.');
+        return;
+    }
+    
+    showLoading();
+    
+    // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
+    const processNextFolder = (index) => {
+        if (index >= selectedFolders.length) {
+            // 모든 폴더 처리 완료
+            loadLockStatus().then(() => {
+                loadFiles(currentPath); // 파일 목록 새로고침
+                statusInfo.textContent = `${selectedFolders.length}개 폴더 잠금/해제 완료`;
+                hideLoading();
+            });
+            return;
+        }
+        
+        const folder = selectedFolders[index];
+        const encodedPath = encodeURIComponent(folder.path);
+        
+        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`'${folder.name}' 폴더 잠금/해제 처리 실패`);
+            }
+            return response.json();
+        })
+        .then(() => {
+            // 다음 폴더 처리
+            processNextFolder(index + 1);
+        })
+        .catch(error => {
+            alert(`오류 발생: ${error.message}`);
+            hideLoading();
+            loadFiles(currentPath);
+        });
+    };
+    
+    // 첫 번째 폴더부터 처리 시작
+    processNextFolder(0);
+}
+
+// 잠금 상태 로드 함수
+function loadLockStatus() {
+    return fetch(`${API_BASE_URL}/api/lock-status`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('잠금 상태 조회 실패');
+            }
+            return response.json();
+        })
+        .then(data => {
+            lockedFolders = data.lockState;
+            console.log('잠금 폴더 목록:', lockedFolders);
+            return lockedFolders;
+        })
+        .catch(error => {
+            console.error('잠금 상태 조회 오류:', error);
+            return [];
+        });
 }

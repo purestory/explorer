@@ -1,15 +1,18 @@
 [Unit]
-Description=WebDAV Server
+Description=WebDAV Explorer Server
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/node /home/purestory/webdav/server.js
-Restart=always
+Type=simple
 User=purestory
-Group=purestory
-Environment=PATH=/usr/bin:/usr/local/bin
-Environment=NODE_ENV=production
 WorkingDirectory=/home/purestory/webdav
+ExecStart=/usr/bin/node /home/purestory/webdav/server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=webdav-server
+Environment=NODE_ENV=production
 
 [Install]
-WantedBy=multi-user.target 
+WantedBy=multi-user.target

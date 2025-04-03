@@ -12,6 +12,54 @@ const PORT = process.env.PORT || 3333;
 const logFile = fs.createWriteStream(path.join(__dirname, 'logs/server.log'), { flags: 'a' });
 const errorLogFile = fs.createWriteStream(path.join(__dirname, 'logs/error.log'), { flags: 'a' });
 
+// 폴더 잠금 상태 저장 배열
+let lockState = [];
+
+// 잠금 상태 파일 경로
+const LOCK_STATE_FILE = path.join(__dirname, 'locks.json');
+
+// 잠금 상태 불러오기
+function loadLockState() {
+  try {
+    if (fs.existsSync(LOCK_STATE_FILE)) {
+      const data = fs.readFileSync(LOCK_STATE_FILE, 'utf8');
+      lockState = JSON.parse(data);
+      log(`잠금 상태 로드됨: ${lockState.length}개 항목`);
+    }
+  } catch (error) {
+    errorLog('잠금 상태 로드 오류:', error);
+    lockState = [];
+  }
+}
+
+// 잠금 상태 저장하기
+function saveLockState() {
+  try {
+    fs.writeFileSync(LOCK_STATE_FILE, JSON.stringify(lockState, null, 2), 'utf8');
+    log(`잠금 상태 저장됨: ${lockState.length}개 항목`);
+  } catch (error) {
+    errorLog('잠금 상태 저장 오류:', error);
+  }
+}
+
+// 폴더 잠금 확인 함수
+function isFolderLocked(folderPath) {
+  // 현재 경로가 잠겨 있는지 확인
+  if (lockState.includes(folderPath)) {
+    return true;
+  }
+  
+  // 상위 경로가 잠겨 있는지 확인 (경로 계층 구조 고려)
+  return lockState.some(lockedPath => {
+    // 경로가 잠긴 폴더의 하위 경로인지 확인
+    // /parent/child가 /parent 안에 있는지 확인
+    return folderPath.startsWith(lockedPath + '/');
+  });
+}
+
+// 초기화 시 잠금 상태 로드
+loadLockState();
+
 function log(message) {
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - ${message}\n`;
@@ -389,6 +437,12 @@ app.delete('/api/files/*', (req, res) => {
       return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
     }
 
+    // 잠금 상태 확인
+    if (isFolderLocked(itemPath)) {
+      errorLog(`잠금된 폴더 삭제 시도: ${itemPath}`);
+      return res.status(403).send('이 폴더는 잠겨 있어 삭제할 수 없습니다.');
+    }
+
     // 디렉토리인지 확인
     const stats = fs.statSync(fullPath);
     if (stats.isDirectory()) {
@@ -404,6 +458,67 @@ app.delete('/api/files/*', (req, res) => {
     res.status(200).send('삭제되었습니다.');
   } catch (error) {
     errorLog('삭제 오류:', error);
+    res.status(500).send('서버 오류가 발생했습니다.');
+  }
+});
+
+// 폴더 잠금/해제 API
+app.post('/api/lock/*', (req, res) => {
+  try {
+    // URL 디코딩하여 한글 경로 처리
+    const folderPath = decodeURIComponent(req.params[0] || '');
+    const fullPath = path.join(ROOT_DIRECTORY, folderPath);
+    
+    log(`폴더 잠금/해제 요청: ${fullPath}`);
+
+    // 폴더 존재 확인
+    if (!fs.existsSync(fullPath)) {
+      errorLog(`폴더를 찾을 수 없음: ${fullPath}`);
+      return res.status(404).send('폴더를 찾을 수 없습니다.');
+    }
+
+    // 디렉토리인지 확인
+    const stats = fs.statSync(fullPath);
+    if (!stats.isDirectory()) {
+      errorLog(`잠금 대상이 폴더가 아님: ${fullPath}`);
+      return res.status(400).send('폴더만 잠글 수 있습니다.');
+    }
+
+    // 현재 잠금 상태 확인
+    const isLocked = lockState.includes(folderPath);
+    
+    if (isLocked) {
+      // 잠금 해제
+      lockState = lockState.filter(path => path !== folderPath);
+      log(`폴더 잠금 해제됨: ${folderPath}`);
+    } else {
+      // 잠금 설정
+      lockState.push(folderPath);
+      log(`폴더 잠금 설정됨: ${folderPath}`);
+    }
+    
+    // 잠금 상태 저장
+    saveLockState();
+    
+    res.status(200).json({
+      path: folderPath,
+      locked: !isLocked,
+      message: isLocked ? '폴더 잠금이 해제되었습니다.' : '폴더가 잠겼습니다.'
+    });
+  } catch (error) {
+    errorLog('폴더 잠금/해제 오류:', error);
+    res.status(500).send('서버 오류가 발생했습니다.');
+  }
+});
+
+// 잠금 상태 조회 API
+app.get('/api/lock-status', (req, res) => {
+  try {
+    res.status(200).json({
+      lockState: lockState
+    });
+  } catch (error) {
+    errorLog('잠금 상태 조회 오류:', error);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
