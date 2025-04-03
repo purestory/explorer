@@ -7,6 +7,8 @@ const multer = require('multer');
 const { execSync } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3333;
+// 압축 라이브러리 추가
+const archiver = require('archiver');
 
 // 로깅 설정
 const logFile = fs.createWriteStream(path.join(__dirname, 'logs/server.log'), { flags: 'a' });
@@ -789,36 +791,72 @@ app.post('/api/compress', bodyParser.json(), (req, res) => {
       return res.status(409).json({ error: '같은 이름의 압축 파일이 이미 존재합니다.' });
     }
     
-    // zip 명령어 구성 - 압축률 0 옵션 추가 (-0)
-    let zipCommand = `cd "${ROOT_DIRECTORY}" && zip -0 -r "${zipFilePath}"`;
+    // 압축 파일 생성
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', {
+      zlib: { level: 0 } // 압축률 0 (가장 빠름)
+    });
     
-    // 파일 경로 추가
-    files.forEach(file => {
+    // 압축 완료 이벤트 설정
+    output.on('close', () => {
+      log(`압축 완료: ${zipFilePath} (${archive.pointer()} 바이트)`);
+      
+      // 압축 파일 권한 설정
+      fs.chmodSync(zipFilePath, 0o666);
+      
+      res.status(200).json({ 
+        success: true, 
+        message: '압축이 완료되었습니다.',
+        zipFile: path.basename(zipFilePath),
+        zipPath: targetPath || '',
+        size: archive.pointer()
+      });
+    });
+    
+    // 압축 오류 이벤트 설정
+    archive.on('error', (err) => {
+      errorLog('압축 중 오류 발생:', err);
+      res.status(500).json({ error: '압축 중 오류가 발생했습니다.', message: err.message });
+    });
+    
+    // 파이프 연결
+    archive.pipe(output);
+    
+    // 파일/폴더 추가
+    let addedItems = 0;
+    
+    for (const file of files) {
       const filePath = targetPath ? `${targetPath}/${file}` : file;
       const fullPath = path.join(ROOT_DIRECTORY, filePath);
       
       // 파일/폴더 존재 확인
       if (fs.existsSync(fullPath)) {
-        // 상대 경로 추출 (ROOT_DIRECTORY 기준)
-        const relativePath = path.relative(ROOT_DIRECTORY, fullPath);
-        zipCommand += ` "${relativePath}"`;
+        const stats = fs.statSync(fullPath);
+        
+        if (stats.isDirectory()) {
+          // 폴더인 경우 (모든 내용 포함)
+          log(`폴더 압축 중: ${filePath}`);
+          archive.directory(fullPath, file);
+        } else {
+          // 파일인 경우
+          log(`파일 압축 중: ${filePath}`);
+          archive.file(fullPath, { name: file });
+        }
+        
+        addedItems++;
+      } else {
+        log(`파일/폴더 없음 (무시됨): ${filePath}`);
       }
-    });
+    }
     
-    // 압축 실행
-    log(`실행 명령어: ${zipCommand}`);
-    execSync(zipCommand);
+    if (addedItems === 0) {
+      archive.abort();
+      return res.status(400).json({ error: '유효한 파일이나 폴더가 없습니다.' });
+    }
     
-    // 압축 파일 권한 설정
-    fs.chmodSync(zipFilePath, 0o666);
+    // 압축 종료
+    archive.finalize();
     
-    log(`압축 완료: ${zipFilePath}`);
-    res.status(200).json({ 
-      success: true, 
-      message: '압축이 완료되었습니다.',
-      zipFile: path.basename(zipFilePath),
-      zipPath: targetPath || ''
-    });
   } catch (error) {
     errorLog('압축 오류:', error);
     res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
