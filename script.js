@@ -406,6 +406,29 @@ function initDragSelect() {
         selectionBox.style.width = `${width}px`;
         selectionBox.style.height = `${height}px`;
         
+        // 파일 항목 선택 로직 (스크롤 고려)
+        // 선택 영역의 절대 좌표 계산 (스크롤 포함)
+        const currentScrollTop = fileList.scrollTop;
+        const scrollDiff = currentScrollTop - initialScrollTop;
+        
+        // 선택 영역의 절대 위치 계산 (컨테이너 내부 좌표)
+        const selectLeft = Math.min(currentClientX, startClientX) - rect.left;
+        const selectRight = Math.max(currentClientX, startClientX) - rect.left;
+        
+        // 스크롤 방향에 관계없이 선택 영역의 시작과 끝 좌표 계산을 수정
+        // 시작 위치의 Y 좌표를 스크롤 시작 위치 기준으로 계산
+        const startY_abs = startClientY - rect.top + initialScrollTop;
+        // 현재 위치의 Y 좌표를 현재 스크롤 위치 기준으로 계산
+        const currentY_abs = currentClientY - rect.top + currentScrollTop;
+        
+        // 최종 상단/하단 좌표 계산
+        const selectTop = Math.min(startY_abs, currentY_abs);
+        const selectBottom = Math.max(startY_abs, currentY_abs);
+        
+        // 디버그 로깅 추가
+        console.log(`스크롤 정보: 초기=${initialScrollTop}, 현재=${currentScrollTop}, 차이=${scrollDiff}`);
+        console.log(`선택 영역: top=${selectTop}, bottom=${selectBottom}`);
+        
         // 목록 상단/하단 자동 스크롤
         const buffer = 50; // 자동 스크롤 감지 영역 (픽셀)
         
@@ -416,17 +439,6 @@ function initDragSelect() {
             // 하단으로 스크롤
             fileList.scrollTop += 10;
         }
-        
-        // 파일 항목 선택 로직 (스크롤 고려)
-        // 선택 영역의 절대 좌표 계산 (스크롤 포함)
-        const currentScrollTop = fileList.scrollTop;
-        const scrollDiff = currentScrollTop - initialScrollTop;
-        
-        // 선택 영역의 절대 위치 계산 (컨테이너 내부 좌표)
-        const selectLeft = Math.min(currentClientX, startClientX) - rect.left;
-        const selectRight = Math.max(currentClientX, startClientX) - rect.left;
-        const selectTop = Math.min(currentClientY, startClientY) - rect.top + initialScrollTop; // 스크롤 시작 위치 기준
-        const selectBottom = Math.max(currentClientY, startClientY) - rect.top + initialScrollTop + scrollDiff; // 현재 스크롤 위치 고려
         
         // 모든 파일 항목들을 순회하면서 선택 영역과 겹치는지 확인
         const items = document.querySelectorAll('.file-item');
