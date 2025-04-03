@@ -21,6 +21,8 @@ let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
 let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 추가
 // 폴더 잠금 상태 저장
 let lockedFolders = [];
+// 폴더 잠금 기능 사용 가능 여부
+let lockFeatureAvailable = true;
 
 // 드래그 선택 상태 관련 전역 변수 추가
 window.dragSelectState = {
@@ -3448,6 +3450,13 @@ function isPathLocked(path) {
 
 // 폴더 잠금 토글 함수 (수정: 명령 인자 추가)
 function toggleFolderLock(action) {
+    // 잠금 기능을 사용할 수 없으면 경고 표시
+    if (!lockFeatureAvailable) {
+        console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+        // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
+        return;
+    }
+    
     // 선택된 폴더 항목들 확인
     const selectedFolders = [];
     
@@ -3465,7 +3474,7 @@ function toggleFolderLock(action) {
     });
     
     if (selectedFolders.length === 0) {
-        alert('잠금/해제할 폴더를 선택해주세요.');
+        // 폴더가 선택되지 않았으면 조용히 리턴
         return;
     }
     
@@ -3502,10 +3511,20 @@ function toggleFolderLock(action) {
         const encodedPath = encodeURIComponent(folder.path);
         
         fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ action: action })
         })
         .then(response => {
             if (!response.ok) {
+                // 404 에러인 경우 기능을 사용할 수 없다고 설정
+                if (response.status === 404) {
+                    lockFeatureAvailable = false;
+                    console.log('폴더 잠금 API가 서버에 구현되어 있지 않습니다.');
+                    throw new Error('폴더 잠금 기능을 사용할 수 없습니다.');
+                }
                 throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
             }
             return response.json();
@@ -3515,6 +3534,16 @@ function toggleFolderLock(action) {
             processNextFolder(index + 1);
         })
         .catch(error => {
+            // 서버에 API가 구현되어 있지 않은 경우 조용히 처리
+            if (!lockFeatureAvailable) {
+                console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+                hideLoading();
+                loadFiles(currentPath);
+                return;
+            }
+            
+            // 일반 오류 발생 시 알림 표시
+            console.error('폴더 잠금/해제 오류:', error);
             alert(`오류 발생: ${error.message}`);
             hideLoading();
             loadFiles(currentPath);
@@ -3541,12 +3570,18 @@ function loadLockStatus() {
                     lockFeatureAvailable = false;
                     console.log('잠금 기능이 서버에 구현되어 있지 않습니다.');
                 }
-                throw new Error('잠금 상태 조회 실패');
+                // 오류이지만 처리는 계속하기 위해 빈 배열 반환
+                return { lockState: [] };
             }
             return response.json();
         })
         .then(data => {
-            lockedFolders = data.lockState;
+            // data가 null이거나 lockState가 없는 경우 빈 배열로 처리
+            if (!data || !data.lockState) {
+                lockedFolders = [];
+            } else {
+                lockedFolders = data.lockState;
+            }
             console.log('잠금 폴더 목록:', lockedFolders);
             return lockedFolders;
         })
@@ -3554,9 +3589,10 @@ function loadLockStatus() {
             // 콘솔 에러 메시지를 한 번만 표시
             if (lockFeatureAvailable) {
                 console.error('잠금 상태 조회 오류:', error);
-                // 첫 번째 오류 발생 시 잠금 기능 비활성화 고려
-                // 단, 네트워크 오류 등의 일시적 문제일 수 있으므로 3회 연속 실패 시 비활성화하는 방식도 고려 가능
+                // 서버가 기능을 지원하지 않으므로 기능 비활성화
+                lockFeatureAvailable = false;
             }
+            lockedFolders = [];
             return [];
         });
 }
@@ -3591,7 +3627,8 @@ function isPathLocked(path) {
 function toggleFolderLock(action = 'lock') {
     // 잠금 기능을 사용할 수 없으면 경고 표시
     if (!lockFeatureAvailable) {
-        alert('폴더 잠금 기능을 사용할 수 없습니다.');
+        console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+        // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
         return;
     }
     
@@ -3612,7 +3649,7 @@ function toggleFolderLock(action = 'lock') {
     });
     
     if (selectedFolders.length === 0) {
-        alert('잠금/해제할 폴더를 선택해주세요.');
+        // 폴더가 선택되지 않았으면 조용히 리턴
         return;
     }
     
@@ -3649,7 +3686,11 @@ function toggleFolderLock(action = 'lock') {
         const encodedPath = encodeURIComponent(folder.path);
         
         fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ action: action })
         })
         .then(response => {
             if (!response.ok) {
