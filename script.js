@@ -392,26 +392,40 @@ function initDragSelect() {
             return;
         }
         
+        const fileList = document.getElementById('fileList');
         const rect = fileList.getBoundingClientRect();
         let scrollX = 0;
         let scrollY = 0;
         
-        // 수직 스크롤 계산
-        if (clientY < rect.top + scrollEdgeSize) {
-            // 상단 가장자리 근처에서는 위로 스크롤
-            scrollY = -scrollSpeed * (1 - ((clientY - rect.top) / scrollEdgeSize));
-        } else if (clientY > rect.bottom - scrollEdgeSize) {
-            // 하단 가장자리 근처에서는 아래로 스크롤
-            scrollY = scrollSpeed * (1 - ((rect.bottom - clientY) / scrollEdgeSize));
+        // 파일 목록 경계와의 거리 계산 (음수는 경계 밖을 의미)
+        const distanceFromTop = clientY - rect.top;
+        const distanceFromBottom = rect.bottom - clientY;
+        const distanceFromLeft = clientX - rect.left;
+        const distanceFromRight = rect.right - clientX;
+        
+        const edgeSize = 100; // 경계 감지 영역 크기
+        const maxScrollSpeed = 15; // 최대 스크롤 속도
+        
+        // 수직 스크롤 계산 - 경계 밖에서도 작동
+        if (distanceFromTop < edgeSize) {
+            // 상단 근처 또는 위로 벗어난 경우 위로 스크롤 (거리가 음수일 경우 최대 속도)
+            const factor = Math.min(1, Math.max(0, 1 - (distanceFromTop / edgeSize)));
+            scrollY = -maxScrollSpeed * factor;
+        } else if (distanceFromBottom < edgeSize) {
+            // 하단 근처 또는 아래로 벗어난 경우 아래로 스크롤 (거리가 음수일 경우 최대 속도)
+            const factor = Math.min(1, Math.max(0, 1 - (distanceFromBottom / edgeSize)));
+            scrollY = maxScrollSpeed * factor;
         }
         
-        // 수평 스크롤 계산 (필요한 경우)
-        if (clientX < rect.left + scrollEdgeSize) {
-            // 왼쪽 가장자리 근처에서는 왼쪽으로 스크롤
-            scrollX = -scrollSpeed * (1 - ((clientX - rect.left) / scrollEdgeSize));
-        } else if (clientX > rect.right - scrollEdgeSize) {
-            // 오른쪽 가장자리 근처에서는 오른쪽으로 스크롤
-            scrollX = scrollSpeed * (1 - ((rect.right - clientX) / scrollEdgeSize));
+        // 수평 스크롤 계산 - 경계 밖에서도 작동
+        if (distanceFromLeft < edgeSize) {
+            // 왼쪽 근처 또는 왼쪽으로 벗어난 경우 왼쪽으로 스크롤
+            const factor = Math.min(1, Math.max(0, 1 - (distanceFromLeft / edgeSize)));
+            scrollX = -maxScrollSpeed * factor;
+        } else if (distanceFromRight < edgeSize) {
+            // 오른쪽 근처 또는 오른쪽으로 벗어난 경우 오른쪽으로 스크롤
+            const factor = Math.min(1, Math.max(0, 1 - (distanceFromRight / edgeSize)));
+            scrollX = maxScrollSpeed * factor;
         }
         
         // 스크롤 적용
@@ -569,16 +583,9 @@ function initDragSelect() {
         const selectBottom = Math.max(startY_abs, currentY_abs);
         
         // 자동 스크롤 처리 - requestAnimationFrame 사용
-        if (e.clientX >= rect.left && e.clientX <= rect.right &&
-            e.clientY >= rect.top && e.clientY <= rect.bottom) {
-            
-            // 이미 자동 스크롤이 진행 중이 아니면 시작
-            if (autoScrollAnimationId === null) {
-                autoScroll(e.clientX, e.clientY);
-            }
-        } else {
-            // 마우스가 컨테이너를 벗어나면 자동 스크롤 취소
-            cancelAutoScroll();
+        // 항상 자동 스크롤 함수를 호출하여 경계 내/외부 모두 처리
+        if (autoScrollAnimationId === null) {
+            autoScroll(e.clientX, e.clientY);
         }
         
         // 모든 파일 항목들을 순회하면서 선택 영역과 겹치는지 확인
