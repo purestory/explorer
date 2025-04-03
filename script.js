@@ -21,6 +21,8 @@ let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
 let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 추가
 // 폴더 잠금 상태 저장
 let lockedFolders = [];
+// 파일 로딩 상태 플래그 추가
+let isLoadingFiles = false;
 
 // 드래그 선택 상태 관련 전역 변수 추가
 window.dragSelectState = {
@@ -868,6 +870,11 @@ function updateStorageInfoDisplay() {
 
 // 파일 목록 로드 함수
 function loadFiles(path = '') {
+    if (isLoadingFiles) {
+        console.log('이미 파일 로딩 중입니다. 새로운 로딩 요청을 무시합니다.');
+        return;
+    }
+    isLoadingFiles = true;
     showLoading();
     currentPath = path;
     
@@ -895,7 +902,6 @@ function loadFiles(path = '') {
             // 정렬 적용
             renderFiles(data);
             updateBreadcrumb(path);
-            hideLoading();
             
             // 파일 드래그 이벤트 초기화
             initDragAndDrop();
@@ -906,7 +912,10 @@ function loadFiles(path = '') {
         .catch(error => {
             console.error('Error:', error);
             statusInfo.textContent = `오류: ${error.message}`;
+        })
+        .finally(() => {
             hideLoading();
+            isLoadingFiles = false; // 로딩 완료
         });
     
     // 디스크 사용량 로드
@@ -1367,6 +1376,12 @@ function handleFileClick(e, fileItem) {
 
 // 파일 더블클릭 처리
 function handleFileDblClick(e, fileItem) {
+    // 파일 로딩 중이면 더블클릭 무시
+    if (isLoadingFiles) {
+        console.log('파일 로딩 중에는 더블클릭을 무시합니다.');
+        return;
+    }
+    
     // 이벤트 버블링 방지
     e.preventDefault();
     e.stopPropagation();
@@ -1409,18 +1424,24 @@ function handleFileDblClick(e, fileItem) {
 
 // 폴더 탐색
 function navigateToFolder(folderName) {
+    // 파일 로딩 중이면 탐색 무시
+    if (isLoadingFiles) {
+        console.log('파일 로딩 중에는 폴더 탐색을 무시합니다.');
+        return;
+    }
+    
     let newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
     currentPath = newPath;
     
     // 폴더 이동 히스토리 상태 업데이트
     updateHistoryState(currentPath);
     
-    // 이전 더블클릭 이벤트 리스너 제거를 위해 기존 파일 항목 캐시
-    const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
-    oldFileItems.forEach(item => {
-        const clonedItem = item.cloneNode(true);
-        item.parentNode.replaceChild(clonedItem, item);
-    });
+    // DOM 요소 복제 로직 제거
+    // const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
+    // oldFileItems.forEach(item => {
+    //     const clonedItem = item.cloneNode(true);
+    //     item.parentNode.replaceChild(clonedItem, item);
+    // });
     
     // 파일 목록 로드
     loadFiles(newPath);
