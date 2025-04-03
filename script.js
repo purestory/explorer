@@ -643,17 +643,31 @@ function setupGlobalDragCleanup() {
         window._isCleaningDragState = true;
         console.log('clearDragState: 정리 시작');
         
-        // 드래그 상태 플래그 초기화
+        // 드래그 상태 플래그 초기화 (파일 이동/업로드 관련)
         window.isDraggingActive = false;
         
-        // 모든 dragging 클래스 제거
+        // --- 추가된 코드: 드래그 *선택* 상태 관련 정리 ---
+        const selectionBox = document.getElementById('selectionBox');
+        if (selectionBox) {
+            selectionBox.style.display = 'none';
+            selectionBox.style.width = '0px';
+            selectionBox.style.height = '0px';
+            // 관련 데이터 속성 초기화 (드래그 선택 시작점 정보 제거)
+            delete selectionBox.dataset.startClientX;
+            delete selectionBox.dataset.startClientY;
+            delete selectionBox.dataset.initialScrollTop;
+            console.log('clearDragState: 드래그 선택 박스 상태 초기화');
+        }
+        // --- 추가된 코드 끝 ---
+        
+        // 모든 dragging 클래스 제거 (파일 이동/업로드 관련)
         const draggingElements = document.querySelectorAll('.dragging');
         if (draggingElements.length > 0) {
             console.log(`clearDragState: ${draggingElements.length}개의 dragging 클래스 제거`);
             draggingElements.forEach(el => el.classList.remove('dragging'));
         }
         
-        // 모든 drag-over 클래스 제거
+        // 모든 drag-over 클래스 제거 (파일 이동/업로드 관련)
         const dragOverElements = document.querySelectorAll('.drag-over');
         if (dragOverElements.length > 0) {
             console.log(`clearDragState: ${dragOverElements.length}개의 drag-over 클래스 제거`);
