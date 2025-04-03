@@ -808,7 +808,7 @@ function initShortcuts() {
 function loadDiskUsage() {
     showLoading();
     
-    fetch(`${API_BASE_URL}/disk-usage`)
+    fetch(`${API_BASE_URL}/api/disk-usage`)
         .then(response => {
             if (!response.ok) {
                 throw new Error('디스크 사용량 정보를 가져오는 데 실패했습니다.');
@@ -893,7 +893,7 @@ function loadFiles(path = '') {
     // 더블클릭이 가능한지 여부를 나타내는 전역 플래그
     window.doubleClickEnabled = false;
     
-    fetch(`${API_BASE_URL}/files/${encodedPath}`)
+    fetch(`${API_BASE_URL}/api/files/${encodedPath}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`상태 ${response.status}: ${response.statusText}`);
@@ -3564,7 +3564,7 @@ function loadLockStatus() {
         return Promise.resolve([]);
     }
     
-    return fetch(`${API_BASE_URL}/lock-status`)
+    return fetch(`${API_BASE_URL}/api/lock-status`)
         .then(response => {
             if (!response.ok) {
                 // 404 에러인 경우 기능을 사용할 수 없다고 표시
@@ -3687,7 +3687,7 @@ function toggleFolderLock(action = 'lock') {
         const folder = foldersToProcess[index];
         const encodedPath = encodeURIComponent(folder.path);
         
-        fetch(`${API_BASE_URL}/lock/${encodedPath}`, {
+        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
