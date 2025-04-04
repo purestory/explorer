@@ -4396,7 +4396,8 @@ function initDropZone() {
     dropZone.removeEventListener('dragover', handleDragOver);
     dropZone.removeEventListener('dragleave', handleDragLeave);
     dropZone.removeEventListener('drop', handleDrop);
-    dropZone.removeEventListener('drop', handleDropZoneDrop); // 추가: 다른 핸들러도 제거
+    // handleDropZoneDrop 함수는 제거되었으므로 관련 코드도 제거
+    // dropZone.removeEventListener('drop', handleDropZoneDrop);
     fileView.removeEventListener('dragover', handleDragOver);
     fileView.removeEventListener('dragleave', handleDragLeave);
     fileView.removeEventListener('drop', handleDrop);
