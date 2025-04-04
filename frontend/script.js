@@ -4749,35 +4749,5 @@ function handleFileDrop(e, targetFolderItem = null) {
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
     }
 }
+// 중복 함수 제거: handleDropZoneDrop 함수는 이미 2127 라인에 정의되어 있음
 
-// 전체 드롭존 영역에 파일이 드롭되었을 때 호출되는 함수
-function handleDropZoneDrop(e) {
-    console.log('드롭존에 파일 드롭됨');
-    preventDefaults(e);
-    
-    // 드래그 상태 초기화
-    window.draggingInProgress = false;
-    
-    // 내부/외부 파일 판단
-    const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
-    
-    // 최종 판단 로그 출력
-    console.log(`드롭존 처리: ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
-    
-    // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리
-    if (isExternalDrop) {
-        console.log('드롭존 드롭 - 외부 파일 드롭 처리');
-        handleExternalFileDrop(e, currentPath);
-    } 
-    // 내부 파일이라도 경로가 비어있으면 오류 처리
-    else if (isInternalDrop && draggedPaths.length > 0) {
-        console.log('드롭존 드롭 - 내부 파일 이동 처리:', draggedPaths);
-        // 현재 드롭존의 경로로 파일 이동
-        handleInternalFileDrop(draggedPaths, { path: currentPath });
-    }
-    // 판단 불가능한 경우
-    else {
-        console.log('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
-        showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
-    }
-}
