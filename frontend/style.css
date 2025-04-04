@@ -162,6 +162,7 @@ h1 {
     position: relative;
     display: flex;
     flex-direction: column;
+    width: 100%;
 }
 
 .file-list {
@@ -169,6 +170,7 @@ h1 {
     flex: 1;
     padding: 0;
     position: relative;
+    width: 100%;
 }
 
 .file-view {
@@ -176,27 +178,38 @@ h1 {
     flex-wrap: wrap;
     align-content: flex-start;
     position: relative;
+    width: 100%;
+}
+
+/* 그리드 뷰 (아이콘 모드) */
+.file-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+    gap: 10px;
+    padding: 10px;
 }
 
 .file-view:not(.list-view) {
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
-}
-
-.file-view:not(.list-view) .files-container {
-    display: flex;
-    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
 }
 
 .file-view:not(.list-view) .file-item {
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     padding: 10px;
     margin: 8px;
-    width: 100px;
-    height: 100px;
+    width: 120px;
+    height: 120px;
+    flex: 0 0 auto;
+    box-sizing: border-box;
 }
 
 .file-view:not(.list-view) .file-details {
@@ -209,6 +222,9 @@ h1 {
     border-radius: 4px;
     transition: all 0.2s ease-in-out;
     overflow: hidden;
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
 }
 
 /* 그리드뷰 스타일 */
@@ -229,17 +245,28 @@ h1 {
 /* 리스트뷰 스타일 */
 .file-view.list-view {
     display: block;
+    width: 100%;
 }
 
 .file-view.list-view .file-item {
     display: flex;
     flex-direction: row;
     align-items: center;
-    padding: 6px 12px;
+    padding: 8px 12px;
     margin: 0;
     width: 100%;
     height: auto;
     border-bottom: 1px solid #f0f0f0;
+    box-sizing: border-box;
+    min-height: 36px;
+}
+
+.file-view.list-view .file-icon,
+.file-view.list-view .file-name,
+.file-view.list-view .file-details,
+.file-view.list-view .file-size,
+.file-view.list-view .file-date {
+    pointer-events: auto;
 }
 
 .file-view.list-view .file-icon {
@@ -261,21 +288,14 @@ h1 {
     display: flex;
     justify-content: space-between;
     flex: 2.5;
+    align-items: center;
+    height: 100%;
 }
 
-.file-size {
-    flex: 1;
-    text-align: right;
-    color: #666;
-    font-size: 0.8rem;
-}
-
-.file-date {
-    flex: 1.5;
-    text-align: right;
-    color: #666;
-    font-size: 0.8rem;
-    margin-left: 10px;
+.file-size, .file-date {
+    display: flex;
+    align-items: center;
+    height: 100%;
 }
 
 .file-item:hover {
@@ -548,14 +568,6 @@ h1 {
     font-size: 14px;
     color: #7f8c8d;
     margin-top: 5px;
-}
-
-.file-item {
-    position: relative;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.2s ease-in-out;
-    overflow: hidden;
 }
 
 .file-item:hover {
@@ -901,17 +913,16 @@ h1 {
 /* 파일 리스트 헤더 스타일 추가 */
 .file-list-header {
     display: flex;
-    align-items: center;
+    padding: 8px 12px;
     background-color: #f8f8f8;
-    font-weight: bold;
-    color: #555;
     border-bottom: 1px solid #ddd;
-    padding: 8px 15px;
-    margin-bottom: 0;
+    font-weight: bold;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
     position: sticky;
     top: 0;
     z-index: 10;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .header-icon {
@@ -935,11 +946,6 @@ h1 {
     text-align: right;
     cursor: pointer;
     margin-left: 10px;
-}
-
-.files-container {
-    width: 100%;
-    padding: 15px 20px;
 }
 
 /* 일반 모드에서 숨김 처리 */
@@ -1047,4 +1053,37 @@ h1 {
 /* 목록 보기에서 잠긴 폴더 스타일 */
 .view-list .locked-folder .lock-icon {
     right: 30px;
+}
+
+.file-size {
+    flex: 1;
+    text-align: right;
+    color: #666;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.file-date {
+    flex: 1.5;
+    text-align: right;
+    color: #666;
+    font-size: 0.8rem;
+    margin-left: 10px;
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.files-container {
+    width: 100%;
+    padding: 15px 20px;
+}
+
+/* 부모 컨테이너 추가 설정 */
+#fileList {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
 }

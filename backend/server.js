@@ -8,9 +8,15 @@ const { execSync } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3333;
 
+// 로그 디렉토리 확인 및 생성
+const LOGS_DIRECTORY = path.join(__dirname, 'logs');
+if (!fs.existsSync(LOGS_DIRECTORY)) {
+  fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
+}
+
 // 로깅 설정
-const logFile = fs.createWriteStream(path.join(__dirname, 'logs/server.log'), { flags: 'a' });
-const errorLogFile = fs.createWriteStream(path.join(__dirname, 'logs/error.log'), { flags: 'a' });
+const logFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'server.log'), { flags: 'a' });
+const errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
 
 function log(message) {
   const timestamp = new Date().toISOString();
@@ -116,7 +122,7 @@ app.use((req, res, next) => {
 
 // 기본 미들웨어 설정
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // 로깅 미들웨어
 app.use((req, res, next) => {
@@ -126,7 +132,7 @@ app.use((req, res, next) => {
 
 // 메인 페이지
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 // 파일 업로드 설정
@@ -494,6 +500,8 @@ app.post('/api/upload', (req, res) => {
 
     // 최대 파일명 길이 제한 설정 (바이트 기준, 시스템 최대치의 90%)
     const MAX_FILENAME_BYTES = 229;
+    // 최대 경로 길이 제한 (시스템마다 다를 수 있음)
+    const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로 설정
 
     // 파일명 길이 제한 함수 (바이트 기준)
     function truncateFileName(filename) {
@@ -516,6 +524,105 @@ app.post('/api/upload', (req, res) => {
       
       log(`파일명이 너무 김(Bytes: ${Buffer.byteLength(filename)}): ${filename} → ${newFileName}`);
       return newFileName;
+    }
+
+    // 경로 길이 확인 및 제한 함수
+    function checkAndTruncatePath(fullPath) {
+      const fullPathBytes = Buffer.byteLength(fullPath);
+      if (fullPathBytes <= MAX_PATH_BYTES) {
+        return { path: fullPath, truncated: false };
+      }
+      
+      // 경로가 너무 길 경우 처리 로직
+      log(`경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`);
+      
+      // 경로 분해 및 분석
+      const pathParts = fullPath.split(path.sep);
+      const driveOrRoot = pathParts[0] || '/'; // 드라이브 또는 루트 디렉토리
+      
+      // 마지막 요소는 파일명일 수 있으므로 보존 우선
+      const lastElement = pathParts[pathParts.length - 1];
+      const isLastElementFile = lastElement.includes('.');
+      
+      // 각 디렉토리 이름의 최대 바이트 수를 계산
+      // 파일명, 루트, 구분자 길이를 뺀 나머지 공간을 디렉토리들이 공유
+      const fileNameBytes = isLastElementFile ? Buffer.byteLength(lastElement) : 0;
+      const rootBytes = Buffer.byteLength(driveOrRoot);
+      const separatorBytes = (pathParts.length - 1) * Buffer.byteLength(path.sep);
+      
+      // 디렉토리에 할당할 수 있는 총 바이트 (파일명 제외)
+      const totalDirBytes = MAX_PATH_BYTES - fileNameBytes - rootBytes - separatorBytes;
+      
+      // 디렉토리 수 (파일명 제외)
+      const dirCount = isLastElementFile ? pathParts.length - 2 : pathParts.length - 1;
+      
+      // 각 디렉토리당 평균 할당 바이트 (최소 20바이트 보장)
+      const avgMaxBytes = Math.max(20, Math.floor(totalDirBytes / (dirCount > 0 ? dirCount : 1)));
+      
+      // 각 경로 부분 순회하며 길이 제한
+      const truncatedParts = [driveOrRoot];
+      let bytesUsed = rootBytes + separatorBytes;
+      
+      for (let i = 1; i < pathParts.length; i++) {
+        let part = pathParts[i];
+        const partBytes = Buffer.byteLength(part);
+        
+        // 마지막 요소이고 파일이면 가능한 한 원본 유지
+        if (i === pathParts.length - 1 && isLastElementFile) {
+          // 파일명이 너무 긴 경우 별도 처리 (마지막 요소만 truncateFileName 호출)
+          if (partBytes > MAX_FILENAME_BYTES) {
+            part = truncateFileName(part);
+          }
+          truncatedParts.push(part);
+          continue;
+        }
+        
+        // 디렉토리 이름이 할당된 바이트 수를 초과하는 경우 자르기
+        if (partBytes > avgMaxBytes) {
+          // 디렉토리 이름 자르기 (한글 등 멀티바이트 문자 고려)
+          let truncatedPart = '';
+          for (let j = 0; j < part.length; j++) {
+            const nextChar = part[j];
+            const potentialNew = truncatedPart + nextChar;
+            if (Buffer.byteLength(potentialNew + '...') <= avgMaxBytes) {
+              truncatedPart = potentialNew;
+            } else {
+              break;
+            }
+          }
+          
+          // 이름이 너무 짧아졌다면 최소 한 글자 이상 포함하도록 함
+          if (truncatedPart.length === 0 && part.length > 0) {
+            truncatedPart = part.substring(0, 1);
+          }
+          
+          part = truncatedPart + '...';
+        }
+        
+        truncatedParts.push(part);
+        bytesUsed += Buffer.byteLength(part) + Buffer.byteLength(path.sep);
+      }
+      
+      const truncatedPath = truncatedParts.join(path.sep);
+      const finalPathBytes = Buffer.byteLength(truncatedPath);
+      
+      log(`경로 길이 제한: ${fullPathBytes} → ${finalPathBytes} 바이트`);
+      log(`줄어든 경로: ${truncatedPath}`);
+      
+      // 최종 확인 - 여전히 너무 길면 더 강력하게 줄이기
+      if (finalPathBytes > MAX_PATH_BYTES) {
+        // 문제 해결을 위한 비상 대책 - 파일명 유지하고 중간 경로 크게 축소
+        const rootAndFile = isLastElementFile ? 
+          [driveOrRoot, truncateFileName(lastElement)] : 
+          [driveOrRoot, truncatedParts[truncatedParts.length - 1]];
+          
+        // 파일명과 루트 사이에 "..." 추가하여 모든 중간 경로 제거
+        const emergencyPath = rootAndFile.join(path.sep + '...' + path.sep);
+        log(`비상 경로 축소: ${truncatedPath} → ${emergencyPath}`);
+        return { path: emergencyPath, truncated: true, emergency: true };
+      }
+      
+      return { path: truncatedPath, truncated: true };
     }
 
     // req.files 배열과 fileInfoArray 매핑 (순서가 같다고 가정)
@@ -547,7 +654,21 @@ app.post('/api/upload', (req, res) => {
             }
             
             // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 수정된 상대 경로)
-            const destinationPath = path.join(rootUploadDir, relativeFilePath);
+            let destinationPath = path.join(rootUploadDir, relativeFilePath);
+            
+            // 전체 경로 길이 확인 및 처리
+            const pathResult = checkAndTruncatePath(destinationPath);
+            if (pathResult.truncated) {
+                destinationPath = pathResult.path;
+                // 경로 변경에 따른 상대 경로 재계산 (저장용)
+                relativeFilePath = destinationPath.substring(rootUploadDir.length);
+                // 경로 시작에 '/' 있으면 제거
+                if (relativeFilePath.startsWith(path.sep)) {
+                    relativeFilePath = relativeFilePath.substring(1);
+                }
+                log(`전체 경로가 너무 길어 변경됨: ${relativeFilePath}`);
+            }
+
             // 저장될 디렉토리 경로 추출
             const destinationDir = path.dirname(destinationPath);
 

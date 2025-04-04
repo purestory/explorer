@@ -26,12 +26,41 @@ WebDAV(Web Distributed Authoring and Versioning) 프로토콜을 통해 파일�
 - 업로드 UI 처리 속도 향상
 - 외부 파일 드래그앤드롭 감지 정확도 개선
 
+### 2023.06.01 - 프로젝트 구조 개선
+- 프로젝트를 frontend와 backend로 분리
+- 코드 모듈화 개선
+- 유지보수성 향상
+
 ## 기술 스택
 
 - **프론트엔드**: HTML, CSS, JavaScript
-- **백엔드**: Node.js
+- **백엔드**: Node.js, Express, WebDAV-Server
 - **웹 서버**: Nginx
 - **프로토콜**: WebDAV
+
+## 프로젝트 구조
+
+```
+webdav-explorer/
+├── frontend/             # 프론트엔드 코드
+│   ├── index.html        # 메인 HTML 파일
+│   ├── style.css         # 스타일시트
+│   ├── script.js         # 프론트엔드 JavaScript
+│   └── package.json      # 프론트엔드 의존성
+│
+├── backend/              # 백엔드 코드
+│   ├── server.js         # 메인 서버 파일
+│   ├── routes/           # API 라우트
+│   ├── controllers/      # 컨트롤러
+│   ├── middlewares/      # 미들웨어
+│   ├── utils/            # 유틸리티 함수
+│   ├── logs/             # 로그 파일
+│   ├── share-folder/     # 공유 폴더
+│   └── package.json      # 백엔드 의존성
+│
+├── package.json          # 프로젝트 메인 package.json
+└── README.md             # 프로젝트 설명
+```
 
 ## 설치 방법
 
@@ -43,7 +72,7 @@ git clone https://github.com/purestory/webdav-explorer.git
 2. 필요한 패키지 설치:
 ```
 cd webdav-explorer
-npm install
+npm run install-all
 ```
 
 3. 서버 시작:
@@ -54,6 +83,18 @@ npm start
 4. 브라우저에서 접속:
 ```
 http://localhost:3333
+```
+
+## 개발 모드 실행
+
+백엔드 개발 모드:
+```
+npm run backend
+```
+
+프론트엔드 개발 모드:
+```
+npm run frontend
 ```
 
 ## 서비스 설정 (시스템 서비스 등록)
@@ -70,7 +111,7 @@ Description=WebDAV Server
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/node /home/purestory/webdav/server.js
+ExecStart=/usr/bin/node /home/purestory/webdav/backend/server.js
 Restart=always
 User=purestory
 Group=purestory
@@ -149,7 +190,7 @@ server {
     
     # 정적 파일 서비스
     location /static/ {
-        alias /home/purestory/webdav/static/;
+        alias /home/purestory/webdav/frontend/;
         expires 1d;
         add_header Cache-Control "public";
     }
@@ -159,15 +200,15 @@ server {
 ## 주요 설정
 
 - **최대 업로드 크기**: 10GB
-- **공유 폴더 위치**: /home/purestory/webdav/share-folder
-- **로그 파일 위치**: /var/log/webdav/
+- **공유 폴더 위치**: /home/purestory/webdav/backend/share-folder
+- **로그 파일 위치**: /home/purestory/webdav/backend/logs/
 
 ## 문제 해결
 
 ### share-folder 디렉토리 오류
 서비스 시작 시 "share-folder 디렉토리를 찾을 수 없습니다" 오류가 발생할 경우 다음 명령어로 해결할 수 있습니다:
 ```
-mkdir -p share-folder && chmod 777 share-folder
+mkdir -p backend/share-folder && chmod 777 backend/share-folder
 ```
 
 ### 포트 사용 중 오류
