@@ -1070,9 +1070,9 @@ function renderFiles(files) {
             // 정렬된 파일 목록
             const sortedFiles = sortFiles(files);
             
-            // 숨김 파일 표시 (이전 필터링 코드 제거)
-            // 모든 파일이 표시되도록 변경
-            const visibleFiles = sortedFiles;
+            // 숨김 파일 필터링 (추가된 부분)
+            // 이름이 .으로 시작하는 파일은 숨김 파일로 간주
+            const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
             
             // 잠금 상태 디버그 로깅
             console.log('현재 잠금 폴더 목록:', lockedFolders);
@@ -1249,7 +1249,7 @@ function renderFiles(files) {
             }
         
             // 상태 정보 업데이트 - 숨김 파일 카운트 포함
-            const hiddenCount = 0;
+            const hiddenCount = sortedFiles.length - visibleFiles.length;
             if (hiddenCount > 0) {
                 statusInfo.textContent = `${visibleFiles.length}개 항목 (${hiddenCount}개 숨김 파일 제외)`;
             } else {
@@ -1880,11 +1880,11 @@ function initDragAndDrop() {
         console.log('드래그 시작:', fileName);
         
         // 선택되지 않은 항목을 드래그하는 경우, 선택 초기화 후 해당 항목만 선택
-        if (!fileItem.classList.contains('selected')) {
-            clearSelection();
-            selectItem(fileItem);
-        }
-        
+    if (!fileItem.classList.contains('selected')) {
+        clearSelection();
+        selectItem(fileItem);
+    }
+
         // 드래그 중인 항목 개수
         const dragCount = selectedItems.size;
         console.log(`드래그 시작: ${dragCount}개 항목 드래그 중`);
@@ -1905,7 +1905,7 @@ function initDragAndDrop() {
             
             // 2. 내부 드래그 마커 설정 (보안 강화)
             e.dataTransfer.setData('application/x-internal-drag', 'true');
-            
+
             // 3. 일반 텍스트 데이터로도 저장 (호환성 유지)
             e.dataTransfer.setData('text/plain', draggedItems.join('\n'));
             
@@ -1914,17 +1914,17 @@ function initDragAndDrop() {
                 e.dataTransfer.setDragImage(fileItem, 15, 15);
                 e.dataTransfer.effectAllowed = 'move';
             }
-            
+
             console.log('[File Drag Start] 내부 드래그 마커 설정 완료 (json, x-internal-drag)');
             console.log('[File Drag Start] dataTransfer types set:', Array.from(e.dataTransfer.types));
-            
+
             // 5. 드래그 중인 항목에 시각적 효과 적용
             setTimeout(() => {
                 document.querySelectorAll('.file-item.selected').forEach(item => {
                     item.classList.add('dragging');
                 });
             }, 0);
-            
+
         } catch (error) {
             console.error('드래그 시작 중 오류:', error);
             // 기본 정보만이라도 설정
@@ -2014,7 +2014,7 @@ function handleFileDragOver(e) {
         
         // 드래그 상태 초기화
         window.draggingInProgress = false;
-        
+    
         // 드롭존 비활성화
         dropZone.classList.remove('active');
 
@@ -2025,13 +2025,13 @@ function handleFileDragOver(e) {
         console.log('드롭 이벤트 발생 위치:', e.target.className);
         console.log('DataTransfer Types:', Array.from(e.dataTransfer.types));
         console.log('DataTransfer Files Length:', e.dataTransfer.files.length);
-        
+
         // 상위 폴더에 드롭되는 경우 차단
         if (fileItem && fileItem.getAttribute('data-parent-dir') === 'true') {
             console.log('상위 폴더에 드롭되어 무시됨');
             return;
         }
-        
+
         // 드래그 오버 스타일 제거 (폴더 항목에서)
         if (fileItem) {
             fileItem.classList.remove('drag-over');
@@ -2150,8 +2150,8 @@ function handleDropZoneDrop(e) {
     else {
         console.log('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
+        }
     }
-}
     
     // 전체 영역 드롭존 이벤트 리스너 등록
     window.removeEventListener('dragenter', handleDropZoneDragEnter);
@@ -2179,7 +2179,7 @@ function isInternalDrag(e) {
     if (e.dataTransfer.types.includes('application/x-internal-drag')) {
         return true;
     }
-    
+
     // 내부 드래그 진행 상태 확인 (전역 변수)
     if (window.draggingInProgress) {
         return true;
@@ -2210,9 +2210,9 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
         console.error('[Internal Drop] 유효하지 않은 파일 경로 정보');
         showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
-        return;
-    }
-    
+             return;
+        }
+
     // 경로 처리 및 유효성 검사
     const validItemPaths = draggedItemPaths.filter(path => {
         // 경로가 유효한 문자열인지 확인
@@ -2257,8 +2257,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
         if (targetInDraggedItems) {
             console.warn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
-            showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
-            return;
+             showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
+             return;
         }
     }
     
@@ -2280,7 +2280,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         clearSelection();
         return;
     }
-    
+
     // --- 유효성 검사 끝 ---
     
     // 이동 시작
@@ -2441,71 +2441,76 @@ function traverseFileTree(entry, path, filesWithPaths) {
 
         if (entry.isFile) {
             entry.file(file => {
-                // 숨김 파일 (.으로 시작)도 포함
-                // 파일 이름 길이 체크 및 처리
-                const maxFileNameLength = 220; // 최대 파일명 바이트 길이 설정
-                let fileName = file.name;
-                let relativePath = currentPath;
-                
-                // 파일명 바이트 길이 계산
-                const fileNameBytes = new TextEncoder().encode(fileName).length;
-                
-                // 파일명이 너무 길면 잘라내기
-                if (fileNameBytes > maxFileNameLength) {
-                    const extension = fileName.lastIndexOf('.') > 0 ? fileName.substring(fileName.lastIndexOf('.')) : '';
-                    const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.') > 0 ? fileName.lastIndexOf('.') : fileName.length);
+                // 숨김 파일 (.으로 시작)은 제외
+                if (!file.name.startsWith('.')) {
+                    // 파일 이름 길이 체크 및 처리
+                    const maxFileNameLength = 220; // 최대 파일명 바이트 길이 설정
+                    let fileName = file.name;
+                    let relativePath = currentPath;
                     
-                    // 바이트 기준으로 이름 자르기
-                    let shortName = '';
-                    const maxBytes = maxFileNameLength - new TextEncoder().encode(extension).length - 3; // "..." 공간 확보
+                    // 파일명 바이트 길이 계산
+                    const fileNameBytes = new TextEncoder().encode(fileName).length;
                     
-                    // UTF-8은 문자당 1~4바이트, 문자 경계를 보존하며 자름
-                    let byteCount = 0;
-                    for (let i = 0; i < fileNameWithoutExt.length; i++) {
-                        const charBytes = new TextEncoder().encode(fileNameWithoutExt[i]).length;
-                        if (byteCount + charBytes <= maxBytes) {
-                            shortName += fileNameWithoutExt[i];
-                            byteCount += charBytes;
+                    // 파일명이 너무 길면 잘라내기
+                    if (fileNameBytes > maxFileNameLength) {
+                        const extension = fileName.lastIndexOf('.') > 0 ? fileName.substring(fileName.lastIndexOf('.')) : '';
+                        const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.') > 0 ? fileName.lastIndexOf('.') : fileName.length);
+                        
+                        // 바이트 기준으로 이름 자르기
+                        let shortName = '';
+                        const maxBytes = maxFileNameLength - new TextEncoder().encode(extension).length - 3; // "..." 공간 확보
+                        
+                        // UTF-8은 문자당 1~4바이트, 문자 경계를 보존하며 자름
+                        let byteCount = 0;
+                        for (let i = 0; i < fileNameWithoutExt.length; i++) {
+                            const charBytes = new TextEncoder().encode(fileNameWithoutExt[i]).length;
+                            if (byteCount + charBytes <= maxBytes) {
+                                shortName += fileNameWithoutExt[i];
+                                byteCount += charBytes;
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        const newFileName = shortName + '...' + extension;
+                        
+                        // 상대 경로도 수정
+                        if (path) {
+                            relativePath = `${path}/${newFileName}`;
                         } else {
-                            break;
+                            relativePath = newFileName;
+                        }
+                        
+                        console.log(`파일명이 너무 깁니다. 원본: ${fileName}, 수정됨: ${newFileName}`);
+                        
+                        // 파일 객체를 새로운 이름으로 복제 (File 객체는 직접 수정할 수 없음)
+                        const renamedFile = new File([file], newFileName, { type: file.type });
+                        filesWithPaths.push({ file: renamedFile, relativePath: relativePath });
+                    } else {
+                        // 전체 경로 바이트 길이 확인 (UTF-8)
+                        const fullPathBytes = new TextEncoder().encode(relativePath).length;
+                        
+                        if (fullPathBytes > maxFullPathLength) {
+                            // 경로가 너무 길면 비상 처리 (파일만 남기고 경로 단축)
+                            console.warn(`전체 경로가 너무 깁니다(${fullPathBytes} bytes): ${relativePath}`);
+                            
+                            // 파일명만 보존하고 경로는 압축
+                            const shortenedPath = `긴경로/${fileName}`;
+                            console.log(`경로 단축됨: ${relativePath} → ${shortenedPath}`);
+                            
+                            // 중요: 원본 파일 이름은 유지하되 경로만 변경
+                            filesWithPaths.push({ file: file, relativePath: shortenedPath });
+                            statusInfo.textContent = `일부 파일의 경로가 너무 길어 단축되었습니다.`;
+                        } else {
+                            // 정상 경로
+                            filesWithPaths.push({ file: file, relativePath: relativePath });
+                            console.log(`파일 추가: ${relativePath}`);
                         }
                     }
-                    
-                    const newFileName = shortName + '...' + extension;
-                    
-                    // 상대 경로도 수정
-                    if (path) {
-                        relativePath = `${path}/${newFileName}`;
-                    } else {
-                        relativePath = newFileName;
-                    }
-                    
-                    console.log(`파일명이 너무 깁니다. 원본: ${fileName}, 수정됨: ${newFileName}`);
-                    
-                    // 파일 객체를 새로운 이름으로 복제 (File 객체는 직접 수정할 수 없음)
-                    const renamedFile = new File([file], newFileName, { type: file.type });
-                    filesWithPaths.push({ file: renamedFile, relativePath: relativePath });
                 } else {
-                    // 전체 경로 바이트 길이 확인 (UTF-8)
-                    const fullPathBytes = new TextEncoder().encode(relativePath).length;
-                    
-                    if (fullPathBytes > maxFullPathLength) {
-                        // 경로가 너무 길면 비상 처리 (파일만 남기고 경로 단축)
-                        console.warn(`전체 경로가 너무 깁니다(${fullPathBytes} bytes): ${relativePath}`);
-                        
-                        // 파일명만 보존하고 경로는 압축
-                        const shortenedPath = `긴경로/${fileName}`;
-                        console.log(`경로 단축됨: ${relativePath} → ${shortenedPath}`);
-                        
-                        // 중요: 원본 파일 이름은 유지하되 경로만 변경
-                        filesWithPaths.push({ file: file, relativePath: shortenedPath });
-                        statusInfo.textContent = `일부 파일의 경로가 너무 길어 단축되었습니다.`;
-                    } else {
-                        // 정상 경로
-                        filesWithPaths.push({ file: file, relativePath: relativePath });
-                        console.log(`파일 추가: ${relativePath}`);
-                    }
+                    console.log(`숨김 파일 제외: ${currentPath}`);
                 }
+                resolve();
             }, err => {
                 console.error(`파일 읽기 오류 (${currentPath}):`, err);
                 reject(err); // 오류 발생 시 reject 호출
@@ -4430,10 +4435,10 @@ function initDropZone() {
         // 외부 파일 처리
         if (isExternalDrop) {
             console.log('[initDropZone] 외부 파일 드롭 처리');
-            if (folderItem) {
-                handleExternalFileDrop(e, folderItem);
-            } else {
-                handleExternalFileDrop(e);
+        if (folderItem) {
+            handleExternalFileDrop(e, folderItem);
+        } else {
+            handleExternalFileDrop(e);
             }
         }
         // 내부 파일 이동 처리
