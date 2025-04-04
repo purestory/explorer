@@ -1070,9 +1070,9 @@ function renderFiles(files) {
             // 정렬된 파일 목록
             const sortedFiles = sortFiles(files);
             
-            // 숨김 파일 필터링 (추가된 부분)
-            // 이름이 .으로 시작하는 파일은 숨김 파일로 간주
-            const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
+            // 숨김 파일 표시 (이전 필터링 코드 제거)
+            // 모든 파일이 표시되도록 변경
+            const visibleFiles = sortedFiles;
             
             // 잠금 상태 디버그 로깅
             console.log('현재 잠금 폴더 목록:', lockedFolders);
@@ -1249,7 +1249,7 @@ function renderFiles(files) {
             }
         
             // 상태 정보 업데이트 - 숨김 파일 카운트 포함
-            const hiddenCount = sortedFiles.length - visibleFiles.length;
+            const hiddenCount = 0;
             if (hiddenCount > 0) {
                 statusInfo.textContent = `${visibleFiles.length}개 항목 (${hiddenCount}개 숨김 파일 제외)`;
             } else {
@@ -2441,76 +2441,71 @@ function traverseFileTree(entry, path, filesWithPaths) {
 
         if (entry.isFile) {
             entry.file(file => {
-                // 숨김 파일 (.으로 시작)은 제외
-                if (!file.name.startsWith('.')) {
-                    // 파일 이름 길이 체크 및 처리
-                    const maxFileNameLength = 220; // 최대 파일명 바이트 길이 설정
-                    let fileName = file.name;
-                    let relativePath = currentPath;
+                // 숨김 파일 (.으로 시작)도 포함
+                // 파일 이름 길이 체크 및 처리
+                const maxFileNameLength = 220; // 최대 파일명 바이트 길이 설정
+                let fileName = file.name;
+                let relativePath = currentPath;
+                
+                // 파일명 바이트 길이 계산
+                const fileNameBytes = new TextEncoder().encode(fileName).length;
+                
+                // 파일명이 너무 길면 잘라내기
+                if (fileNameBytes > maxFileNameLength) {
+                    const extension = fileName.lastIndexOf('.') > 0 ? fileName.substring(fileName.lastIndexOf('.')) : '';
+                    const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.') > 0 ? fileName.lastIndexOf('.') : fileName.length);
                     
-                    // 파일명 바이트 길이 계산
-                    const fileNameBytes = new TextEncoder().encode(fileName).length;
+                    // 바이트 기준으로 이름 자르기
+                    let shortName = '';
+                    const maxBytes = maxFileNameLength - new TextEncoder().encode(extension).length - 3; // "..." 공간 확보
                     
-                    // 파일명이 너무 길면 잘라내기
-                    if (fileNameBytes > maxFileNameLength) {
-                        const extension = fileName.lastIndexOf('.') > 0 ? fileName.substring(fileName.lastIndexOf('.')) : '';
-                        const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.') > 0 ? fileName.lastIndexOf('.') : fileName.length);
-                        
-                        // 바이트 기준으로 이름 자르기
-                        let shortName = '';
-                        const maxBytes = maxFileNameLength - new TextEncoder().encode(extension).length - 3; // "..." 공간 확보
-                        
-                        // UTF-8은 문자당 1~4바이트, 문자 경계를 보존하며 자름
-                        let byteCount = 0;
-                        for (let i = 0; i < fileNameWithoutExt.length; i++) {
-                            const charBytes = new TextEncoder().encode(fileNameWithoutExt[i]).length;
-                            if (byteCount + charBytes <= maxBytes) {
-                                shortName += fileNameWithoutExt[i];
-                                byteCount += charBytes;
-                            } else {
-                                break;
-                            }
-                        }
-                        
-                        const newFileName = shortName + '...' + extension;
-                        
-                        // 상대 경로도 수정
-                        if (path) {
-                            relativePath = `${path}/${newFileName}`;
+                    // UTF-8은 문자당 1~4바이트, 문자 경계를 보존하며 자름
+                    let byteCount = 0;
+                    for (let i = 0; i < fileNameWithoutExt.length; i++) {
+                        const charBytes = new TextEncoder().encode(fileNameWithoutExt[i]).length;
+                        if (byteCount + charBytes <= maxBytes) {
+                            shortName += fileNameWithoutExt[i];
+                            byteCount += charBytes;
                         } else {
-                            relativePath = newFileName;
-                        }
-                        
-                        console.log(`파일명이 너무 깁니다. 원본: ${fileName}, 수정됨: ${newFileName}`);
-                        
-                        // 파일 객체를 새로운 이름으로 복제 (File 객체는 직접 수정할 수 없음)
-                        const renamedFile = new File([file], newFileName, { type: file.type });
-                        filesWithPaths.push({ file: renamedFile, relativePath: relativePath });
-                    } else {
-                        // 전체 경로 바이트 길이 확인 (UTF-8)
-                        const fullPathBytes = new TextEncoder().encode(relativePath).length;
-                        
-                        if (fullPathBytes > maxFullPathLength) {
-                            // 경로가 너무 길면 비상 처리 (파일만 남기고 경로 단축)
-                            console.warn(`전체 경로가 너무 깁니다(${fullPathBytes} bytes): ${relativePath}`);
-                            
-                            // 파일명만 보존하고 경로는 압축
-                            const shortenedPath = `긴경로/${fileName}`;
-                            console.log(`경로 단축됨: ${relativePath} → ${shortenedPath}`);
-                            
-                            // 중요: 원본 파일 이름은 유지하되 경로만 변경
-                            filesWithPaths.push({ file: file, relativePath: shortenedPath });
-                            statusInfo.textContent = `일부 파일의 경로가 너무 길어 단축되었습니다.`;
-                        } else {
-                            // 정상 경로
-                            filesWithPaths.push({ file: file, relativePath: relativePath });
-                            console.log(`파일 추가: ${relativePath}`);
+                            break;
                         }
                     }
+                    
+                    const newFileName = shortName + '...' + extension;
+                    
+                    // 상대 경로도 수정
+                    if (path) {
+                        relativePath = `${path}/${newFileName}`;
+                    } else {
+                        relativePath = newFileName;
+                    }
+                    
+                    console.log(`파일명이 너무 깁니다. 원본: ${fileName}, 수정됨: ${newFileName}`);
+                    
+                    // 파일 객체를 새로운 이름으로 복제 (File 객체는 직접 수정할 수 없음)
+                    const renamedFile = new File([file], newFileName, { type: file.type });
+                    filesWithPaths.push({ file: renamedFile, relativePath: relativePath });
                 } else {
-                    console.log(`숨김 파일 제외: ${currentPath}`);
+                    // 전체 경로 바이트 길이 확인 (UTF-8)
+                    const fullPathBytes = new TextEncoder().encode(relativePath).length;
+                    
+                    if (fullPathBytes > maxFullPathLength) {
+                        // 경로가 너무 길면 비상 처리 (파일만 남기고 경로 단축)
+                        console.warn(`전체 경로가 너무 깁니다(${fullPathBytes} bytes): ${relativePath}`);
+                        
+                        // 파일명만 보존하고 경로는 압축
+                        const shortenedPath = `긴경로/${fileName}`;
+                        console.log(`경로 단축됨: ${relativePath} → ${shortenedPath}`);
+                        
+                        // 중요: 원본 파일 이름은 유지하되 경로만 변경
+                        filesWithPaths.push({ file: file, relativePath: shortenedPath });
+                        statusInfo.textContent = `일부 파일의 경로가 너무 길어 단축되었습니다.`;
+                    } else {
+                        // 정상 경로
+                        filesWithPaths.push({ file: file, relativePath: relativePath });
+                        console.log(`파일 추가: ${relativePath}`);
+                    }
                 }
-                resolve();
             }, err => {
                 console.error(`파일 읽기 오류 (${currentPath}):`, err);
                 reject(err); // 오류 발생 시 reject 호출
