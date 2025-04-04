@@ -2159,10 +2159,7 @@ function handleDropZoneDrop(e) {
     window.removeEventListener('dragleave', handleDropZoneDragLeave);
     dropZone.removeEventListener('drop', handleDropZoneDrop);
     
-    window.addEventListener('dragenter', handleDropZoneDragEnter);
-    window.addEventListener('dragover', handleDropZoneDragOver);
-    window.addEventListener('dragleave', handleDropZoneDragLeave);
-    dropZone.addEventListener('drop', handleDropZoneDrop);
+    console.log('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
     
     // 개발 모드에서 폴더 항목 CSS 선택자 유효성 확인
     console.log('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
@@ -4358,6 +4355,15 @@ function showToast(message, type = 'info') {
 
 // 드롭존 초기화 및 이벤트 설정
 function initDropZone() {
+    // 전역 변수로 등록된 리스너가 있는지 체크
+    window.dropZoneInitialized = window.dropZoneInitialized || false;
+    
+    // 이미 초기화 된 경우 중복 등록 방지
+    if (window.dropZoneInitialized) {
+        console.log('드롭존 이미 초기화됨, 중복 등록 방지');
+        return;
+    }
+    
     // 기본 동작 방지 함수 (드래그 앤 드롭 이벤트에서 사용)
     function preventDefaults(e) {
         e.preventDefault();
@@ -4390,9 +4396,11 @@ function initDropZone() {
     dropZone.removeEventListener('dragover', handleDragOver);
     dropZone.removeEventListener('dragleave', handleDragLeave);
     dropZone.removeEventListener('drop', handleDrop);
+    dropZone.removeEventListener('drop', handleDropZoneDrop); // 추가: 다른 핸들러도 제거
     fileView.removeEventListener('dragover', handleDragOver);
     fileView.removeEventListener('dragleave', handleDragLeave);
     fileView.removeEventListener('drop', handleDrop);
+    fileView.removeEventListener('drop', handleFileDrop); // 추가: 파일뷰의 파일드롭 핸들러도 제거
     document.body.removeEventListener('dragover', preventDefaults);
     document.body.removeEventListener('drop', preventDefaults);
     
@@ -4473,7 +4481,8 @@ function initDropZone() {
     fileView.classList.remove('dragging');
     dropZone.style.display = 'none';
     
-    console.log('초기화 시 드래그 클래스 정리');
+    console.log('드롭존 초기화 완료, 중복 등록 방지 플래그 설정');
+    window.dropZoneInitialized = true;  // 초기화 완료 플래그 설정
 }
 
 // 파일/폴더가 폴더 위에 드롭되었을 때 호출되는 함수
