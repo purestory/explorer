@@ -1,6 +1,54 @@
-# WebDAV 파일 서버
+# WebDAV 파일 탐색기
 
-WebDAV(Web Distributed Authoring and Versioning) 프로토콜을 통해 파일을 공유하고 관리할 수 있는 웹 기반 파일 서버입니다.
+Express.js와 WebDAV 서버를 기반으로 구현된 파일 탐색기 웹 애플리케이션입니다.
+
+## 주요 기능
+
+- 파일 및 폴더 관리 (업로드, 다운로드, 이동, 복사, 삭제)
+- 긴 경로 및 한글 파일명 지원
+- 드래그 앤 드롭 파일 업로드
+- 폴더 잠금 기능
+- 디스크 사용량 모니터링
+- 파일 압축 기능
+
+## 구조
+
+- `backend/`: 서버 코드 (Express.js, WebDAV)
+- `frontend/`: 클라이언트 코드 (HTML, CSS, JavaScript)
+- `코드분석.md`: 프론트엔드 코드 분석 문서
+- `백엔드_코드분석.md`: 백엔드 코드 분석 문서
+
+## 기술 스택
+
+- **백엔드**: Node.js, Express.js, webdav-server
+- **프론트엔드**: HTML, CSS, JavaScript (바닐라)
+
+## 설치 및 실행
+
+1. 저장소 클론
+   ```
+   git clone https://github.com/purestory/webdav.git
+   cd webdav
+   ```
+
+2. 백엔드 설치 및 실행
+   ```
+   cd backend
+   npm install
+   npm start
+   ```
+
+3. 브라우저에서 접속
+   ```
+   http://localhost:3333
+   ```
+
+## 특징
+
+- 모놀리식 구조의 간단한 설계
+- 상세한 로깅 시스템
+- 복잡한 파일명 및 경로 처리 지원
+- WebDAV 프로토콜 지원
 
 ## 기능
 
