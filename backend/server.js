@@ -200,11 +200,11 @@ app.get('/api/files/*', async (req, res) => {
     let requestPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, requestPath);
     
-    log(`파일 목록 요청: ${fullPath}`);
+    logWithIP(`파일 목록 요청: ${fullPath}`, req);
 
     // 경로가 존재하는지 확인
     if (!fs.existsSync(fullPath)) {
-      errorLog(`경로를 찾을 수 없습니다: ${fullPath}`);
+      errorLogWithIP(`경로를 찾을 수 없습니다: ${fullPath}`, null, req);
       return res.status(404).send('경로를 찾을 수 없습니다.');
     }
 
@@ -212,7 +212,7 @@ app.get('/api/files/*', async (req, res) => {
     const stats = fs.statSync(fullPath);
     if (!stats.isDirectory()) {
       // 파일인 경우 처리
-      log(`파일 요청: ${fullPath}`);
+      logWithIP(`파일 다운로드 요청: ${fullPath}`, req);
       
       // 파일명 추출
       const fileName = path.basename(fullPath);
@@ -260,7 +260,13 @@ app.get('/api/files/*', async (req, res) => {
         // 일반 다운로드 파일
         // Content-Disposition 헤더에 UTF-8로 인코딩된 파일명 설정
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        res.download(fullPath);
+        res.download(fullPath, fileName, (err) => {
+          if (err) {
+            errorLogWithIP(`파일 다운로드 중 오류: ${fullPath}`, err, req);
+          } else {
+            logWithIP(`파일 다운로드 완료: ${fullPath}`, req);
+          }
+        });
       }
       return;
     }
@@ -280,10 +286,10 @@ app.get('/api/files/*', async (req, res) => {
       };
     });
 
-    log(`파일 목록 반환: ${fileItems.length}개 항목`);
+    logWithIP(`파일 목록 반환: ${fileItems.length}개 항목`, req);
     res.json(fileItems);
   } catch (error) {
-    errorLog('파일 목록 오류:', error);
+    errorLogWithIP('파일 목록 오류:', error, req);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
