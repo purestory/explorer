@@ -3815,19 +3815,8 @@ function isPathLocked(path) {
         return false;
     }
     
-    return lockedFolders.some(lockedPath => {
-        // 경로가 잠긴 폴더 자체인 경우
-        if (path === lockedPath) {
-            return true;
-        }
-        
-        // 경로가 잠긴 폴더의 하위 경로인 경우 (접근 제한)
-        if (path.startsWith(lockedPath + '/')) {
-            return true;
-        }
-        
-        return false;
-    });
+    // 정확히 해당 경로만 확인 (하위 경로는 isPathAccessRestricted 함수에서 확인)
+    return lockedFolders.includes(path);
 }
 
 // 폴더 잠금 토글 기능
