@@ -25,11 +25,27 @@ function log(message) {
   console.log(message);
 }
 
+function logWithIP(message, req) {
+  const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+  const timestamp = new Date().toISOString();
+  const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
+  logFile.write(logMessage);
+  console.log(`[IP: ${ip}] ${message}`);
+}
+
 function errorLog(message, error) {
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - ERROR: ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
   errorLogFile.write(logMessage);
   console.error(message, error);
+}
+
+function errorLogWithIP(message, error, req) {
+  const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+  const timestamp = new Date().toISOString();
+  const logMessage = `${timestamp} - ERROR: [IP: ${ip}] ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
+  errorLogFile.write(logMessage);
+  console.error(`[IP: ${ip}] ${message}`, error);
 }
 
 // 최대 저장 용량 설정 (100GB)
@@ -387,11 +403,11 @@ app.delete('/api/files/*', (req, res) => {
     const itemPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, itemPath);
     
-    log(`삭제 요청: ${fullPath}`);
+    logWithIP(`삭제 요청: ${fullPath}`, req);
 
     // 존재하는지 확인
     if (!fs.existsSync(fullPath)) {
-      errorLog(`파일/폴더를 찾을 수 없음: ${fullPath}`);
+      errorLogWithIP(`파일/폴더를 찾을 수 없음: ${fullPath}`, null, req);
       return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
     }
 
@@ -402,7 +418,7 @@ app.delete('/api/files/*', (req, res) => {
       try {
         lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
       } catch (e) {
-        errorLog('잠긴 폴더 목록 로드 오류:', e);
+        errorLogWithIP('잠긴 폴더 목록 로드 오류:', e, req);
         lockedFolders = [];
       }
     }
@@ -427,23 +443,23 @@ app.delete('/api/files/*', (req, res) => {
 
     // 잠금 확인
     if (isLocked || hasLockedSubfolders) {
-      errorLog(`잠긴 폴더 혹은 내부에 잠긴 폴더가 있는 폴더 삭제 시도: ${fullPath}`);
+      errorLogWithIP(`잠긴 폴더 혹은 내부에 잠긴 폴더가 있는 폴더 삭제 시도: ${fullPath}`, null, req);
       return res.status(403).send('잠긴 폴더 또는 잠긴 폴더를 포함한 폴더는 삭제할 수 없습니다.');
     }
 
     if (isDirectory) {
       // 폴더 삭제 (재귀적)
       fs.rmdirSync(fullPath, { recursive: true });
-      log(`폴더 삭제 완료: ${fullPath}`);
+      logWithIP(`폴더 삭제 완료: ${fullPath}`, req);
     } else {
       // 파일 삭제
       fs.unlinkSync(fullPath);
-      log(`파일 삭제 완료: ${fullPath}`);
+      logWithIP(`파일 삭제 완료: ${fullPath}`, req);
     }
 
     res.status(200).send('삭제되었습니다.');
   } catch (error) {
-    errorLog('삭제 오류:', error);
+    errorLogWithIP('삭제 오류:', error, req);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
@@ -461,7 +477,7 @@ app.post('/api/upload', (req, res) => {
   // 2. multer 미들웨어 실행
   upload(req, res, function(err) {
     if (err) {
-      errorLog('파일 업로드 처리 오류 (multer):', err);
+      errorLogWithIP('파일 업로드 처리 오류 (multer):', err, req);
       // Multer 오류 처리 (예: 파일 크기 초과)
       if (err instanceof multer.MulterError) {
           return res.status(400).json({ error: `파일 업로드 오류: ${err.message}` });
@@ -471,11 +487,11 @@ app.post('/api/upload', (req, res) => {
 
     // 3. 필수 데이터 확인 (파일 및 파일 정보)
     if (!req.files || req.files.length === 0) {
-      errorLog('업로드 요청에 파일이 없습니다.');
+      errorLogWithIP('업로드 요청에 파일이 없습니다.', null, req);
       return res.status(400).json({ error: '업로드할 파일이 없습니다.' });
     }
     if (!req.body.fileInfo) {
-      errorLog('업로드 요청에 파일 정보(fileInfo)가 없습니다.');
+      errorLogWithIP('업로드 요청에 파일 정보(fileInfo)가 없습니다.', null, req);
       return res.status(400).json({ error: '파일 정보가 누락되었습니다.' });
     }
 
@@ -486,13 +502,13 @@ app.post('/api/upload', (req, res) => {
 
     try {
       fileInfoArray = JSON.parse(req.body.fileInfo);
-      log(`파일 정보 수신: ${fileInfoArray.length}개 항목`);
+      logWithIP(`파일 정보 수신: ${fileInfoArray.length}개 항목`, req);
     } catch (parseError) {
-      errorLog('fileInfo JSON 파싱 오류:', parseError);
+      errorLogWithIP('fileInfo JSON 파싱 오류:', parseError, req);
       return res.status(400).json({ error: '잘못된 파일 정보 형식입니다.' });
     }
 
-    log(`기본 업로드 경로: ${baseUploadPath || '루트 디렉토리'}, 절대 경로: ${rootUploadDir}`);
+    logWithIP(`기본 업로드 경로: ${baseUploadPath || '루트 디렉토리'}, 절대 경로: ${rootUploadDir}`, req);
 
     // 5. 각 파일 처리 및 저장
     const processedFiles = [];
@@ -522,7 +538,7 @@ app.post('/api/upload', (req, res) => {
       
       const newFileName = truncatedName + '...' + extension;
       
-      log(`파일명이 너무 김(Bytes: ${Buffer.byteLength(filename)}): ${filename} → ${newFileName}`);
+      logWithIP(`파일명이 너무 김(Bytes: ${Buffer.byteLength(filename)}): ${filename} → ${newFileName}`, req);
       return newFileName;
     }
 
@@ -534,7 +550,7 @@ app.post('/api/upload', (req, res) => {
       }
       
       // 경로가 너무 길 경우 처리 로직
-      log(`경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`);
+      logWithIP(`경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`, req);
       
       // 경로 분해 및 분석
       const pathParts = fullPath.split(path.sep);
@@ -606,8 +622,8 @@ app.post('/api/upload', (req, res) => {
       const truncatedPath = truncatedParts.join(path.sep);
       const finalPathBytes = Buffer.byteLength(truncatedPath);
       
-      log(`경로 길이 제한: ${fullPathBytes} → ${finalPathBytes} 바이트`);
-      log(`줄어든 경로: ${truncatedPath}`);
+      logWithIP(`경로 길이 제한: ${fullPathBytes} → ${finalPathBytes} 바이트`, req);
+      logWithIP(`줄어든 경로: ${truncatedPath}`, req);
       
       // 최종 확인 - 여전히 너무 길면 더 강력하게 줄이기
       if (finalPathBytes > MAX_PATH_BYTES) {
@@ -618,7 +634,7 @@ app.post('/api/upload', (req, res) => {
           
         // 파일명과 루트 사이에 "..." 추가하여 모든 중간 경로 제거
         const emergencyPath = rootAndFile.join(path.sep + '...' + path.sep);
-        log(`비상 경로 축소: ${truncatedPath} → ${emergencyPath}`);
+        logWithIP(`비상 경로 축소: ${truncatedPath} → ${emergencyPath}`, req);
         return { path: emergencyPath, truncated: true, emergency: true };
       }
       
@@ -634,7 +650,7 @@ app.post('/api/upload', (req, res) => {
 
         if (!fileInfo || !fileInfo.relativePath) {
             const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-            errorLog(`파일 정보 불일치 또는 상대 경로 누락: ${originalName} (index: ${index})`);
+            errorLogWithIP(`파일 정보 불일치 또는 상대 경로 누락: ${originalName} (index: ${index})`, null, req);
             errors.push(`파일 ${originalName}의 정보를 찾을 수 없거나 상대 경로가 없습니다.`);
             return; // 다음 파일로 이동
         }
@@ -650,7 +666,7 @@ app.post('/api/upload', (req, res) => {
                 finalFileName = truncateFileName(originalFileName);
                 const dirName = path.dirname(relativeFilePath);
                 relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
-                log(`파일명 길이 제한(Bytes)으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`);
+                logWithIP(`파일명 길이 제한(Bytes)으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`, req);
             }
             
             // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 수정된 상대 경로)
@@ -666,7 +682,7 @@ app.post('/api/upload', (req, res) => {
                 if (relativeFilePath.startsWith(path.sep)) {
                     relativeFilePath = relativeFilePath.substring(1);
                 }
-                log(`전체 경로가 너무 길어 변경됨: ${relativeFilePath}`);
+                logWithIP(`전체 경로가 너무 길어 변경됨: ${relativeFilePath}`, req);
             }
 
             // 저장될 디렉토리 경로 추출
@@ -676,13 +692,13 @@ app.post('/api/upload', (req, res) => {
             if (!fs.existsSync(destinationDir)) {
                 fs.mkdirSync(destinationDir, { recursive: true });
                 fs.chmodSync(destinationDir, 0o777); // 생성된 디렉토리 권한 설정
-                log(`하위 디렉토리 생성됨: ${destinationDir}`);
+                logWithIP(`하위 디렉토리 생성됨: ${destinationDir}`, req);
             }
 
             // 파일 시스템에 저장하기 전 상세 로그 추가
-            log(`[Upload Detail] Original Relative Path: ${fileInfo.relativePath}`);
-            log(`[Upload Detail] Final Filename: ${finalFileName} (Length: ${finalFileName.length}, Bytes: ${Buffer.byteLength(finalFileName)})`);
-            log(`[Upload Detail] Destination Path: ${destinationPath} (Length: ${destinationPath.length}, Bytes: ${Buffer.byteLength(destinationPath)})`);
+            logWithIP(`[Upload Detail] Original Relative Path: ${fileInfo.relativePath}`, req);
+            logWithIP(`[Upload Detail] Final Filename: ${finalFileName} (Length: ${finalFileName.length}, Bytes: ${Buffer.byteLength(finalFileName)})`, req);
+            logWithIP(`[Upload Detail] Destination Path: ${destinationPath} (Length: ${destinationPath.length}, Bytes: ${Buffer.byteLength(destinationPath)})`, req);
 
             // 파일 시스템에 저장 (메모리 버퍼 사용)
             fs.writeFileSync(destinationPath, file.buffer);
@@ -699,10 +715,10 @@ app.post('/api/upload', (req, res) => {
                 fullPath: destinationPath
             });
 
-            log(`파일 저장 완료: ${destinationPath} (크기: ${formatBytes(file.size)})`);
+            logWithIP(`파일 저장 완료: ${destinationPath} (크기: ${formatBytes(file.size)})`, req);
 
         } catch (writeError) {
-            errorLog(`파일 저장 중 오류: ${fileInfo.relativePath}`, writeError);
+            errorLogWithIP(`파일 저장 중 오류: ${fileInfo.relativePath}`, writeError, req);
             errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`);
         }
     });
@@ -710,7 +726,7 @@ app.post('/api/upload', (req, res) => {
     // 6. 최종 응답 전송
     if (errors.length > 0) {
       // 일부 오류 발생
-      log(`파일 업로드 중 ${errors.length}개의 오류 발생`);
+      logWithIP(`파일 업로드 중 ${errors.length}개의 오류 발생`, req);
       res.status(207).json({ // Multi-Status 응답
         message: `일부 파일 업로드 중 오류 발생 (${processedFiles.length}개 성공, ${errors.length}개 실패)`,
         processedFiles: processedFiles,
@@ -718,7 +734,7 @@ app.post('/api/upload', (req, res) => {
       });
     } else {
       // 모든 파일 성공
-      log(`${processedFiles.length}개 파일 업로드 성공`);
+      logWithIP(`${processedFiles.length}개 파일 업로드 성공`, req);
       res.status(201).json({
         message: '파일 업로드 성공',
         files: processedFiles
