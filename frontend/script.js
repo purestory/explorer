@@ -4416,7 +4416,9 @@ function initDropZone() {
 }
 
 // 파일/폴더가 폴더 위에 드롭되었을 때 호출하는 함수는 아래의 통합 함수로 대체되었습니다.
-// determineDropType(e);
+function handleFileDrop(e, targetFolderItem = null) {
+    // 드롭 타입 판단 
+    const { isInternalDrop, isExternalDrop, reason } = determineDropType(e);
     
     // 최종 판단 로그 출력
     //console.log(`파일 드롭 처리: ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`); // 콘솔 출력 제거됨
