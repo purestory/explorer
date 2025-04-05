@@ -1240,21 +1240,20 @@ function renderFiles(files) {
                     fileItem.appendChild(fileName);
                     fileItem.appendChild(fileDetails);
                     
-                    // 잠긴 폴더에 잠금 아이콘 추가 - 상위 폴더(..)가 아니고 직접 잠긴 폴더만 표시
-                    if (file.name !== '..' && file.isFolder && isDirectlyLocked) {
+                    // 잠긴 폴더에 잠금 아이콘 추가
+                    if (file.isFolder && isDirectlyLocked) {
                         const lockIcon = document.createElement('div');
                         lockIcon.className = 'lock-icon';
                         lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
                         fileItem.appendChild(lockIcon);
                     }
                     
-                    // 접근 제한된 폴더에 표시 추가 - 잠금 표시 사용하지 않음
+                    // 접근 제한된 폴더에 표시 추가
                     if (file.isFolder && isRestricted) {
-                        // 하위 폴더에는 접근 제한 아이콘 표시하지 않음
-                        // const restrictedIcon = document.createElement('div');
-                        // restrictedIcon.className = 'restricted-icon';
-                        // restrictedIcon.innerHTML = '<i class="fas fa-shield-alt"></i>';
-                        // fileItem.appendChild(restrictedIcon);
+                        const restrictedIcon = document.createElement('div');
+                        restrictedIcon.className = 'restricted-icon';
+                        restrictedIcon.innerHTML = '<i class="fas fa-shield-alt"></i>';
+                        fileItem.appendChild(restrictedIcon);
                     }
                     
                     // 이벤트 리스너 설정
@@ -4536,7 +4535,7 @@ function initDropZone() {
 }
 
 // 파일/폴더가 폴더 위에 드롭되었을 때 호출되는 함수
-function handleFileDrop_renamed1(e, targetFolderItem) {
+function handleFileDrop(e, targetFolderItem) {
     preventDefaults(e);
     
     // 드래그 상태 초기화
@@ -4723,7 +4722,7 @@ function determineDropType(e) {
 }
 
 // 파일/폴더가 드롭되었을 때 호출되는 통합 함수
-function handleFileDrop_renamed2(e, targetFolderItem = null) {
+function handleFileDrop(e, targetFolderItem = null) {
     preventDefaults(e);
     
     // 드래그 상태 초기화

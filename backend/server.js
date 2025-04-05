@@ -22,7 +22,7 @@ function log(message) {
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - ${message}\n`;
   logFile.write(logMessage);
-  console.log(message);
+  // 콘솔 출력 제거됨
 }
 
 function logWithIP(message, req) {
@@ -35,7 +35,7 @@ function logWithIP(message, req) {
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
   logFile.write(logMessage);
-  console.log(`[IP: ${ip}] ${message}`);
+  // 콘솔 출력 제거됨
 }
 
 function errorLog(message, error) {
@@ -152,7 +152,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 
 // 로깅 미들웨어
 app.use((req, res, next) => {
-  log(`${req.method} ${req.url}`);
+  // 콘솔 로깅 제거됨
   next();
 });
 
@@ -1024,4 +1024,5 @@ app.post('/api/lock/:path(*)', (req, res) => {
 app.listen(PORT, () => {
   log(`서버가 시작되었습니다. http://localhost:${PORT}`);
   log(`WebDAV 서버: http://localhost:${PORT}/webdav`);
+  // 콘솔 출력 제거됨
 }); 
