@@ -2019,84 +2019,84 @@ function handleFileDragOver(e) {
         }
     }
     
-    function handleFileDrop(e) {
-        preventDefaults(e);
-        
-        // 드래그 상태 초기화
-        window.draggingInProgress = false;
-    
-        // 드롭존 비활성화
-        dropZone.classList.remove('active');
-
-        // 파일 항목 찾기
-        const fileItem = e.target.closest('.file-item');
-
-        // 드롭 위치 및 상태 로깅
-        console.log('드롭 이벤트 발생 위치:', e.target.className);
-        console.log('DataTransfer Types:', Array.from(e.dataTransfer.types));
-        console.log('DataTransfer Files Length:', e.dataTransfer.files.length);
-
-        // 상위 폴더에 드롭되는 경우 차단
-        if (fileItem && fileItem.getAttribute('data-parent-dir') === 'true') {
-            console.log('상위 폴더에 드롭되어 무시됨');
-            return;
-        }
-
-        // 드래그 오버 스타일 제거 (폴더 항목에서)
-        if (fileItem) {
-            fileItem.classList.remove('drag-over');
-            console.log('드롭 대상 항목:', fileItem.getAttribute('data-name'), 
-                      '폴더 여부:', fileItem.getAttribute('data-is-folder'));
-        }
-
-        // 내부/외부 파일 판단
-        const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
-        
-        // 최종 판단 로그 출력
-        console.log(`파일 드롭 처리: ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
-        
-        // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리 (우선순위)
-        if (isExternalDrop) {
-            console.log('외부 파일 드롭으로 최종 판단');
-            
-            // 폴더가 아닌 항목 또는 빈 공간에 드롭된 경우 현재 경로에 업로드
-            if (!fileItem || fileItem.getAttribute('data-is-folder') !== 'true') {
-                console.log('현재 디렉토리에 외부 파일 업로드');
-                handleExternalFileDrop(e); // 현재 경로에 업로드
-            } else {
-                // 폴더 항목에 드롭된 경우 해당 폴더를 타겟으로 지정
-                console.log(`'${fileItem.getAttribute('data-name')}' 폴더에 외부 파일 업로드`);
-                handleExternalFileDrop(e, fileItem);
-            }
-        } 
-        // 내부 파일 이동 처리
-        else if (isInternalDrop && draggedPaths.length > 0) {
-            console.log('내부 파일 이동으로 최종 판단');
-            
-            // 자기 자신에게 드롭하거나 선택된 항목에 드롭하는 경우 방지
-            if (fileItem && fileItem.classList.contains('selected')) {
-                console.log('선택된 항목에는 드롭할 수 없음');
-                return;
-            }
-            
-            // 타겟이 폴더인 경우에만 이동 처리
-            if (!fileItem || fileItem.getAttribute('data-is-folder') === 'true') {
-                // 내부 파일 이동 처리 (경로 배열과 타겟 폴더 정보 전달)
-                handleInternalFileDrop(draggedPaths, fileItem);
-            } else {
-                console.log('파일에 드롭됨: 폴더가 아니므로 이동할 수 없습니다.');
-            }
-        } 
-        // 처리할 수 없는 드롭
-        else {
-            console.log('처리할 수 없는 드롭 형식 또는 데이터 없음');
-            showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
-        }
-    }
-    
-    // 이벤트 리스너 등록
-    fileList.addEventListener('dragstart', handleFileDragStart);
-    fileList.addEventListener('dragend', handleFileDragEnd);
+// 중복 함수 제거 -     function handleFileDrop(e) {
+// 중복 함수 제거 -         preventDefaults(e);
+// 중복 함수 제거 -         
+// 중복 함수 제거 -         // 드래그 상태 초기화
+// 중복 함수 제거 -         window.draggingInProgress = false;
+// 중복 함수 제거 -     
+// 중복 함수 제거 -         // 드롭존 비활성화
+// 중복 함수 제거 -         dropZone.classList.remove('active');
+// 중복 함수 제거 - 
+// 중복 함수 제거 -         // 파일 항목 찾기
+// 중복 함수 제거 -         const fileItem = e.target.closest('.file-item');
+// 중복 함수 제거 - 
+// 중복 함수 제거 -         // 드롭 위치 및 상태 로깅
+// 중복 함수 제거 -         console.log('드롭 이벤트 발생 위치:', e.target.className);
+// 중복 함수 제거 -         console.log('DataTransfer Types:', Array.from(e.dataTransfer.types));
+// 중복 함수 제거 -         console.log('DataTransfer Files Length:', e.dataTransfer.files.length);
+// 중복 함수 제거 - 
+// 중복 함수 제거 -         // 상위 폴더에 드롭되는 경우 차단
+// 중복 함수 제거 -         if (fileItem && fileItem.getAttribute('data-parent-dir') === 'true') {
+// 중복 함수 제거 -             console.log('상위 폴더에 드롭되어 무시됨');
+// 중복 함수 제거 -             return;
+// 중복 함수 제거 -         }
+// 중복 함수 제거 - 
+// 중복 함수 제거 -         // 드래그 오버 스타일 제거 (폴더 항목에서)
+// 중복 함수 제거 -         if (fileItem) {
+// 중복 함수 제거 -             fileItem.classList.remove('drag-over');
+// 중복 함수 제거 -             console.log('드롭 대상 항목:', fileItem.getAttribute('data-name'), 
+// 중복 함수 제거 -                       '폴더 여부:', fileItem.getAttribute('data-is-folder'));
+// 중복 함수 제거 -         }
+// 중복 함수 제거 - 
+// 중복 함수 제거 -         // 내부/외부 파일 판단
+// 중복 함수 제거 -         const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
+// 중복 함수 제거 -         
+// 중복 함수 제거 -         // 최종 판단 로그 출력
+// 중복 함수 제거 -         console.log(`파일 드롭 처리: ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
+// 중복 함수 제거 -         
+// 중복 함수 제거 -         // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리 (우선순위)
+// 중복 함수 제거 -         if (isExternalDrop) {
+// 중복 함수 제거 -             console.log('외부 파일 드롭으로 최종 판단');
+// 중복 함수 제거 -             
+// 중복 함수 제거 -             // 폴더가 아닌 항목 또는 빈 공간에 드롭된 경우 현재 경로에 업로드
+// 중복 함수 제거 -             if (!fileItem || fileItem.getAttribute('data-is-folder') !== 'true') {
+// 중복 함수 제거 -                 console.log('현재 디렉토리에 외부 파일 업로드');
+// 중복 함수 제거 -                 handleExternalFileDrop(e); // 현재 경로에 업로드
+// 중복 함수 제거 -             } else {
+// 중복 함수 제거 -                 // 폴더 항목에 드롭된 경우 해당 폴더를 타겟으로 지정
+// 중복 함수 제거 -                 console.log(`'${fileItem.getAttribute('data-name')}' 폴더에 외부 파일 업로드`);
+// 중복 함수 제거 -                 handleExternalFileDrop(e, fileItem);
+// 중복 함수 제거 -             }
+// 중복 함수 제거 -         } 
+// 중복 함수 제거 -         // 내부 파일 이동 처리
+// 중복 함수 제거 -         else if (isInternalDrop && draggedPaths.length > 0) {
+// 중복 함수 제거 -             console.log('내부 파일 이동으로 최종 판단');
+// 중복 함수 제거 -             
+// 중복 함수 제거 -             // 자기 자신에게 드롭하거나 선택된 항목에 드롭하는 경우 방지
+// 중복 함수 제거 -             if (fileItem && fileItem.classList.contains('selected')) {
+// 중복 함수 제거 -                 console.log('선택된 항목에는 드롭할 수 없음');
+// 중복 함수 제거 -                 return;
+// 중복 함수 제거 -             }
+// 중복 함수 제거 -             
+// 중복 함수 제거 -             // 타겟이 폴더인 경우에만 이동 처리
+// 중복 함수 제거 -             if (!fileItem || fileItem.getAttribute('data-is-folder') === 'true') {
+// 중복 함수 제거 -                 // 내부 파일 이동 처리 (경로 배열과 타겟 폴더 정보 전달)
+// 중복 함수 제거 -                 handleInternalFileDrop(draggedPaths, fileItem);
+// 중복 함수 제거 -             } else {
+// 중복 함수 제거 -                 console.log('파일에 드롭됨: 폴더가 아니므로 이동할 수 없습니다.');
+// 중복 함수 제거 -             }
+// 중복 함수 제거 -         } 
+// 중복 함수 제거 -         // 처리할 수 없는 드롭
+// 중복 함수 제거 -         else {
+// 중복 함수 제거 -             console.log('처리할 수 없는 드롭 형식 또는 데이터 없음');
+// 중복 함수 제거 -             showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
+// 중복 함수 제거 -         }
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 이벤트 리스너 등록
+// 중복 함수 제거 -     fileList.addEventListener('dragstart', handleFileDragStart);
+// 중복 함수 제거 -     fileList.addEventListener('dragend', handleFileDragEnd);
     fileList.addEventListener('dragenter', handleFileDragEnter);
     fileList.addEventListener('dragover', handleFileDragOver);
     fileList.addEventListener('dragleave', handleFileDragLeave);
@@ -4490,89 +4490,89 @@ function initDropZone() {
 }
 
 // 파일/폴더가 폴더 위에 드롭되었을 때 호출되는 함수
-function handleFileDrop(e, targetFolderItem) {
-    preventDefaults(e);
-    
-    // 드래그 상태 초기화
-    window.draggingInProgress = false;
-    
-    // 타겟 폴더 정보 가져오기
-    const targetName = targetFolderItem.getAttribute('data-name');
-    const targetPath = targetFolderItem.getAttribute('data-path') || currentPath;
-    console.log(`폴더에 파일 드롭됨 - 대상: ${targetName}, 경로: ${targetPath}`);
-    
-    // 상위 디렉토리로 이동 처리는 무시
-    if (targetName === '..' || targetFolderItem.hasAttribute('data-parent-dir')) {
-        console.log('상위 디렉토리로의 이동은 처리하지 않음');
-        return;
-    }
-    
-    // 드롭된 데이터 유형 확인
-    const dataTypes = Array.from(e.dataTransfer.types);
-    console.log('폴더 드롭 - 데이터 유형:', dataTypes);
-    
-    // 1. 외부 파일 확인 (File 객체 존재 여부)
-    let isExternalDrop = e.dataTransfer.files.length > 0;
-    
-    // 2. 내부 드래그 여부 확인
-    let isInternalDrop = false;
-    let draggedPaths = [];
-    
-    // 내부 드래그 마커 확인
-    if (dataTypes.includes('application/x-internal-drag')) {
-        isInternalDrop = true;
-        console.log('폴더 드롭 - 내부 드래그 마커 발견');
-    }
-    
-    // 텍스트 데이터에서 경로 정보 추출 시도
-    if (dataTypes.includes('text/plain')) {
-        const textData = e.dataTransfer.getData('text/plain');
-        if (textData) {
-            const paths = textData.split('\n').filter(path => path.trim());
-            
-            // 경로가 내부 경로인지 확인 (예: /로 시작하거나 currentPath에 있는 경로)
-            const isInternalPaths = paths.every(path => 
-                path.startsWith('/') || 
-                (currentPath && path.startsWith(currentPath))
-            );
-            
-            if (isInternalPaths && paths.length > 0) {
-                isInternalDrop = true;
-                draggedPaths = paths;
-                console.log('폴더 드롭 - 텍스트 데이터에서 내부 경로 발견:', draggedPaths);
-            }
-        }
-    }
-    
-    // JSON 데이터 확인
-    if (dataTypes.includes('application/json')) {
-        try {
-            const jsonData = JSON.parse(e.dataTransfer.getData('application/json'));
-            if (jsonData.source === 'internal' && Array.isArray(jsonData.items) && jsonData.items.length > 0) {
-                isInternalDrop = true;
-                draggedPaths = jsonData.items;
-                console.log('폴더 드롭 - JSON 데이터에서 내부 경로 발견:', draggedPaths);
-            }
-        } catch (error) {
-            console.error('JSON 데이터 파싱 오류:', error);
-        }
-    }
-    
-    // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리
-    if (isExternalDrop) {
-        console.log(`외부 파일 드롭 처리 - 대상 폴더: ${targetName}`);
-        handleExternalFileDrop(e, targetPath);
-    } 
-    // 내부 파일이라도 경로가 비어있으면 오류 처리
-    else if (isInternalDrop && draggedPaths.length > 0) {
-        console.log(`내부 파일 이동 처리 - 대상 폴더: ${targetName}, 경로: ${targetPath}`);
-        handleInternalFileDrop(draggedPaths, targetFolderItem);
-    }
-    // 판단 불가능한 경우
-    else {
-        console.log('처리할 수 없는 드롭 데이터');
-        showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
-    }
+// 중복 함수 제거 - function handleFileDrop(e, targetFolderItem) {
+// 중복 함수 제거 -     preventDefaults(e);
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 드래그 상태 초기화
+// 중복 함수 제거 -     window.draggingInProgress = false;
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 타겟 폴더 정보 가져오기
+// 중복 함수 제거 -     const targetName = targetFolderItem.getAttribute('data-name');
+// 중복 함수 제거 -     const targetPath = targetFolderItem.getAttribute('data-path') || currentPath;
+// 중복 함수 제거 -     console.log(`폴더에 파일 드롭됨 - 대상: ${targetName}, 경로: ${targetPath}`);
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 상위 디렉토리로 이동 처리는 무시
+// 중복 함수 제거 -     if (targetName === '..' || targetFolderItem.hasAttribute('data-parent-dir')) {
+// 중복 함수 제거 -         console.log('상위 디렉토리로의 이동은 처리하지 않음');
+// 중복 함수 제거 -         return;
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 드롭된 데이터 유형 확인
+// 중복 함수 제거 -     const dataTypes = Array.from(e.dataTransfer.types);
+// 중복 함수 제거 -     console.log('폴더 드롭 - 데이터 유형:', dataTypes);
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 1. 외부 파일 확인 (File 객체 존재 여부)
+// 중복 함수 제거 -     let isExternalDrop = e.dataTransfer.files.length > 0;
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 2. 내부 드래그 여부 확인
+// 중복 함수 제거 -     let isInternalDrop = false;
+// 중복 함수 제거 -     let draggedPaths = [];
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 내부 드래그 마커 확인
+// 중복 함수 제거 -     if (dataTypes.includes('application/x-internal-drag')) {
+// 중복 함수 제거 -         isInternalDrop = true;
+// 중복 함수 제거 -         console.log('폴더 드롭 - 내부 드래그 마커 발견');
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 텍스트 데이터에서 경로 정보 추출 시도
+// 중복 함수 제거 -     if (dataTypes.includes('text/plain')) {
+// 중복 함수 제거 -         const textData = e.dataTransfer.getData('text/plain');
+// 중복 함수 제거 -         if (textData) {
+// 중복 함수 제거 -             const paths = textData.split('\n').filter(path => path.trim());
+// 중복 함수 제거 -             
+// 중복 함수 제거 -             // 경로가 내부 경로인지 확인 (예: /로 시작하거나 currentPath에 있는 경로)
+// 중복 함수 제거 -             const isInternalPaths = paths.every(path => 
+// 중복 함수 제거 -                 path.startsWith('/') || 
+// 중복 함수 제거 -                 (currentPath && path.startsWith(currentPath))
+// 중복 함수 제거 -             );
+// 중복 함수 제거 -             
+// 중복 함수 제거 -             if (isInternalPaths && paths.length > 0) {
+// 중복 함수 제거 -                 isInternalDrop = true;
+// 중복 함수 제거 -                 draggedPaths = paths;
+// 중복 함수 제거 -                 console.log('폴더 드롭 - 텍스트 데이터에서 내부 경로 발견:', draggedPaths);
+// 중복 함수 제거 -             }
+// 중복 함수 제거 -         }
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // JSON 데이터 확인
+// 중복 함수 제거 -     if (dataTypes.includes('application/json')) {
+// 중복 함수 제거 -         try {
+// 중복 함수 제거 -             const jsonData = JSON.parse(e.dataTransfer.getData('application/json'));
+// 중복 함수 제거 -             if (jsonData.source === 'internal' && Array.isArray(jsonData.items) && jsonData.items.length > 0) {
+// 중복 함수 제거 -                 isInternalDrop = true;
+// 중복 함수 제거 -                 draggedPaths = jsonData.items;
+// 중복 함수 제거 -                 console.log('폴더 드롭 - JSON 데이터에서 내부 경로 발견:', draggedPaths);
+// 중복 함수 제거 -             }
+// 중복 함수 제거 -         } catch (error) {
+// 중복 함수 제거 -             console.error('JSON 데이터 파싱 오류:', error);
+// 중복 함수 제거 -         }
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리
+// 중복 함수 제거 -     if (isExternalDrop) {
+// 중복 함수 제거 -         console.log(`외부 파일 드롭 처리 - 대상 폴더: ${targetName}`);
+// 중복 함수 제거 -         handleExternalFileDrop(e, targetPath);
+// 중복 함수 제거 -     } 
+// 중복 함수 제거 -     // 내부 파일이라도 경로가 비어있으면 오류 처리
+// 중복 함수 제거 -     else if (isInternalDrop && draggedPaths.length > 0) {
+// 중복 함수 제거 -         console.log(`내부 파일 이동 처리 - 대상 폴더: ${targetName}, 경로: ${targetPath}`);
+// 중복 함수 제거 -         handleInternalFileDrop(draggedPaths, targetFolderItem);
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     // 판단 불가능한 경우
+// 중복 함수 제거 -     else {
+// 중복 함수 제거 -         console.log('처리할 수 없는 드롭 데이터');
+// 중복 함수 제거 -         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
+// 중복 함수 제거 -     }
 }
 
 // 드래그된 데이터가 내부 파일인지 외부 파일인지 판단하는 공통 함수
