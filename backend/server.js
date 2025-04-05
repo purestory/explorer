@@ -26,7 +26,12 @@ function log(message) {
 }
 
 function logWithIP(message, req) {
-  const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+  const ip = req.headers['x-forwarded-for'] || 
+             req.headers['x-real-ip'] ||
+             (req.connection && req.connection.remoteAddress) ||
+             (req.socket && req.socket.remoteAddress) ||
+             (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
+             'unknown';
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
   logFile.write(logMessage);
@@ -41,7 +46,12 @@ function errorLog(message, error) {
 }
 
 function errorLogWithIP(message, error, req) {
-  const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+  const ip = req.headers['x-forwarded-for'] || 
+             req.headers['x-real-ip'] ||
+             (req.connection && req.connection.remoteAddress) ||
+             (req.socket && req.socket.remoteAddress) ||
+             (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
+             'unknown';
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - ERROR: [IP: ${ip}] ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
   errorLogFile.write(logMessage);
