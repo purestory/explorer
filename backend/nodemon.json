@@ -1,0 +1,6 @@
+{
+  "watch": ["."],
+  "ignore": ["lockedFolders.json", "node_modules/*", "logs/*"],
+  "ext": "js,json",
+  "exec": "node server.js"
+} 

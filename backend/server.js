@@ -854,6 +854,25 @@ app.put('/api/files/*', (req, res) => {
       return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPath}`);
     }
 
+    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
+    let lockedFolders = [];
+    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+    if (fs.existsSync(lockedFoldersPath)) {
+      try {
+        lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
+      } catch (e) {
+        errorLogWithIP('잠긴 폴더 목록 로드 오류:', e, req);
+        lockedFolders = []; // 오류 발생 시 빈 목록으로 처리
+      }
+    }
+
+    // 원본 경로가 잠긴 폴더인지 확인
+    const isSourceLocked = lockedFolders.some(lockedPath => oldPath === lockedPath);
+    if (isSourceLocked) {
+      errorLogWithIP(`잠긴 폴더 이동/이름 변경 시도: ${fullOldPath}`, null, req);
+      return res.status(403).send('잠긴 폴더는 이동하거나 이름을 변경할 수 없습니다.');
+    }
+
     // 타겟 경로가 제공되면 이동 작업으로 처리 (빈 문자열이면 루트 폴더로 이동)
     const fullTargetPath = targetPath !== undefined 
       ? path.join(ROOT_DIRECTORY, targetPath) 
@@ -954,24 +973,15 @@ app.delete('/api/files/*', (req, res) => {
     const stats = fs.statSync(fullPath);
     const isDirectory = stats.isDirectory();
 
-    // 현재 경로나 그 상위 경로가 잠겨있는지 확인
+    // 현재 경로가 잠긴 폴더 자체인지 확인
     const isLocked = lockedFolders.some(lockedPath => {
-      return itemPath === lockedPath || itemPath.startsWith(lockedPath + '/');
+      return itemPath === lockedPath;
     });
 
-    // 현재 폴더 내에 잠긴 폴더가 있는지 확인 (폴더인 경우만)
-    let hasLockedSubfolders = false;
-    if (isDirectory) {
-      hasLockedSubfolders = lockedFolders.some(lockedPath => {
-        // 현재 삭제하려는 경로가 잠긴 폴더의 상위 경로인지 확인
-        return lockedPath.startsWith(itemPath + '/');
-      });
-    }
-
-    // 잠금 확인
-    if (isLocked || hasLockedSubfolders) {
-      errorLogWithIP(`잠긴 폴더 혹은 내부에 잠긴 폴더가 있는 폴더 삭제 시도: ${fullPath}`, null, req);
-      return res.status(403).send('잠긴 폴더 또는 잠긴 폴더를 포함한 폴더는 삭제할 수 없습니다.');
+    // 잠금 확인 (삭제 대상 자체가 잠긴 경우만)
+    if (isLocked) {
+      errorLogWithIP(`잠긴 폴더 삭제 시도: ${fullPath}`, null, req);
+      return res.status(403).send('잠긴 폴더는 삭제할 수 없습니다.');
     }
 
     if (isDirectory) {

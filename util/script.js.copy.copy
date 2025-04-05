@@ -5738,6 +5738,22 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     
     // --- 유효성 검사 시작 ---
     
+    // 0. 드래그하는 항목 중에 잠긴 폴더가 있는지 확인 (추가)
+    console.log('[Internal Drop - Debug] 잠긴 폴더 확인 시작');
+    const lockedDraggedItem = itemsInfo.find(item => {
+      const isLocked = item.isFolder && isPathLocked(item.fullPath);
+      console.log(`[Internal Drop - Debug] 항목: ${item.name}, 폴더: ${item.isFolder}, 잠김: ${isLocked}`);
+      return isLocked;
+    });
+    console.log('[Internal Drop - Debug] 잠긴 폴더 확인 완료, lockedDraggedItem:', lockedDraggedItem);
+
+    if (lockedDraggedItem) {
+      console.warn(`[Internal Drop] 이동하려는 항목 중 잠긴 폴더('${lockedDraggedItem.name}')가 포함되어 있어 이동할 수 없습니다.`);
+      showToast(`잠긴 폴더('${lockedDraggedItem.name}')는 이동할 수 없습니다.`, 'warning'); // 여기서 사용자에게 알림
+      console.log('[Internal Drop - Debug] 잠긴 폴더 감지, 함수 종료');
+      return; // API 호출 전에 중단
+    }
+    
     // 1. 타겟 폴더가 이동하려는 항목 중 하나인 경우 방지
     if (targetFolderItem) {
         const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
@@ -7145,24 +7161,104 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
             return Promise.allSettled(movePromises)
                 .then(moveResults => {
                     // 결과 분석
-                    const fulfilled = moveResults.filter(result => result.status === 'fulfilled').length;
-                    const rejected = moveResults.filter(result => result.status === 'rejected').length;
-                    
-                    // 이동 결과 메시지
-                    let resultMessage = `${fulfilled}개 항목을 이동했습니다.`;
-                    if (rejected > 0) {
-                        resultMessage += ` ${rejected}개 항목 이동 실패.`;
+                    console.log('[moveToFolder - Debug] Promise.allSettled 결과:', moveResults);
+                    const fulfilledCount = moveResults.filter(result => result.status === 'fulfilled').length;
+                    const rejectedCount = moveResults.filter(result => result.status === 'rejected').length;
+                    const rejectedReasons = moveResults
+                        .filter(result => result.status === 'rejected')
+                        .map(result => result.reason); // 실패 이유 수집
+
+                    // 이동 결과 메시지 (콘솔용 상세 정보)
+                    let consoleMessage = `[moveToFolder] 이동 결과: ${fulfilledCount}개 성공`;
+                    if (rejectedCount > 0) {
+                        consoleMessage += `, ${rejectedCount}개 실패`;
+                        // 실패 이유 로깅
+                        console.error('[moveToFolder] 이동 실패 이유:', rejectedReasons);
                     }
                     if (skipItems.length > 0) {
-                        resultMessage += ` ${skipItems.length}개 항목 동일 경로로 무시됨.`;
+                        consoleMessage += `, ${skipItems.length}개 무시(동일 경로)`;
+                    }
+                    console.log(consoleMessage);
+
+                    // 화면에 표시할 메시지 (툴팁 및 상태표시줄)
+                    let statusMessage = '';
+                    let toastType = 'info';
+                    
+                    if (fulfilledCount > 0 && rejectedCount === 0) {
+                        statusMessage = `${fulfilledCount}개 항목 이동 완료`;
+                        toastType = 'success';
+                    } else if (fulfilledCount > 0 && rejectedCount > 0) {
+                        statusMessage = `${fulfilledCount}개 이동, ${rejectedCount}개 실패`;
+                        toastType = 'warning';
+                    } else if (fulfilledCount === 0 && rejectedCount > 0) {
+                        statusMessage = `모든 항목 이동 실패`;
+                        toastType = 'error';
+                    } else if (skipItems.length > 0) {
+                         statusMessage = `${skipItems.length}개 항목은 이미 대상 폴더에 있습니다.`;
+                         toastType = 'info';
+                    } else {
+                        statusMessage = '이동할 항목이 없습니다.'; // 이동할 항목이 없는 경우
+                        toastType = 'info';
                     }
                     
-                    // 화면에 결과 표시
-                    statusInfo.textContent = resultMessage;
+                    console.log(`[moveToFolder - Debug] 툴팁 표시 전: statusMessage="${statusMessage}", toastType="${toastType}"`);
+                    showToast(statusMessage, toastType); // 툴팁 표시 추가
+                    statusInfo.textContent = statusMessage; // 하단 상태 표시줄에도 동일 메시지
                     
                     // 선택 초기화
                     clearSelection();
                     
+                    // 목록 새로고침 (성공/실패 여부 관계없이 실행)
+                    return loadFiles(currentPath);
+                });
+        });
+    }
+                    const rejectedReasons = moveResults
+                        .filter(result => result.status === 'rejected')
+                        .map(result => result.reason); // 실패 이유 수집
+
+                    // 이동 결과 메시지 (콘솔용 상세 정보)
+                    let consoleMessage = `[moveToFolder] 이동 결과: ${fulfilledCount}개 성공`;
+                    if (rejectedCount > 0) {
+                        consoleMessage += `, ${rejectedCount}개 실패`;
+                        // 실패 이유 로깅
+                        console.error('[moveToFolder] 이동 실패 이유:', rejectedReasons);
+                    }
+                    if (skipItems.length > 0) {
+                        consoleMessage += `, ${skipItems.length}개 무시(동일 경로)`;
+                    }
+                    console.log(consoleMessage);
+
+                    // 화면에 표시할 메시지 (툴팁 및 상태표시줄)
+                    let statusMessage = '';
+                    let toastType = 'info';
+                    
+                    if (fulfilledCount > 0 && rejectedCount === 0) {
+                        statusMessage = `${fulfilledCount}개 항목 이동 완료`;
+                        toastType = 'success';
+                    } else if (fulfilledCount > 0 && rejectedCount > 0) {
+                        statusMessage = `${fulfilledCount}개 이동, ${rejectedCount}개 실패`;
+                        toastType = 'warning';
+                    } else if (fulfilledCount === 0 && rejectedCount > 0) {
+                        statusMessage = `모든 항목 이동 실패`;
+                        toastType = 'error';
+                    } else if (skipItems.length > 0) {
+                         statusMessage = `${skipItems.length}개 항목은 이미 대상 폴더에 있습니다.`;
+                         toastType = 'info';
+                    } else {
+                        statusMessage = '이동할 항목이 없습니다.'; // 이동할 항목이 없는 경우
+                        toastType = 'info';
+                    }
+                    
+                    showToast(statusMessage, toastType); // 툴팁 표시 추가
+                    statusInfo.textContent = statusMessage; // 하단 상태 표시줄에도 동일 메시지
+                    
+                    // 선택 초기화
+                    clearSelection();
+                    
+                    // 목록 새로고침 (성공/실패 여부 관계없이 실행)
+                    return loadFiles(currentPath);
+                })
                     // 목록 새로고침
                     return loadFiles(currentPath);
                 })
