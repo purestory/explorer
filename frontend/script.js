@@ -1,45 +1,3 @@
-// 콘솔 로그 관리 설정
-(() => {
-  // 원본 콘솔 메서드 저장
-  const originalConsole = {
-    log: console.log,
-    info: console.info,
-    warn: console.warn,
-    error: console.error,
-    debug: console.debug
-  };
-
-  // 콘솔 메서드 재정의
-  console.log = function() {};  // 일반 로그 비활성화
-  console.info = function() {}; // 정보 로그 비활성화
-  console.debug = function() {}; // 디버그 로그 비활성화
-  
-  // 경고와 에러는 그대로 유지
-  console.warn = originalConsole.warn;
-  console.error = originalConsole.error;
-
-  // 개발 모드에서만 모든 로그 활성화하는 함수
-  window.enableAllLogs = function() {
-    console.log = originalConsole.log;
-    console.info = originalConsole.info;
-    console.debug = originalConsole.debug;
-    console.warn = originalConsole.warn;
-    console.error = originalConsole.error;
-    console.log('모든 콘솔 로그가 활성화되었습니다.');
-  };
-
-  // 다시 로그 비활성화하는 함수
-  window.disableLogs = function() {
-    console.log = function() {};
-    console.info = function() {};
-    console.debug = function() {};
-    // 경고와 에러는 유지
-    console.warn = originalConsole.warn;
-    console.error = originalConsole.error;
-    console.error('일반 로그가 비활성화되었습니다. 에러와 경고만 표시됩니다.');
-  };
-})();
-
 // 전역 변수
 // URL 경로에 따라 적절한 API 베이스 URL 설정
 const API_BASE_URL = window.location.hostname === 'itsmyzone.iptime.org' ? 
@@ -3680,11 +3638,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
             
             // 선택된 모든 항목 이동
             const movePromises = finalItemsToMove.map(item => {
-                // const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
-                // 위 로직은 루트 폴더에서는 맞지만 하위 폴더에서는 문제를 일으킴
-                // finalItemsToMove 배열의 'item'은 이미 전체 경로를 포함하고 있을 수 있음
-                // 따라서 currentPath를 추가하지 않고 item 자체를 sourcePath로 사용
-                const sourceFullPath = item;
+                const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
                 return moveItem(sourceFullPath, targetPath, shouldOverwrite);
             });
             
