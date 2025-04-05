@@ -1,4 +1,3 @@
-
 // 개발 모드 설정 - false로 설정하면 콘솔 로그가 표시되지 않습니다
 window.DEBUG_MODE = false;
 
@@ -1123,6 +1122,14 @@ function renderFiles(files) {
                 parentItem.setAttribute('data-is-folder', 'true');
                 parentItem.setAttribute('data-parent-dir', 'true'); // 상위 폴더 표시를 위한 속성 추가
                 
+                // 상위 디렉토리 경로 계산
+                const parentPath = currentPath.split('/').slice(0, -1).join('/');
+                
+                // 상위 폴더가 잠겨 있는지 확인 - 부모 폴더에 대해서는 isPathLocked 체크
+                if (isPathLocked(parentPath)) {
+                    parentItem.classList.add('locked-folder');
+                }
+                
                 // 아이콘 생성
                 const parentIcon = document.createElement('div');
                 parentIcon.className = 'file-icon';
@@ -1185,10 +1192,12 @@ function renderFiles(files) {
                     // 접근 제한 (상위 폴더가 잠겨있는 경우) 확인
                     const isRestricted = isPathAccessRestricted(filePath) && !isDirectlyLocked;
                     
-                    if (file.isFolder && isDirectlyLocked) {
+                    // 상위 폴더(..)이 아닐 경우만 잠금 표시
+                    if (file.name !== '..' && file.isFolder && isDirectlyLocked) {
                         fileItem.classList.add('locked-folder');
                     } else if (file.isFolder && isRestricted) {
-                        fileItem.classList.add('restricted-folder');
+                        // 하위 폴더에는 잠금 표시 안함 (restricted-folder 클래스도 제거)
+                        // 이 부분은 아무 액션도 하지 않음
                     }
                     
                     // 아이콘 생성
