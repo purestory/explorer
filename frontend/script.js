@@ -2910,7 +2910,7 @@ function initViewModes() {
     if (listView) {
         listViewBtn.classList.add('active');
         gridViewBtn.classList.remove('active');
-    } else {
+                    } else {
         gridViewBtn.classList.add('active');
         listViewBtn.classList.remove('active');
     }
@@ -3031,9 +3031,9 @@ function initRenaming() {
         
         if (!newName) {
             alert('새 이름을 입력해주세요.');
-        return;
-    }
-        
+            return;
+        }
+
         const selectedItem = document.querySelector('.file-item.selected');
         const oldName = selectedItem.getAttribute('data-name');
         const oldPath = currentPath ? `${currentPath}/${oldName}` : oldName;
@@ -3212,8 +3212,8 @@ function compressAndDownload(itemList) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestData)
-    })
-    .then(response => {
+        })
+        .then(response => {
         if (!response.ok) {
             return response.json().then(data => {
                 throw new Error(data.error || '압축 중 오류가 발생했습니다.');
@@ -3299,7 +3299,7 @@ function navigateToParentFolder() {
     if (lastSlashIndex === -1) {
         // 슬래시가 없으면 루트 폴더로 이동
         currentPath = '';
-             } else {
+            } else {
         // 슬래시가 있으면 상위 경로로 이동
         currentPath = currentPath.substring(0, lastSlashIndex);
     }
@@ -3536,8 +3536,8 @@ function compressSelectedItems() {
         
         // 압축 후 파일 목록 새로고침
         loadFiles(currentPath);
-    })
-    .catch(error => {
+        })
+        .catch(error => {
         // 오류 처리
         console.error('압축 오류:', error);
         statusInfo.textContent = `압축 실패: ${error.message}`;
