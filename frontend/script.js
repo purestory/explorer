@@ -4573,7 +4573,6 @@ function initDropZone() {
 // 중복 함수 제거 -         console.log('처리할 수 없는 드롭 데이터');
 // 중복 함수 제거 -         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
 // 중복 함수 제거 -     }
-}
 
 // 드래그된 데이터가 내부 파일인지 외부 파일인지 판단하는 공통 함수
 function determineDropType(e) {
