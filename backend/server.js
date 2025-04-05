@@ -8,6 +8,15 @@ const { execSync } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3333;
 
+// Multer 설정 (Memory Storage 사용)
+const storage = multer.memoryStorage(); // memoryStorage 사용으로 변경
+const uploadMiddleware = multer({
+  storage: storage, // memoryStorage 사용
+  limits: {
+    fileSize: 10 * 1024 * 1024 * 1024 // 10GB
+  }
+});
+
 // 로그 디렉토리 확인 및 생성
 const LOGS_DIRECTORY = path.join(__dirname, 'logs');
 if (!fs.existsSync(LOGS_DIRECTORY)) {
@@ -26,12 +35,15 @@ function log(message) {
 }
 
 function logWithIP(message, req) {
-  const ip = req.headers['x-forwarded-for'] || 
-             req.headers['x-real-ip'] ||
-             (req.connection && req.connection.remoteAddress) ||
-             (req.socket && req.socket.remoteAddress) ||
-             (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
-             'unknown';
+  let ip = 'unknown';
+  if (req && req.headers) {
+    ip = req.headers['x-forwarded-for'] || 
+         req.headers['x-real-ip'] ||
+         (req.connection && req.connection.remoteAddress) ||
+         (req.socket && req.socket.remoteAddress) ||
+         (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
+         'unknown';
+  }
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
   logFile.write(logMessage);
@@ -46,12 +58,15 @@ function errorLog(message, error) {
 }
 
 function errorLogWithIP(message, error, req) {
-  const ip = req.headers['x-forwarded-for'] || 
-             req.headers['x-real-ip'] ||
-             (req.connection && req.connection.remoteAddress) ||
-             (req.socket && req.socket.remoteAddress) ||
-             (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
-             'unknown';
+  let ip = 'unknown';
+  if (req && req.headers) {
+    ip = req.headers['x-forwarded-for'] || 
+         req.headers['x-real-ip'] ||
+         (req.connection && req.connection.remoteAddress) ||
+         (req.socket && req.socket.remoteAddress) ||
+         (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
+         'unknown';
+  }
   const timestamp = new Date().toISOString();
   const logMessage = `${timestamp} - ERROR: [IP: ${ip}] ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
   errorLogFile.write(logMessage);
@@ -146,8 +161,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Express 내장 body-parser 설정 (크기 제한 증가)
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
 // 기본 미들웨어 설정
-app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 // 로깅 미들웨어
@@ -161,602 +179,267 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-// 파일 업로드 설정
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    // 경로 정보가 있으면 해당 경로에 저장, 없으면 루트 디렉토리에 저장
-    const uploadPath = req.body.path 
-      ? path.join(ROOT_DIRECTORY, req.body.path) 
-      : ROOT_DIRECTORY;
-    
-    // 디렉토리가 없으면 생성
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-      fs.chmodSync(uploadPath, 0o777);
-    }
-    
-    logWithIP(`업로드 대상 폴더: ${uploadPath}`, req);
-    cb(null, uploadPath);
-  },
-  filename: function (req, file, cb) {
-    // 원본 파일명에서 한글 인코딩 처리
-    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    logWithIP(`업로드 파일명: ${originalName}`, req);
-    cb(null, originalName);
-  }
-});
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 * 1024 // 10GB
-  }
-});
+// 파일 업로드 API (Multer 미들웨어 직접 적용)
+app.post('/api/upload', uploadMiddleware.any(), (req, res) => {
+  // Multer 미들웨어가 먼저 실행됨. 수동 실행 로직 제거.
 
-// API 라우트 설정
-// 파일 목록 가져오기
-app.get('/api/files/*', async (req, res) => {
+  // 오류 처리 (Multer 오류는 Express 오류 핸들러나 try-catch로 처리 가능하나 여기선 간단히 확인)
+  if (!req.files || req.files.length === 0) {
+    // Multer가 파일을 처리하지 못했거나 파일이 없는 경우
+    // (파일 크기 초과 등의 Multer 자체 오류는 별도 오류 핸들러 필요)
+    errorLogWithIP('업로드 요청에 파일이 없거나 처리 중 오류 발생.', null, req);
+    // 413 오류가 Multer에서 발생했다면 err 객체가 있을 수 있으나, 여기서는 일반적인 실패로 처리
+    // 실제 Multer 에러 메시지를 받으려면 에러 핸들링 미들웨어 필요
+    return res.status(400).json({ error: '파일이 없거나 업로드 처리 중 오류가 발생했습니다.' }); 
+  }
+  if (!req.body.fileInfo) {
+    errorLogWithIP('업로드 요청에 파일 정보(fileInfo)가 없습니다.', null, req);
+    return res.status(400).json({ error: '파일 정보가 누락되었습니다.' });
+  }
+  
+  // 이하 기존 파일 처리 로직 (upload(req, res, ...) 콜백 함수 내부 로직을 여기로 이동)
+  // 4. 데이터 파싱 및 경로 설정
+  const baseUploadPath = req.body.path || ''; // 클라이언트가 지정한 기본 업로드 경로
+  const rootUploadDir = path.join(ROOT_DIRECTORY, baseUploadPath);
+  let fileInfoArray;
+
   try {
-    // URL 디코딩하여 한글 경로 처리
-    let requestPath = decodeURIComponent(req.params[0] || '');
-    const fullPath = path.join(ROOT_DIRECTORY, requestPath);
-    
-    logWithIP(`파일 목록 요청: ${fullPath}`, req);
-
-    // 경로가 존재하는지 확인
-    if (!fs.existsSync(fullPath)) {
-      errorLogWithIP(`경로를 찾을 수 없습니다: ${fullPath}`, null, req);
-      return res.status(404).send('경로를 찾을 수 없습니다.');
-    }
-
-    // 디렉토리인지 확인
-    const stats = fs.statSync(fullPath);
-    if (!stats.isDirectory()) {
-      // 파일인 경우 처리
-      logWithIP(`파일 다운로드 요청: ${fullPath}`, req);
-      
-      // 파일명 추출
-      const fileName = path.basename(fullPath);
-      // 파일 확장자 추출
-      const fileExt = path.extname(fullPath).toLowerCase().substring(1);
-      
-      // 브라우저에서 직접 볼 수 있는 파일 형식
-      const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
-                            'mp4', 'webm', 'ogg', 'mp3', 'wav', 
-                            'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
-      
-      // MIME 타입 설정
-      const mimeTypes = {
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'bmp': 'image/bmp',
-        'webp': 'image/webp',
-        'svg': 'image/svg+xml',
-        'mp4': 'video/mp4',
-        'webm': 'video/webm',
-        'ogg': 'video/ogg',
-        'mp3': 'audio/mpeg',
-        'wav': 'audio/wav',
-        'pdf': 'application/pdf',
-        'txt': 'text/plain',
-        'html': 'text/html',
-        'htm': 'text/html',
-        'css': 'text/css',
-        'js': 'text/javascript',
-        'json': 'application/json',
-        'xml': 'application/xml'
-      };
-      
-      // 직접 볼 수 있는 파일인지 확인
-      if (viewableTypes.includes(fileExt)) {
-        // Content-Type 설정
-        res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
-        // 인라인 표시 설정 (브라우저에서 직접 열기)
-        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        // 파일 스트림 전송
-        fs.createReadStream(fullPath).pipe(res);
-      } else {
-        // 일반 다운로드 파일
-        // Content-Disposition 헤더에 UTF-8로 인코딩된 파일명 설정
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        res.download(fullPath, fileName, (err) => {
-          if (err) {
-            errorLogWithIP(`파일 다운로드 중 오류: ${fullPath}`, err, req);
-          } else {
-            logWithIP(`파일 다운로드 완료: ${fullPath}`, req);
-          }
-        });
-      }
-      return;
-    }
-
-    // 디렉토리 내용 읽기
-    const items = fs.readdirSync(fullPath);
-    const fileItems = items.map(item => {
-      const itemPath = path.join(fullPath, item);
-      const itemStats = fs.statSync(itemPath);
-      const isDirectory = itemStats.isDirectory();
-
-      return {
-        name: item,
-        isFolder: isDirectory,
-        size: itemStats.size,
-        modifiedTime: itemStats.mtime.toISOString()
-      };
-    });
-
-    logWithIP(`파일 목록 반환: ${fileItems.length}개 항목`, req);
-    res.json(fileItems);
-  } catch (error) {
-    errorLogWithIP('파일 목록 오류:', error, req);
-    res.status(500).send('서버 오류가 발생했습니다.');
+    fileInfoArray = JSON.parse(req.body.fileInfo);
+    logWithIP(`파일 정보 수신: ${fileInfoArray.length}개 항목`, req);
+  } catch (parseError) {
+    errorLogWithIP('fileInfo JSON 파싱 오류:', parseError, req);
+    return res.status(400).json({ error: '잘못된 파일 정보 형식입니다.' });
   }
-});
 
-// 새 폴더 생성
-app.post('/api/files/*', (req, res) => {
-  try {
-    // URL 디코딩하여 한글 경로 처리
-    const folderPath = decodeURIComponent(req.params[0] || '');
-    const fullPath = path.join(ROOT_DIRECTORY, folderPath);
-    
-    logWithIP(`폴더 생성 요청: ${fullPath}`, req);
+  logWithIP(`기본 업로드 경로: ${baseUploadPath || '루트 디렉토리'}, 절대 경로: ${rootUploadDir}`, req);
 
-    // 이미 존재하는지 확인
-    if (fs.existsSync(fullPath)) {
-      errorLogWithIP(`이미 존재하는 폴더: ${fullPath}`, null, req);
-      return res.status(409).send('이미 존재하는 이름입니다.');
+  // 5. 각 파일 처리 및 저장
+  const processedFiles = [];
+  const errors = [];
+
+  // 최대 파일명 길이 제한 설정 (바이트 기준, 시스템 최대치의 90%)
+  const MAX_FILENAME_BYTES = 229;
+  // 최대 경로 길이 제한 (시스템마다 다를 수 있음)
+  const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로 설정
+
+  // 파일명 길이 제한 함수 (바이트 기준)
+  function truncateFileName(filename) {
+    if (Buffer.byteLength(filename) <= MAX_FILENAME_BYTES) {
+      return filename;
     }
-
-    // 폴더 생성
-    fs.mkdirSync(fullPath, { recursive: true });
-    fs.chmodSync(fullPath, 0o777);
     
-    logWithIP(`폴더 생성 완료: ${fullPath}`, req);
-    res.status(201).send('폴더가 생성되었습니다.');
-  } catch (error) {
-    errorLogWithIP('폴더 생성 오류:', error, req);
-    res.status(500).send('서버 오류가 발생했습니다.');
+    const extension = filename.lastIndexOf('.') > 0 ? filename.substring(filename.lastIndexOf('.')) : '';
+    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') > 0 ? filename.lastIndexOf('.') : filename.length);
+    
+    // 바이트 길이 기준으로 자르기
+    let truncatedName = nameWithoutExt;
+    while (Buffer.byteLength(truncatedName + '...' + extension) > MAX_FILENAME_BYTES) {
+      // 문자열 끝에서 한 글자씩 제거 (멀티바이트 문자 고려)
+      truncatedName = truncatedName.slice(0, -1); 
+      if (truncatedName.length === 0) break; // 이름 부분이 없어지면 중단
+    }
+    
+    const newFileName = truncatedName + '...' + extension;
+    
+    logWithIP(`파일명이 너무 김(Bytes: ${Buffer.byteLength(filename)}): ${filename} → ${newFileName}`, req);
+    return newFileName;
   }
-});
 
-// 파일/폴더 이름 변경
-app.put('/api/files/*', (req, res) => {
-  try {
-    // URL 디코딩하여 한글 경로 처리
-    const oldPath = decodeURIComponent(req.params[0] || '');
-    const { newName, targetPath, overwrite } = req.body;
-    
-    logWithIP(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`, req);
-    
-    if (!newName) {
-      errorLogWithIP('새 이름이 제공되지 않음', null, req);
-      return res.status(400).send('새 이름이 제공되지 않았습니다.');
+  // 경로 길이 확인 및 제한 함수
+  function checkAndTruncatePath(fullPath) {
+    const fullPathBytes = Buffer.byteLength(fullPath);
+    if (fullPathBytes <= MAX_PATH_BYTES) {
+      return { path: fullPath, truncated: false };
     }
-
-    const fullOldPath = path.join(ROOT_DIRECTORY, oldPath);
     
-    // 원본이 존재하는지 확인
-    if (!fs.existsSync(fullOldPath)) {
-      errorLogWithIP(`원본 파일/폴더를 찾을 수 없음: ${fullOldPath}`, null, req);
-      return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPath}`);
-    }
-
-    // 타겟 경로가 제공되면 이동 작업으로 처리 (빈 문자열이면 루트 폴더로 이동)
-    const fullTargetPath = targetPath !== undefined 
-      ? path.join(ROOT_DIRECTORY, targetPath) 
-      : path.dirname(fullOldPath);
+    // 경로가 너무 길 경우 처리 로직
+    logWithIP(`경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`, req);
+    
+    // 경로 분해 및 분석
+    const pathParts = fullPath.split(path.sep);
+    const driveOrRoot = pathParts[0] || '/'; // 드라이브 또는 루트 디렉토리
+    
+    // 마지막 요소는 파일명일 수 있으므로 보존 우선
+    const lastElement = pathParts[pathParts.length - 1];
+    const isLastElementFile = lastElement.includes('.');
+    
+    // 각 디렉토리 이름의 최대 바이트 수를 계산
+    // 파일명, 루트, 구분자 길이를 뺀 나머지 공간을 디렉토리들이 공유
+    const fileNameBytes = isLastElementFile ? Buffer.byteLength(lastElement) : 0;
+    const rootBytes = Buffer.byteLength(driveOrRoot);
+    const separatorBytes = (pathParts.length - 1) * Buffer.byteLength(path.sep);
+    
+    // 디렉토리에 할당할 수 있는 총 바이트 (파일명 제외)
+    const totalDirBytes = MAX_PATH_BYTES - fileNameBytes - rootBytes - separatorBytes;
+    
+    // 디렉토리 수 (파일명 제외)
+    const dirCount = isLastElementFile ? pathParts.length - 2 : pathParts.length - 1;
+    
+    // 각 디렉토리당 평균 할당 바이트 (최소 20바이트 보장)
+    const avgMaxBytes = Math.max(20, Math.floor(totalDirBytes / (dirCount > 0 ? dirCount : 1)));
+    
+    // 각 경로 부분 순회하며 길이 제한
+    const truncatedParts = [driveOrRoot];
+    let bytesUsed = rootBytes + separatorBytes;
+    
+    for (let i = 1; i < pathParts.length; i++) {
+      let part = pathParts[i];
+      const partBytes = Buffer.byteLength(part);
       
-    const fullNewPath = path.join(fullTargetPath, newName);
-      
-    logWithIP(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`);
-    logWithIP(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`);
-
-    // 원본과 대상이 같은 경로인지 확인
-    if (fullOldPath === fullNewPath) {
-      logWithIP(`동일한 경로로의 이동 무시: ${fullOldPath}`);
-      return res.status(200).send('이동이 완료되었습니다.');
-    }
-
-    // 대상 경로의 디렉토리가 없으면 생성
-    if (!fs.existsSync(fullTargetPath)) {
-      logWithIP(`대상 디렉토리 생성: ${fullTargetPath}`);
-      fs.mkdirSync(fullTargetPath, { recursive: true });
-      fs.chmodSync(fullTargetPath, 0o777);
-    }
-
-    // 대상 경로에 이미 존재하는지 확인
-    if (fs.existsSync(fullNewPath)) {
-      if (overwrite) {
-        // 덮어쓰기 옵션이 true면 기존 파일/폴더 삭제
-        logWithIP(`파일이 이미 존재하나 덮어쓰기 옵션 사용: ${fullNewPath}`);
-        try {
-          // 폴더인지 파일인지 확인하여 적절하게 삭제
-          const stats = fs.statSync(fullNewPath);
-          if (stats.isDirectory()) {
-            fs.rmdirSync(fullNewPath, { recursive: true });
-          } else {
-            fs.unlinkSync(fullNewPath);
-          }
-        } catch (deleteError) {
-          errorLogWithIP(`기존 파일/폴더 삭제 오류: ${fullNewPath}`, deleteError, req);
-          return res.status(500).send(`기존 파일 삭제 중 오류가 발생했습니다: ${deleteError.message}`);
+      // 마지막 요소이고 파일이면 가능한 한 원본 유지
+      if (i === pathParts.length - 1 && isLastElementFile) {
+        // 파일명이 너무 긴 경우 별도 처리 (마지막 요소만 truncateFileName 호출)
+        if (partBytes > MAX_FILENAME_BYTES) {
+          part = truncateFileName(part);
         }
-      } else {
-        // 덮어쓰기 옵션이 없으면 409 Conflict 반환
-        errorLogWithIP(`이미 존재하는 이름: ${fullNewPath}`);
-        return res.status(409).send('이미 존재하는 이름입니다.');
-      }
-    }
-
-    // 이름 변경 (파일 이동)
-    try {
-      fs.renameSync(fullOldPath, fullNewPath);
-      logWithIP(`이동 완료: ${fullOldPath} -> ${fullNewPath}`);
-      
-      res.status(200).send('이동이 완료되었습니다.');
-    } catch (renameError) {
-      // EXDEV 오류는 서로 다른 디바이스 간 이동 시 발생
-      if (renameError.code === 'EXDEV') {
-        errorLogWithIP('서로 다른 파일 시스템 간 이동 오류 (EXDEV)', renameError, req);
-        return res.status(500).send('서로 다른 디바이스 간에 파일을 이동할 수 없습니다. 파일을 복사 후 원본을 삭제해주세요.');
-      }
-      
-      errorLogWithIP(`이름 변경/이동 오류: ${fullOldPath} -> ${fullNewPath}`, renameError, req);
-      return res.status(500).send(`이동 오류: ${renameError.message}`);
-    }
-  } catch (error) {
-    errorLogWithIP('이름 변경 오류:', error, req);
-    res.status(500).send(`서버 오류가 발생했습니다: ${error.message}`);
-  }
-});
-
-// 파일/폴더 삭제
-app.delete('/api/files/*', (req, res) => {
-  try {
-    // URL 디코딩하여 한글 경로 처리
-    const itemPath = decodeURIComponent(req.params[0] || '');
-    const fullPath = path.join(ROOT_DIRECTORY, itemPath);
-    
-    logWithIP(`삭제 요청: ${fullPath}`, req);
-
-    // 존재하는지 확인
-    if (!fs.existsSync(fullPath)) {
-      errorLogWithIP(`파일/폴더를 찾을 수 없음: ${fullPath}`, null, req);
-      return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
-    }
-
-    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
-    let lockedFolders = [];
-    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
-    if (fs.existsSync(lockedFoldersPath)) {
-      try {
-        lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
-      } catch (e) {
-        errorLogWithIP('잠긴 폴더 목록 로드 오류:', e, req);
-        lockedFolders = [];
-      }
-    }
-
-    // 디렉토리인지 확인
-    const stats = fs.statSync(fullPath);
-    const isDirectory = stats.isDirectory();
-
-    // 현재 경로나 그 상위 경로가 잠겨있는지 확인
-    const isLocked = lockedFolders.some(lockedPath => {
-      return itemPath === lockedPath || itemPath.startsWith(lockedPath + '/');
-    });
-
-    // 현재 폴더 내에 잠긴 폴더가 있는지 확인 (폴더인 경우만)
-    let hasLockedSubfolders = false;
-    if (isDirectory) {
-      hasLockedSubfolders = lockedFolders.some(lockedPath => {
-        // 현재 삭제하려는 경로가 잠긴 폴더의 상위 경로인지 확인
-        return lockedPath.startsWith(itemPath + '/');
-      });
-    }
-
-    // 잠금 확인
-    if (isLocked || hasLockedSubfolders) {
-      errorLogWithIP(`잠긴 폴더 혹은 내부에 잠긴 폴더가 있는 폴더 삭제 시도: ${fullPath}`, null, req);
-      return res.status(403).send('잠긴 폴더 또는 잠긴 폴더를 포함한 폴더는 삭제할 수 없습니다.');
-    }
-
-    if (isDirectory) {
-      // 폴더 삭제 (재귀적)
-      fs.rmdirSync(fullPath, { recursive: true });
-      logWithIP(`폴더 삭제 완료: ${fullPath}`, req);
-    } else {
-      // 파일 삭제
-      fs.unlinkSync(fullPath);
-      logWithIP(`파일 삭제 완료: ${fullPath}`, req);
-    }
-
-    res.status(200).send('삭제되었습니다.');
-  } catch (error) {
-    errorLogWithIP('삭제 오류:', error, req);
-    res.status(500).send('서버 오류가 발생했습니다.');
-  }
-});
-
-// 파일 업로드 API
-app.post('/api/upload', (req, res) => {
-  // 1. multer 설정을 any()로 변경하여 모든 파일과 필드를 받음
-  const upload = multer({
-    storage: multer.memoryStorage(), // 파일을 메모리에 저장
-    limits: {
-      fileSize: 10 * 1024 * 1024 * 1024 // 10GB
-    }
-  }).any(); // 모든 필드 이름의 파일을 req.files 배열로 받음
-
-  // 2. multer 미들웨어 실행
-  upload(req, res, function(err) {
-    if (err) {
-      errorLogWithIP('파일 업로드 처리 오류 (multer):', err, req);
-      // Multer 오류 처리 (예: 파일 크기 초과)
-      if (err instanceof multer.MulterError) {
-          return res.status(400).json({ error: `파일 업로드 오류: ${err.message}` });
-      }
-      return res.status(500).json({ error: '파일 업로드 중 서버 오류가 발생했습니다.' });
-    }
-
-    // 3. 필수 데이터 확인 (파일 및 파일 정보)
-    if (!req.files || req.files.length === 0) {
-      errorLogWithIP('업로드 요청에 파일이 없습니다.', null, req);
-      return res.status(400).json({ error: '업로드할 파일이 없습니다.' });
-    }
-    if (!req.body.fileInfo) {
-      errorLogWithIP('업로드 요청에 파일 정보(fileInfo)가 없습니다.', null, req);
-      return res.status(400).json({ error: '파일 정보가 누락되었습니다.' });
-    }
-
-    // 4. 데이터 파싱 및 경로 설정
-    const baseUploadPath = req.body.path || ''; // 클라이언트가 지정한 기본 업로드 경로
-    const rootUploadDir = path.join(ROOT_DIRECTORY, baseUploadPath);
-    let fileInfoArray;
-
-    try {
-      fileInfoArray = JSON.parse(req.body.fileInfo);
-      logWithIP(`파일 정보 수신: ${fileInfoArray.length}개 항목`, req);
-    } catch (parseError) {
-      errorLogWithIP('fileInfo JSON 파싱 오류:', parseError, req);
-      return res.status(400).json({ error: '잘못된 파일 정보 형식입니다.' });
-    }
-
-    logWithIP(`기본 업로드 경로: ${baseUploadPath || '루트 디렉토리'}, 절대 경로: ${rootUploadDir}`, req);
-
-    // 5. 각 파일 처리 및 저장
-    const processedFiles = [];
-    const errors = [];
-
-    // 최대 파일명 길이 제한 설정 (바이트 기준, 시스템 최대치의 90%)
-    const MAX_FILENAME_BYTES = 229;
-    // 최대 경로 길이 제한 (시스템마다 다를 수 있음)
-    const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로 설정
-
-    // 파일명 길이 제한 함수 (바이트 기준)
-    function truncateFileName(filename) {
-      if (Buffer.byteLength(filename) <= MAX_FILENAME_BYTES) {
-        return filename;
-      }
-      
-      const extension = filename.lastIndexOf('.') > 0 ? filename.substring(filename.lastIndexOf('.')) : '';
-      const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') > 0 ? filename.lastIndexOf('.') : filename.length);
-      
-      // 바이트 길이 기준으로 자르기
-      let truncatedName = nameWithoutExt;
-      while (Buffer.byteLength(truncatedName + '...' + extension) > MAX_FILENAME_BYTES) {
-        // 문자열 끝에서 한 글자씩 제거 (멀티바이트 문자 고려)
-        truncatedName = truncatedName.slice(0, -1); 
-        if (truncatedName.length === 0) break; // 이름 부분이 없어지면 중단
-      }
-      
-      const newFileName = truncatedName + '...' + extension;
-      
-      logWithIP(`파일명이 너무 김(Bytes: ${Buffer.byteLength(filename)}): ${filename} → ${newFileName}`, req);
-      return newFileName;
-    }
-
-    // 경로 길이 확인 및 제한 함수
-    function checkAndTruncatePath(fullPath) {
-      const fullPathBytes = Buffer.byteLength(fullPath);
-      if (fullPathBytes <= MAX_PATH_BYTES) {
-        return { path: fullPath, truncated: false };
-      }
-      
-      // 경로가 너무 길 경우 처리 로직
-      logWithIP(`경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`, req);
-      
-      // 경로 분해 및 분석
-      const pathParts = fullPath.split(path.sep);
-      const driveOrRoot = pathParts[0] || '/'; // 드라이브 또는 루트 디렉토리
-      
-      // 마지막 요소는 파일명일 수 있으므로 보존 우선
-      const lastElement = pathParts[pathParts.length - 1];
-      const isLastElementFile = lastElement.includes('.');
-      
-      // 각 디렉토리 이름의 최대 바이트 수를 계산
-      // 파일명, 루트, 구분자 길이를 뺀 나머지 공간을 디렉토리들이 공유
-      const fileNameBytes = isLastElementFile ? Buffer.byteLength(lastElement) : 0;
-      const rootBytes = Buffer.byteLength(driveOrRoot);
-      const separatorBytes = (pathParts.length - 1) * Buffer.byteLength(path.sep);
-      
-      // 디렉토리에 할당할 수 있는 총 바이트 (파일명 제외)
-      const totalDirBytes = MAX_PATH_BYTES - fileNameBytes - rootBytes - separatorBytes;
-      
-      // 디렉토리 수 (파일명 제외)
-      const dirCount = isLastElementFile ? pathParts.length - 2 : pathParts.length - 1;
-      
-      // 각 디렉토리당 평균 할당 바이트 (최소 20바이트 보장)
-      const avgMaxBytes = Math.max(20, Math.floor(totalDirBytes / (dirCount > 0 ? dirCount : 1)));
-      
-      // 각 경로 부분 순회하며 길이 제한
-      const truncatedParts = [driveOrRoot];
-      let bytesUsed = rootBytes + separatorBytes;
-      
-      for (let i = 1; i < pathParts.length; i++) {
-        let part = pathParts[i];
-        const partBytes = Buffer.byteLength(part);
-        
-        // 마지막 요소이고 파일이면 가능한 한 원본 유지
-        if (i === pathParts.length - 1 && isLastElementFile) {
-          // 파일명이 너무 긴 경우 별도 처리 (마지막 요소만 truncateFileName 호출)
-          if (partBytes > MAX_FILENAME_BYTES) {
-            part = truncateFileName(part);
-          }
-          truncatedParts.push(part);
-          continue;
-        }
-        
-        // 디렉토리 이름이 할당된 바이트 수를 초과하는 경우 자르기
-        if (partBytes > avgMaxBytes) {
-          // 디렉토리 이름 자르기 (한글 등 멀티바이트 문자 고려)
-          let truncatedPart = '';
-          for (let j = 0; j < part.length; j++) {
-            const nextChar = part[j];
-            const potentialNew = truncatedPart + nextChar;
-            if (Buffer.byteLength(potentialNew + '...') <= avgMaxBytes) {
-              truncatedPart = potentialNew;
-            } else {
-              break;
-            }
-          }
-          
-          // 이름이 너무 짧아졌다면 최소 한 글자 이상 포함하도록 함
-          if (truncatedPart.length === 0 && part.length > 0) {
-            truncatedPart = part.substring(0, 1);
-          }
-          
-          part = truncatedPart + '...';
-        }
-        
         truncatedParts.push(part);
-        bytesUsed += Buffer.byteLength(part) + Buffer.byteLength(path.sep);
+        continue;
       }
       
-      const truncatedPath = truncatedParts.join(path.sep);
-      const finalPathBytes = Buffer.byteLength(truncatedPath);
+      // 디렉토리 이름이 할당된 바이트 수를 초과하는 경우 자르기
+      if (partBytes > avgMaxBytes) {
+        // 디렉토리 이름 자르기 (한글 등 멀티바이트 문자 고려)
+        let truncatedPart = '';
+        for (let j = 0; j < part.length; j++) {
+          const nextChar = part[j];
+          const potentialNew = truncatedPart + nextChar;
+          if (Buffer.byteLength(potentialNew + '...') <= avgMaxBytes) {
+            truncatedPart = potentialNew;
+          } else {
+            break;
+          }
+        }
+        
+        // 이름이 너무 짧아졌다면 최소 한 글자 이상 포함하도록 함
+        if (truncatedPart.length === 0 && part.length > 0) {
+          truncatedPart = part.substring(0, 1);
+        }
+        
+        part = truncatedPart + '...';
+      }
       
-      logWithIP(`경로 길이 제한: ${fullPathBytes} → ${finalPathBytes} 바이트`, req);
-      logWithIP(`줄어든 경로: ${truncatedPath}`, req);
-      
-      // 최종 확인 - 여전히 너무 길면 더 강력하게 줄이기
-      if (finalPathBytes > MAX_PATH_BYTES) {
-        // 문제 해결을 위한 비상 대책 - 파일명 유지하고 중간 경로 크게 축소
-        const rootAndFile = isLastElementFile ? 
-          [driveOrRoot, truncateFileName(lastElement)] : 
-          [driveOrRoot, truncatedParts[truncatedParts.length - 1]];
+      truncatedParts.push(part);
+      bytesUsed += Buffer.byteLength(part) + Buffer.byteLength(path.sep);
+    }
+    
+    const truncatedPath = truncatedParts.join(path.sep);
+    const finalPathBytes = Buffer.byteLength(truncatedPath);
+    
+    logWithIP(`경로 길이 제한: ${fullPathBytes} → ${finalPathBytes} 바이트`, req);
+    logWithIP(`줄어든 경로: ${truncatedPath}`, req);
+    
+    // 최종 확인 - 여전히 너무 길면 더 강력하게 줄이기
+    if (finalPathBytes > MAX_PATH_BYTES) {
+      // 문제 해결을 위한 비상 대책 - 파일명 유지하고 중간 경로 크게 축소
+      const rootAndFile = isLastElementFile ? 
+        [driveOrRoot, truncateFileName(lastElement)] : 
+        [driveOrRoot, truncatedParts[truncatedParts.length - 1]];
+        
+      // 파일명과 루트 사이에 "..." 추가하여 모든 중간 경로 제거
+      const emergencyPath = rootAndFile.join(path.sep + '...' + path.sep);
+      logWithIP(`비상 경로 축소: ${truncatedPath} → ${emergencyPath}`, req);
+      return { path: emergencyPath, truncated: true, emergency: true };
+    }
+    
+    return { path: truncatedPath, truncated: true };
+  }
+
+  // req.files 배열과 fileInfoArray 매핑 (순서가 같다고 가정)
+  // 클라이언트에서 file_${index} 와 fileInfo 순서를 일치시킴
+  req.files.forEach((file, index) => {
+      // fileInfoArray 에서 현재 파일과 매칭되는 정보 찾기
+      // 클라이언트에서 보낸 file_${index} 의 index를 사용하거나, 순서를 신뢰
+      const fileInfo = fileInfoArray.find(info => info.index === index || info.originalName === Buffer.from(file.originalname, 'latin1').toString('utf8'));
+
+      if (!fileInfo || !fileInfo.relativePath) {
+          const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+          errorLogWithIP(`파일 정보 불일치 또는 상대 경로 누락: ${originalName} (index: ${index})`, null, req);
+          errors.push(`파일 ${originalName}의 정보를 찾을 수 없거나 상대 경로가 없습니다.`);
+          return; // 다음 파일로 이동
+      }
+
+      try {
+          // 파일명 길이 확인 및 처리 (바이트 기준)
+          let relativeFilePath = fileInfo.relativePath;
+          const originalFileName = path.basename(relativeFilePath);
+          let finalFileName = originalFileName; // 최종 파일명 변수 추가
           
-        // 파일명과 루트 사이에 "..." 추가하여 모든 중간 경로 제거
-        const emergencyPath = rootAndFile.join(path.sep + '...' + path.sep);
-        logWithIP(`비상 경로 축소: ${truncatedPath} → ${emergencyPath}`, req);
-        return { path: emergencyPath, truncated: true, emergency: true };
+          // 파일명 바이트 길이가 너무 길면 자르기
+          if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
+              finalFileName = truncateFileName(originalFileName);
+              const dirName = path.dirname(relativeFilePath);
+              relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
+              logWithIP(`파일명 길이 제한(Bytes)으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`, req);
+          }
+          
+          // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 수정된 상대 경로)
+          let destinationPath = path.join(rootUploadDir, relativeFilePath);
+          
+          // 전체 경로 길이 확인 및 처리
+          const pathResult = checkAndTruncatePath(destinationPath);
+          if (pathResult.truncated) {
+              destinationPath = pathResult.path;
+              // 경로 변경에 따른 상대 경로 재계산 (저장용)
+              relativeFilePath = destinationPath.substring(rootUploadDir.length);
+              // 경로 시작에 '/' 있으면 제거
+              if (relativeFilePath.startsWith(path.sep)) {
+                  relativeFilePath = relativeFilePath.substring(1);
+              }
+              logWithIP(`전체 경로가 너무 길어 변경됨: ${relativeFilePath}`, req);
+          }
+
+          // 저장될 디렉토리 경로 추출
+          const destinationDir = path.dirname(destinationPath);
+
+          // 디렉토리 생성 (필요한 경우)
+          if (!fs.existsSync(destinationDir)) {
+              fs.mkdirSync(destinationDir, { recursive: true });
+              fs.chmodSync(destinationDir, 0o777); // 생성된 디렉토리 권한 설정
+              logWithIP(`하위 디렉토리 생성됨: ${destinationDir}`, req);
+          }
+
+          logWithIP(`[Upload Detail] 최종 경로: ${destinationPath}`, req);
+
+          // 파일 시스템에 저장 (메모리 버퍼 사용)
+          fs.writeFileSync(destinationPath, file.buffer); // <--- renameSync 대신 writeFileSync 사용
+          fs.chmodSync(destinationPath, 0o666); // 저장된 파일 권한 설정
+
+          // 처리된 파일 정보 저장
+          processedFiles.push({
+              name: path.basename(destinationPath), // 실제 저장된 파일명
+              originalName: fileInfo.originalName,
+              relativePath: destinationPath.substring(rootUploadDir.length).replace(/^\\+|^\//, ''), // 실제 저장된 경로 기준 상대경로
+              size: file.size,
+              path: baseUploadPath,
+              mimetype: file.mimetype,
+              fullPath: destinationPath
+          });
+
+          logWithIP(`파일 저장 완료 (메모리 사용): ${destinationPath} (크기: ${formatBytes(file.size)})`, req);
+
+      } catch (writeError) {
+          errorLogWithIP(`파일 저장 중 오류: ${fileInfo.relativePath}`, writeError, req);
+          errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`);
       }
-      
-      return { path: truncatedPath, truncated: true };
-    }
-
-    // req.files 배열과 fileInfoArray 매핑 (순서가 같다고 가정)
-    // 클라이언트에서 file_${index} 와 fileInfo 순서를 일치시킴
-    req.files.forEach((file, index) => {
-        // fileInfoArray 에서 현재 파일과 매칭되는 정보 찾기
-        // 클라이언트에서 보낸 file_${index} 의 index를 사용하거나, 순서를 신뢰
-        const fileInfo = fileInfoArray.find(info => info.index === index || info.originalName === Buffer.from(file.originalname, 'latin1').toString('utf8'));
-
-        if (!fileInfo || !fileInfo.relativePath) {
-            const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-            errorLogWithIP(`파일 정보 불일치 또는 상대 경로 누락: ${originalName} (index: ${index})`, null, req);
-            errors.push(`파일 ${originalName}의 정보를 찾을 수 없거나 상대 경로가 없습니다.`);
-            return; // 다음 파일로 이동
-        }
-
-        try {
-            // 파일명 길이 확인 및 처리 (바이트 기준)
-            let relativeFilePath = fileInfo.relativePath;
-            const originalFileName = path.basename(relativeFilePath);
-            let finalFileName = originalFileName; // 최종 파일명 변수 추가
-            
-            // 파일명 바이트 길이가 너무 길면 자르기
-            if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
-                finalFileName = truncateFileName(originalFileName);
-                const dirName = path.dirname(relativeFilePath);
-                relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
-                logWithIP(`파일명 길이 제한(Bytes)으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`, req);
-            }
-            
-            // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 수정된 상대 경로)
-            let destinationPath = path.join(rootUploadDir, relativeFilePath);
-            
-            // 전체 경로 길이 확인 및 처리
-            const pathResult = checkAndTruncatePath(destinationPath);
-            if (pathResult.truncated) {
-                destinationPath = pathResult.path;
-                // 경로 변경에 따른 상대 경로 재계산 (저장용)
-                relativeFilePath = destinationPath.substring(rootUploadDir.length);
-                // 경로 시작에 '/' 있으면 제거
-                if (relativeFilePath.startsWith(path.sep)) {
-                    relativeFilePath = relativeFilePath.substring(1);
-                }
-                logWithIP(`전체 경로가 너무 길어 변경됨: ${relativeFilePath}`, req);
-            }
-
-            // 저장될 디렉토리 경로 추출
-            const destinationDir = path.dirname(destinationPath);
-
-            // 디렉토리 생성 (필요한 경우)
-            if (!fs.existsSync(destinationDir)) {
-                fs.mkdirSync(destinationDir, { recursive: true });
-                fs.chmodSync(destinationDir, 0o777); // 생성된 디렉토리 권한 설정
-                logWithIP(`하위 디렉토리 생성됨: ${destinationDir}`, req);
-            }
-
-            // 파일 시스템에 저장하기 전 상세 로그 추가
-            logWithIP(`[Upload Detail] Original Relative Path: ${fileInfo.relativePath}`, req);
-            logWithIP(`[Upload Detail] Final Filename: ${finalFileName} (Length: ${finalFileName.length}, Bytes: ${Buffer.byteLength(finalFileName)})`, req);
-            logWithIP(`[Upload Detail] Destination Path: ${destinationPath} (Length: ${destinationPath.length}, Bytes: ${Buffer.byteLength(destinationPath)})`, req);
-
-            // 파일 시스템에 저장 (메모리 버퍼 사용)
-            fs.writeFileSync(destinationPath, file.buffer);
-            fs.chmodSync(destinationPath, 0o666); // 저장된 파일 권한 설정
-
-            // 처리된 파일 정보 저장
-            processedFiles.push({
-                name: finalFileName, // 수정된 최종 파일명 사용
-                originalName: fileInfo.originalName, // 원본 파일명도 기록
-                relativePath: relativeFilePath, // 수정된 상대 경로 사용
-                size: file.size,
-                path: baseUploadPath, // 기본 업로드 경로
-                mimetype: file.mimetype,
-                fullPath: destinationPath
-            });
-
-            logWithIP(`파일 저장 완료: ${destinationPath} (크기: ${formatBytes(file.size)})`, req);
-
-        } catch (writeError) {
-            errorLogWithIP(`파일 저장 중 오류: ${fileInfo.relativePath}`, writeError, req);
-            errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`);
-        }
-    });
-
-    // 6. 최종 응답 전송
-    if (errors.length > 0) {
-      // 일부 오류 발생
-      logWithIP(`파일 업로드 중 ${errors.length}개의 오류 발생`, req);
-      res.status(207).json({ // Multi-Status 응답
-        message: `일부 파일 업로드 중 오류 발생 (${processedFiles.length}개 성공, ${errors.length}개 실패)`,
-        processedFiles: processedFiles,
-        errors: errors
-      });
-    } else {
-      // 모든 파일 성공
-      logWithIP(`${processedFiles.length}개 파일 업로드 성공`, req);
-      res.status(201).json({
-        message: '파일 업로드 성공',
-        files: processedFiles
-      });
-    }
   });
+
+  // 6. 최종 응답 전송
+  if (errors.length > 0) {
+    // 일부 오류 발생
+    logWithIP(`파일 업로드 중 ${errors.length}개의 오류 발생`, req);
+    res.status(207).json({ // Multi-Status 응답
+      message: `일부 파일 업로드 중 오류 발생 (${processedFiles.length}개 성공, ${errors.length}개 실패)`,
+      processedFiles: processedFiles,
+      errors: errors
+    });
+  } else {
+    // 모든 파일 성공
+    logWithIP(`${processedFiles.length}개 파일 업로드 성공`, req);
+    res.status(201).json({
+      message: '파일 업로드 성공',
+      files: processedFiles
+    });
+  }
 });
 
 // 바이트 단위를 읽기 쉬운 형식으로 변환하는 함수
@@ -1016,6 +699,294 @@ app.post('/api/lock/:path(*)', (req, res) => {
     });
   } catch (error) {
     errorLog(`폴더 ${req.body.action === 'lock' ? '잠금' : '잠금 해제'} 오류:`, error);
+    res.status(500).send('서버 오류가 발생했습니다.');
+  }
+});
+
+// API 라우트 설정 추가
+// 파일 목록 가져오기
+app.get('/api/files/*', async (req, res) => {
+  try {
+    // URL 디코딩하여 한글 경로 처리
+    let requestPath = decodeURIComponent(req.params[0] || '');
+    const fullPath = path.join(ROOT_DIRECTORY, requestPath);
+    
+    logWithIP(`파일 목록 요청: ${fullPath}`, req);
+
+    // 경로가 존재하는지 확인
+    if (!fs.existsSync(fullPath)) {
+      errorLogWithIP(`경로를 찾을 수 없습니다: ${fullPath}`, null, req);
+      return res.status(404).send('경로를 찾을 수 없습니다.');
+    }
+
+    // 디렉토리인지 확인
+    const stats = fs.statSync(fullPath);
+    if (!stats.isDirectory()) {
+      // 파일인 경우 처리
+      logWithIP(`파일 다운로드 요청: ${fullPath}`, req);
+      
+      // 파일명 추출
+      const fileName = path.basename(fullPath);
+      // 파일 확장자 추출
+      const fileExt = path.extname(fullPath).toLowerCase().substring(1);
+      
+      // 브라우저에서 직접 볼 수 있는 파일 형식
+      const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
+                            'mp4', 'webm', 'ogg', 'mp3', 'wav', 
+                            'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
+      
+      // MIME 타입 설정
+      const mimeTypes = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'bmp': 'image/bmp',
+        'webp': 'image/webp',
+        'svg': 'image/svg+xml',
+        'mp4': 'video/mp4',
+        'webm': 'video/webm',
+        'ogg': 'video/ogg',
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav',
+        'pdf': 'application/pdf',
+        'txt': 'text/plain',
+        'html': 'text/html',
+        'htm': 'text/html',
+        'css': 'text/css',
+        'js': 'text/javascript',
+        'json': 'application/json',
+        'xml': 'application/xml'
+      };
+      
+      // 직접 볼 수 있는 파일인지 확인
+      if (viewableTypes.includes(fileExt)) {
+        // Content-Type 설정
+        res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
+        // 인라인 표시 설정 (브라우저에서 직접 열기)
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+        // 파일 스트림 전송
+        fs.createReadStream(fullPath).pipe(res);
+      } else {
+        // 일반 다운로드 파일
+        // Content-Disposition 헤더에 UTF-8로 인코딩된 파일명 설정
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+        res.download(fullPath, fileName, (err) => {
+          if (err) {
+            errorLogWithIP(`파일 다운로드 중 오류: ${fullPath}`, err, req);
+          } else {
+            logWithIP(`파일 다운로드 완료: ${fullPath}`, req);
+          }
+        });
+      }
+      return;
+    }
+
+    // 디렉토리 내용 읽기
+    const items = fs.readdirSync(fullPath);
+    const fileItems = items.map(item => {
+      const itemPath = path.join(fullPath, item);
+      const itemStats = fs.statSync(itemPath);
+      const isDirectory = itemStats.isDirectory();
+
+      return {
+        name: item,
+        isFolder: isDirectory,
+        size: itemStats.size,
+        modifiedTime: itemStats.mtime.toISOString()
+      };
+    });
+
+    logWithIP(`파일 목록 반환: ${fileItems.length}개 항목`, req);
+    res.json(fileItems);
+  } catch (error) {
+    errorLogWithIP('파일 목록 오류:', error, req);
+    res.status(500).send('서버 오류가 발생했습니다.');
+  }
+});
+
+// 새 폴더 생성
+app.post('/api/files/*', (req, res) => {
+  try {
+    // URL 디코딩하여 한글 경로 처리
+    const folderPath = decodeURIComponent(req.params[0] || '');
+    const fullPath = path.join(ROOT_DIRECTORY, folderPath);
+    
+    logWithIP(`폴더 생성 요청: ${fullPath}`, req);
+
+    // 이미 존재하는지 확인
+    if (fs.existsSync(fullPath)) {
+      errorLogWithIP(`이미 존재하는 폴더: ${fullPath}`, null, req);
+      return res.status(409).send('이미 존재하는 이름입니다.');
+    }
+
+    // 폴더 생성
+    fs.mkdirSync(fullPath, { recursive: true });
+    fs.chmodSync(fullPath, 0o777);
+    
+    logWithIP(`폴더 생성 완료: ${fullPath}`, req);
+    res.status(201).send('폴더가 생성되었습니다.');
+  } catch (error) {
+    errorLogWithIP('폴더 생성 오류:', error, req);
+    res.status(500).send('서버 오류가 발생했습니다.');
+  }
+});
+
+// 파일/폴더 이름 변경 또는 이동
+app.put('/api/files/*', (req, res) => {
+  try {
+    // URL 디코딩하여 한글 경로 처리
+    const oldPath = decodeURIComponent(req.params[0] || '');
+    const { newName, targetPath, overwrite } = req.body;
+    
+    logWithIP(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`, req);
+    
+    if (!newName) {
+      errorLogWithIP('새 이름이 제공되지 않음', null, req);
+      return res.status(400).send('새 이름이 제공되지 않았습니다.');
+    }
+
+    const fullOldPath = path.join(ROOT_DIRECTORY, oldPath);
+    
+    // 원본이 존재하는지 확인
+    if (!fs.existsSync(fullOldPath)) {
+      errorLogWithIP(`원본 파일/폴더를 찾을 수 없음: ${fullOldPath}`, null, req);
+      return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPath}`);
+    }
+
+    // 타겟 경로가 제공되면 이동 작업으로 처리 (빈 문자열이면 루트 폴더로 이동)
+    const fullTargetPath = targetPath !== undefined 
+      ? path.join(ROOT_DIRECTORY, targetPath) 
+      : path.dirname(fullOldPath);
+      
+    const fullNewPath = path.join(fullTargetPath, newName);
+      
+    logWithIP(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`);
+    logWithIP(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`);
+
+    // 원본과 대상이 같은 경로인지 확인
+    if (fullOldPath === fullNewPath) {
+      logWithIP(`동일한 경로로의 이동 무시: ${fullOldPath}`);
+      return res.status(200).send('이동이 완료되었습니다.');
+    }
+
+    // 대상 경로의 디렉토리가 없으면 생성
+    if (!fs.existsSync(fullTargetPath)) {
+      logWithIP(`대상 디렉토리 생성: ${fullTargetPath}`);
+      fs.mkdirSync(fullTargetPath, { recursive: true });
+      fs.chmodSync(fullTargetPath, 0o777);
+    }
+
+    // 대상 경로에 이미 존재하는지 확인
+    if (fs.existsSync(fullNewPath)) {
+      if (overwrite) {
+        // 덮어쓰기 옵션이 true면 기존 파일/폴더 삭제
+        logWithIP(`파일이 이미 존재하나 덮어쓰기 옵션 사용: ${fullNewPath}`);
+        try {
+          // 폴더인지 파일인지 확인하여 적절하게 삭제
+          const stats = fs.statSync(fullNewPath);
+          if (stats.isDirectory()) {
+            fs.rmdirSync(fullNewPath, { recursive: true });
+          } else {
+            fs.unlinkSync(fullNewPath);
+          }
+        } catch (deleteError) {
+          errorLogWithIP(`기존 파일/폴더 삭제 오류: ${fullNewPath}`, deleteError, req);
+          return res.status(500).send(`기존 파일 삭제 중 오류가 발생했습니다: ${deleteError.message}`);
+        }
+      } else {
+        // 덮어쓰기 옵션이 없으면 409 Conflict 반환
+        errorLogWithIP(`이미 존재하는 이름: ${fullNewPath}`);
+        return res.status(409).send('이미 존재하는 이름입니다.');
+      }
+    }
+
+    // 이름 변경 (파일 이동)
+    try {
+      fs.renameSync(fullOldPath, fullNewPath);
+      logWithIP(`이동 완료: ${fullOldPath} -> ${fullNewPath}`);
+      
+      res.status(200).send('이동이 완료되었습니다.');
+    } catch (renameError) {
+      // EXDEV 오류는 서로 다른 디바이스 간 이동 시 발생
+      if (renameError.code === 'EXDEV') {
+        errorLogWithIP('서로 다른 파일 시스템 간 이동 오류 (EXDEV)', renameError, req);
+        return res.status(500).send('서로 다른 디바이스 간에 파일을 이동할 수 없습니다. 파일을 복사 후 원본을 삭제해주세요.');
+      }
+      
+      errorLogWithIP(`이름 변경/이동 오류: ${fullOldPath} -> ${fullNewPath}`, renameError, req);
+      return res.status(500).send(`이동 오류: ${renameError.message}`);
+    }
+  } catch (error) {
+    errorLogWithIP('이름 변경 오류:', error, req);
+    res.status(500).send(`서버 오류가 발생했습니다: ${error.message}`);
+  }
+});
+
+// 파일/폴더 삭제
+app.delete('/api/files/*', (req, res) => {
+  try {
+    // URL 디코딩하여 한글 경로 처리
+    const itemPath = decodeURIComponent(req.params[0] || '');
+    const fullPath = path.join(ROOT_DIRECTORY, itemPath);
+    
+    logWithIP(`삭제 요청: ${fullPath}`, req);
+
+    // 존재하는지 확인
+    if (!fs.existsSync(fullPath)) {
+      errorLogWithIP(`파일/폴더를 찾을 수 없음: ${fullPath}`, null, req);
+      return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
+    }
+
+    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
+    let lockedFolders = [];
+    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+    if (fs.existsSync(lockedFoldersPath)) {
+      try {
+        lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
+      } catch (e) {
+        errorLogWithIP('잠긴 폴더 목록 로드 오류:', e, req);
+        lockedFolders = [];
+      }
+    }
+
+    // 디렉토리인지 확인
+    const stats = fs.statSync(fullPath);
+    const isDirectory = stats.isDirectory();
+
+    // 현재 경로나 그 상위 경로가 잠겨있는지 확인
+    const isLocked = lockedFolders.some(lockedPath => {
+      return itemPath === lockedPath || itemPath.startsWith(lockedPath + '/');
+    });
+
+    // 현재 폴더 내에 잠긴 폴더가 있는지 확인 (폴더인 경우만)
+    let hasLockedSubfolders = false;
+    if (isDirectory) {
+      hasLockedSubfolders = lockedFolders.some(lockedPath => {
+        // 현재 삭제하려는 경로가 잠긴 폴더의 상위 경로인지 확인
+        return lockedPath.startsWith(itemPath + '/');
+      });
+    }
+
+    // 잠금 확인
+    if (isLocked || hasLockedSubfolders) {
+      errorLogWithIP(`잠긴 폴더 혹은 내부에 잠긴 폴더가 있는 폴더 삭제 시도: ${fullPath}`, null, req);
+      return res.status(403).send('잠긴 폴더 또는 잠긴 폴더를 포함한 폴더는 삭제할 수 없습니다.');
+    }
+
+    if (isDirectory) {
+      // 폴더 삭제 (재귀적)
+      fs.rmdirSync(fullPath, { recursive: true });
+      logWithIP(`폴더 삭제 완료: ${fullPath}`, req);
+    } else {
+      // 파일 삭제
+      fs.unlinkSync(fullPath);
+      logWithIP(`파일 삭제 완료: ${fullPath}`, req);
+    }
+
+    res.status(200).send('삭제되었습니다.');
+  } catch (error) {
+    errorLogWithIP('삭제 오류:', error, req);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
