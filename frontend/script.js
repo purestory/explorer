@@ -3547,109 +3547,6 @@ function compressSelectedItems() {
 }
 
 
-// 파일 또는 폴더를 지정된 대상 폴더로 이동하는 함수
-function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
-    // 이동 중복 호출 방지 상태 확인
-    if (window.isMovingFiles) {
-        console.log('이미 파일 이동 작업이 진행 중입니다.');
-        return Promise.reject('이미 파일 이동 작업이 진행 중입니다.');
-    }
-    
-    // 이동할 항목이 없으면 무시
-    if (!itemsToMove || itemsToMove.length === 0) {
-        console.log('이동할 항목이 없습니다.');
-        return Promise.reject('이동할 항목이 없습니다.');
-    }
-    
-    // 드롭된 폴더 경로 계산 - 대상 경로가 이미 전체 경로인지 확인
-    let targetPath;
-    
-    // targetFolder가 이미 전체 경로를 포함하는지 확인
-    // currentPath가 targetFolder에 포함되어 있으면 전체 경로로 판단
-    if (targetFolder.includes('/') || currentPath === '') {
-        targetPath = targetFolder; // 전체 경로로 판단되면 그대로 사용
-        console.log(`[moveToFolder] 대상 폴더 '${targetFolder}'는 이미 전체 경로를 포함합니다.`);
-    } else {
-        // 기존 로직: 현재 경로 + 대상 폴더 이름
-        targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
-        console.log(`[moveToFolder] 대상 경로 계산: 현재 경로(${currentPath}) + 폴더명(${targetFolder})`);
-    }
-    
-    // 호출 카운터 증가 - 함수 호출 추적
-    dragDropMoveCounter++;
-// 전역 변수
-// URL 경로에 따라 적절한 API 베이스 URL 설정
-const API_BASE_URL = window.location.hostname === 'itsmyzone.iptime.org' ? 
-    window.location.origin : window.location.origin;
-let currentPath = '';
-let selectedItems = new Set();
-let clipboardItems = [];
-let clipboardOperation = ''; // 'cut' or 'copy'
-let isDragging = false;
-let startX, startY;
-let listView = true; // 기본값을 true로 설정 (목록 보기)
-let diskUsage = null;
-// 정렬 상태 추가
-let sortField = 'name'; // 정렬 필드: name, size, date
-let sortDirection = 'asc'; // 정렬 방향: asc, desc
-// 파일 정보 저장을 위한 맵 추가
-let fileInfoMap = new Map();
-// 업로드 함수 호출 카운터 추가
-let uploadButtonCounter = 0;
-let dragDropCounter = 0;
-let dragDropMoveCounter = 0; // 드래그앤드롭 파일 이동 호출 카운터 추가
-let uploadSource = ''; // 업로드 소스 추적 ('button' 또는 'dragdrop')
-let isHandlingDrop = false; // 드롭 이벤트 중복 처리 방지 플래그 추가
-// 폴더 잠금 상태 저장
-let lockedFolders = [];
-// 폴더 잠금 기능 사용 가능 여부
-let lockFeatureAvailable = true;
-
-// 드래그 선택 상태 관련 전역 변수 추가
-window.dragSelectState = {
-    isSelecting: false,
-    dragStarted: false,
-    startedOnFileItem: false,
-    startedOnSelectedItem: false
-};
-
-// DOM 요소
-const fileView = document.getElementById('fileView');
-const breadcrumb = document.getElementById('breadcrumb');
-const createFolderBtn = document.getElementById('createFolder');
-const folderModal = document.getElementById('folderModal');
-const folderNameInput = document.getElementById('folderName');
-const createFolderConfirmBtn = document.getElementById('createFolderBtn');
-const cancelFolderBtn = document.getElementById('cancelFolderBtn');
-const fileUploadInput = document.getElementById('fileUpload');
-const cutBtn = document.getElementById('cutBtn');
-const pasteBtn = document.getElementById('pasteBtn');
-const renameBtn = document.getElementById('renameBtn');
-const deleteBtn = document.getElementById('deleteBtn');
-const renameModal = document.getElementById('renameModal');
-const newNameInput = document.getElementById('newName');
-const confirmRenameBtn = document.getElementById('confirmRenameBtn');
-const cancelRenameBtn = document.getElementById('cancelRenameBtn');
-const searchInput = document.getElementById('searchInput');
-const loadingOverlay = document.getElementById('loadingOverlay');
-const selectionBox = document.getElementById('selectionBox');
-const dropZone = document.getElementById('dropZone');
-const progressContainer = document.getElementById('progressContainer');
-const progressBar = document.getElementById('progressBar');
-const uploadStatus = document.getElementById('uploadStatus');
-const fileList = document.getElementById('fileList');
-const contextMenu = document.getElementById('contextMenu');
-const statusbar = document.getElementById('statusbar');
-const statusInfo = statusbar.querySelector('.status-info');
-const selectionInfo = statusbar.querySelector('.selection-info');
-const gridViewBtn = document.getElementById('gridViewBtn');
-const listViewBtn = document.getElementById('listViewBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-
-// UI에서 잘라내기, 붙여넣기, 이름변경 버튼 숨기기
-cutBtn.style.display = 'none';
-pasteBtn.style.display = 'none';
-renameBtn.style.display = 'none';
 
 // 상황에 맞는 버튼 비활성화/활성화 함수
 function updateButtonStates() {
@@ -7141,7 +7038,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
     }
     
     // 드롭된 폴더 경로 계산
-    const targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
+    const targetPath = targetFolder.startsWith("/") ? targetFolder : (currentPath ? `${currentPath}/${targetFolder}` : targetFolder);
     
     // 호출 카운터 증가 - 함수 호출 추적
     dragDropMoveCounter++;
@@ -7153,7 +7050,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
     
     // 이동 전 충돌 항목 확인 (모든 항목에 대해 한 번만 확인)
     const conflictCheckPromises = itemsToMove.map(item => {
-        const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+        const sourceFullPath = item.startsWith("/") ? item : (currentPath ? `${currentPath}/${item}` : item);
         const fileName = item;
         
         // 소스와 타겟이 같은 경로인지 확인
@@ -8372,5 +8269,3 @@ function handleFileDrop(e, targetFolderItem = null) {
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
     }
 }
-// 중복 함수 제거: handleDropZoneDrop 함수는 이미 2127 라인에 정의되어 있음
-
