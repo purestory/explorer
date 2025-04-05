@@ -3729,113 +3729,113 @@ function isPathAccessRestricted(path) {
 }
 
 // 폴더 잠금 토글 함수 (수정: 명령 인자 추가)
-function toggleFolderLock(action) {
-    // 잠금 기능을 사용할 수 없으면 경고 표시
-    if (!lockFeatureAvailable) {
-        console.log('폴더 잠금 기능을 사용할 수 없습니다.');
-        // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
-        return;
-    }
-    
-    // 선택된 폴더 항목들 확인
-    const selectedFolders = [];
-    
-    
-    // 선택된 항목들 중에서 폴더만 필터링
-    selectedItems.forEach(itemName => {
-        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
-        if (element && element.getAttribute('data-is-folder') === 'true') {
-            const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-            selectedFolders.push({
-                name: itemName,
-                path: folderPath,
-                isLocked: isPathLocked(folderPath)
-            });
-        }
-    });
-    
-    if (selectedFolders.length === 0) {
-        // 폴더가 선택되지 않았으면 조용히 리턴
-        return;
-    }
-    
-    // 처리할 폴더들을 필터링 (선택된 동작에 따라)
-    const foldersToProcess = action === 'lock' 
-        ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
-        : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
-    
-    if (foldersToProcess.length === 0) {
-        if (action === 'lock') {
-            statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
-    } else {
-            statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
-        }
-        return;
-    }
-    
-    showLoading();
-    
-    // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
-    const processNextFolder = (index) => {
-        if (index >= foldersToProcess.length) {
-            // 모든 폴더 처리 완료
-            loadLockStatus().then(() => {
-                loadFiles(currentPath); // 파일 목록 새로고침
-                const actionText = action === 'lock' ? '잠금' : '잠금 해제';
-                statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
-                hideLoading();
-            });
-            return;
-        }
-        
-        const folder = foldersToProcess[index];
-        const encodedPath = encodeURIComponent(folder.path);
-        
-        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ action: action })
-        })
-        .then(response => {
-            if (!response.ok) {
-                // 404 에러인 경우 기능을 사용할 수 없다고 설정
-                if (response.status === 404) {
-                    lockFeatureAvailable = false;
-                    console.log('폴더 잠금 API가 서버에 구현되어 있지 않습니다.');
-                    throw new Error('폴더 잠금 기능을 사용할 수 없습니다.');
-                }
-                throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
-            }
-            return response.json();
-        })
-        .then(() => {
-            // 다음 폴더 처리
-            processNextFolder(index + 1);
-        })
-        .catch(error => {
-            // 서버에 API가 구현되어 있지 않은 경우 조용히 처리
-            if (!lockFeatureAvailable) {
-                console.log('폴더 잠금 기능을 사용할 수 없습니다.');
-                hideLoading();
-                loadFiles(currentPath);
-                return;
-            }
-            
-            // 일반 오류 발생 시 알림 표시
-            console.error('폴더 잠금/해제 오류:', error);
-            alert(`오류 발생: ${error.message}`);
-            hideLoading();
-            loadFiles(currentPath);
-        });
-    };
-    
-    // 첫 번째 폴더부터 처리 시작
-    processNextFolder(0);
-}
-
-// 잠금 상태 로드 함수
+// 중복 함수 제거 - function toggleFolderLock(action) {
+// 중복 함수 제거 -     // 잠금 기능을 사용할 수 없으면 경고 표시
+// 중복 함수 제거 -     if (!lockFeatureAvailable) {
+// 중복 함수 제거 -         console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+// 중복 함수 제거 -         // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
+// 중복 함수 제거 -         return;
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 선택된 폴더 항목들 확인
+// 중복 함수 제거 -     const selectedFolders = [];
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 선택된 항목들 중에서 폴더만 필터링
+// 중복 함수 제거 -     selectedItems.forEach(itemName => {
+// 중복 함수 제거 -         const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
+// 중복 함수 제거 -         if (element && element.getAttribute('data-is-folder') === 'true') {
+// 중복 함수 제거 -             const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+// 중복 함수 제거 -             selectedFolders.push({
+// 중복 함수 제거 -                 name: itemName,
+// 중복 함수 제거 -                 path: folderPath,
+// 중복 함수 제거 -                 isLocked: isPathLocked(folderPath)
+// 중복 함수 제거 -             });
+// 중복 함수 제거 -         }
+// 중복 함수 제거 -     });
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     if (selectedFolders.length === 0) {
+// 중복 함수 제거 -         // 폴더가 선택되지 않았으면 조용히 리턴
+// 중복 함수 제거 -         return;
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 처리할 폴더들을 필터링 (선택된 동작에 따라)
+// 중복 함수 제거 -     const foldersToProcess = action === 'lock' 
+// 중복 함수 제거 -         ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
+// 중복 함수 제거 -         : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     if (foldersToProcess.length === 0) {
+// 중복 함수 제거 -         if (action === 'lock') {
+// 중복 함수 제거 -             statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
+// 중복 함수 제거 -     } else {
+// 중복 함수 제거 -             statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
+// 중복 함수 제거 -         }
+// 중복 함수 제거 -         return;
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     showLoading();
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
+// 중복 함수 제거 -     const processNextFolder = (index) => {
+// 중복 함수 제거 -         if (index >= foldersToProcess.length) {
+// 중복 함수 제거 -             // 모든 폴더 처리 완료
+// 중복 함수 제거 -             loadLockStatus().then(() => {
+// 중복 함수 제거 -                 loadFiles(currentPath); // 파일 목록 새로고침
+// 중복 함수 제거 -                 const actionText = action === 'lock' ? '잠금' : '잠금 해제';
+// 중복 함수 제거 -                 statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
+// 중복 함수 제거 -                 hideLoading();
+// 중복 함수 제거 -             });
+// 중복 함수 제거 -             return;
+// 중복 함수 제거 -         }
+// 중복 함수 제거 -         
+// 중복 함수 제거 -         const folder = foldersToProcess[index];
+// 중복 함수 제거 -         const encodedPath = encodeURIComponent(folder.path);
+// 중복 함수 제거 -         
+// 중복 함수 제거 -         fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
+// 중복 함수 제거 -             method: 'POST',
+// 중복 함수 제거 -             headers: {
+// 중복 함수 제거 -                 'Content-Type': 'application/json'
+// 중복 함수 제거 -             },
+// 중복 함수 제거 -             body: JSON.stringify({ action: action })
+// 중복 함수 제거 -         })
+// 중복 함수 제거 -         .then(response => {
+// 중복 함수 제거 -             if (!response.ok) {
+// 중복 함수 제거 -                 // 404 에러인 경우 기능을 사용할 수 없다고 설정
+// 중복 함수 제거 -                 if (response.status === 404) {
+// 중복 함수 제거 -                     lockFeatureAvailable = false;
+// 중복 함수 제거 -                     console.log('폴더 잠금 API가 서버에 구현되어 있지 않습니다.');
+// 중복 함수 제거 -                     throw new Error('폴더 잠금 기능을 사용할 수 없습니다.');
+// 중복 함수 제거 -                 }
+// 중복 함수 제거 -                 throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
+// 중복 함수 제거 -             }
+// 중복 함수 제거 -             return response.json();
+// 중복 함수 제거 -         })
+// 중복 함수 제거 -         .then(() => {
+// 중복 함수 제거 -             // 다음 폴더 처리
+// 중복 함수 제거 -             processNextFolder(index + 1);
+// 중복 함수 제거 -         })
+// 중복 함수 제거 -         .catch(error => {
+// 중복 함수 제거 -             // 서버에 API가 구현되어 있지 않은 경우 조용히 처리
+// 중복 함수 제거 -             if (!lockFeatureAvailable) {
+// 중복 함수 제거 -                 console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+// 중복 함수 제거 -                 hideLoading();
+// 중복 함수 제거 -                 loadFiles(currentPath);
+// 중복 함수 제거 -                 return;
+// 중복 함수 제거 -             }
+// 중복 함수 제거 -             
+// 중복 함수 제거 -             // 일반 오류 발생 시 알림 표시
+// 중복 함수 제거 -             console.error('폴더 잠금/해제 오류:', error);
+// 중복 함수 제거 -             alert(`오류 발생: ${error.message}`);
+// 중복 함수 제거 -             hideLoading();
+// 중복 함수 제거 -             loadFiles(currentPath);
+// 중복 함수 제거 -         });
+// 중복 함수 제거 -     };
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     // 첫 번째 폴더부터 처리 시작
+// 중복 함수 제거 -     processNextFolder(0);
+// 중복 함수 제거 - }
+// 중복 함수 제거 - 
+// 중복 함수 제거 - // 잠금 상태 로드 함수
 function loadLockStatus() {
     // 이미 잠금 기능을 사용할 수 없다고 판단되면 바로 빈 배열 반환
     if (!lockFeatureAvailable) {
@@ -3901,8 +3901,8 @@ function loadLockStatus() {
 // 중복 함수 제거 -         }
 // 중복 함수 제거 -         
 // 중복 함수 제거 -         return false;
-    });
-}
+// 중복 함수 제거 -     });
+// 중복 함수 제거 - }
 
 // 폴더 잠금 토글 기능
 function toggleFolderLock(action = 'lock') {
