@@ -34,38 +34,13 @@ window.dragSelectState = {
     startedOnSelectedItem: false
 };
 
-// DOM 요소
-const fileView = document.getElementById('fileView');
-const breadcrumb = document.getElementById('breadcrumb');
-const createFolderBtn = document.getElementById('createFolder');
-const folderModal = document.getElementById('folderModal');
-const folderNameInput = document.getElementById('folderName');
-const createFolderConfirmBtn = document.getElementById('createFolderBtn');
-const cancelFolderBtn = document.getElementById('cancelFolderBtn');
-const fileUploadInput = document.getElementById('fileUpload');
-const cutBtn = document.getElementById('cutBtn');
-const pasteBtn = document.getElementById('pasteBtn');
-const renameBtn = document.getElementById('renameBtn');
-const deleteBtn = document.getElementById('deleteBtn');
-const renameModal = document.getElementById('renameModal');
-const newNameInput = document.getElementById('newName');
-const confirmRenameBtn = document.getElementById('confirmRenameBtn');
-const cancelRenameBtn = document.getElementById('cancelRenameBtn');
-const searchInput = document.getElementById('searchInput');
-const loadingOverlay = document.getElementById('loadingOverlay');
-const selectionBox = document.getElementById('selectionBox');
-const dropZone = document.getElementById('dropZone');
-const progressContainer = document.getElementById('progressContainer');
-const progressBar = document.getElementById('progressBar');
-const uploadStatus = document.getElementById('uploadStatus');
-const fileList = document.getElementById('fileList');
-const contextMenu = document.getElementById('contextMenu');
-const statusbar = document.getElementById('statusbar');
-const statusInfo = statusbar.querySelector('.status-info');
-const selectionInfo = statusbar.querySelector('.selection-info');
-const gridViewBtn = document.getElementById('gridViewBtn');
-const listViewBtn = document.getElementById('listViewBtn');
-const downloadBtn = document.getElementById('downloadBtn');
+// DOM 요소 변수
+let fileList, fileView, breadcrumb, contextMenu, dropZone;
+let folderModal, folderNameInput, renameModal, renameInput, fileInfoModal;
+let statusbar, selectionInfo;
+let createFolderBtn, cutBtn, pasteBtn, renameBtn, downloadBtn, deleteBtn;
+let gridViewBtn, listViewBtn;
+let progressContainer, progressBar, uploadStatus, currentFileUpload;
 
 // UI에서 잘라내기, 붙여넣기, 이름변경 버튼 숨기기
 cutBtn.style.display = 'none';
@@ -136,33 +111,40 @@ function handleShiftSelect(fileItem) {
 
 // 모달 초기화
 function initModals() {
-    // 모달 닫기 버튼
-    document.querySelectorAll('.modal-close').forEach(closeBtn => {
-        closeBtn.addEventListener('click', () => {
-            folderModal.style.display = 'none';
-            renameModal.style.display = 'none';
+    // 모달 배경 클릭 시 닫기 처리
+    const modals = document.querySelectorAll('.modal');
+    
+    modals.forEach(modal => {
+        // 모달 배경 클릭 시 닫기
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
         });
+        
+        // 닫기 버튼 이벤트
+        const closeBtn = modal.querySelector('.modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+        }
     });
     
-    // 배경 클릭 시 모달 닫기
-    window.addEventListener('click', (e) => {
-        if (e.target === folderModal) {
-            folderModal.style.display = 'none';
-        }
-        if (e.target === renameModal) {
-            renameModal.style.display = 'none';
-        }
-    });
+    // 파일 정보 모달 닫기 버튼
+    const closeInfoBtn = document.getElementById('closeInfoBtn');
+    if (closeInfoBtn) {
+        closeInfoBtn.addEventListener('click', () => {
+            document.getElementById('fileInfoModal').style.display = 'none';
+        });
+    }
     
     // ESC 키로 모달 닫기
-    window.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (folderModal.style.display === 'flex') {
-                folderModal.style.display = 'none';
-            }
-            if (renameModal.style.display === 'flex') {
-                renameModal.style.display = 'none';
-            }
+            modals.forEach(modal => {
+                modal.style.display = 'none';
+            });
         }
     });
 }
@@ -304,6 +286,9 @@ function initContextMenu() {
         const action = menuText.includes('잠금 해제') ? 'unlock' : 'lock';
         toggleFolderLock(action);
     });
+    
+    // 파일/폴더 정보 보기 이벤트 추가
+    document.getElementById('ctxInfo').addEventListener('click', showFileInfo);
     
     document.getElementById('ctxNewFolder').addEventListener('click', () => {
         // 현재 폴더에 존재하는 파일 목록 확인
@@ -1959,6 +1944,13 @@ function handleFileDragEnter(e) {
                 return;
             }
             
+            // 모든 폴더에서 drag-over 클래스 제거
+            document.querySelectorAll('.file-item[data-is-folder="true"].drag-over').forEach(item => {
+                if (item !== fileItem) {
+                    item.classList.remove('drag-over');
+                }
+            });
+            
             console.log('드래그 진입:', fileItem.getAttribute('data-name'));
             fileItem.classList.add('drag-over');
         }
@@ -2005,8 +1997,11 @@ function handleFileDragOver(e) {
         const fileItem = e.target.closest('.file-item');
         if (!fileItem) return;
         
-        // 폴더 항목에서 나갈 때만 드래그 오버 스타일 제거
+        // e.relatedTarget은 마우스가 이동해 들어간 요소를 가리킵니다.
+        // 마우스가 fileItem 요소 또는 그 자식 요소가 아닌 곳으로 이동했을 때만 클래스를 제거합니다.
+        if (!e.relatedTarget || !fileItem.contains(e.relatedTarget)) {
         fileItem.classList.remove('drag-over');
+        }
     }
     
     function handleFileDrop(e) {
@@ -4744,4 +4739,112 @@ function handleFileDrop(e, targetFolderItem = null) {
     }
 }
 // 중복 함수 제거: handleDropZoneDrop 함수는 이미 2127 라인에 정의되어 있음
+
+// 파일/폴더 정보 표시 함수
+function showFileInfo() {
+    // 선택된 항목 가져오기
+    const selectedItem = document.querySelector('.file-item.selected');
+    if (!selectedItem) return;
+    
+    // 파일/폴더 정보 가져오기
+    const fileName = selectedItem.getAttribute('data-name');
+    const isFolder = selectedItem.getAttribute('data-is-folder') === 'true';
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    
+    // UI 요소에 데이터 설정
+    document.getElementById('infoName').textContent = fileName;
+    document.getElementById('infoType').textContent = isFolder ? '폴더' : getFileType(fileName);
+    document.getElementById('infoLocation').textContent = currentPath || '루트 디렉토리';
+    document.getElementById('infoPath').textContent = filePath;
+    
+    // 추가 정보 가져오기 (API 호출)
+    showLoadingOverlay();
+    
+    // 파일/폴더 상세 정보 가져오기
+    fetch(`/api/info?path=${encodeURIComponent(filePath)}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('파일 정보를 가져오는데 실패했습니다');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // 정보 모달에 데이터 표시
+            document.getElementById('infoSize').textContent = isFolder ? 
+                formatFileSize(data.totalSize) + ` (${data.fileCount}개 파일, ${data.folderCount}개 폴더)` : 
+                formatFileSize(data.size);
+            
+            document.getElementById('infoCreated').textContent = formatDate(data.createdAt);
+            document.getElementById('infoModified').textContent = formatDate(data.modifiedAt);
+            
+            // 권한 정보 (사용 가능한 경우)
+            if (data.permissions) {
+                document.getElementById('infoPermissions').textContent = data.permissions;
+                document.getElementById('infoPermissionsRow').style.display = 'flex';
+            } else {
+                document.getElementById('infoPermissionsRow').style.display = 'none';
+            }
+            
+            // 모달 표시
+            hideLoadingOverlay();
+            document.getElementById('fileInfoModal').style.display = 'flex';
+        })
+        .catch(error => {
+            hideLoadingOverlay();
+            console.error('Error:', error);
+            showToast('파일 정보를 가져오는데 실패했습니다: ' + error.message, 'error');
+            
+            // 기본 정보만 표시
+            document.getElementById('infoSize').textContent = '정보를 가져올 수 없습니다';
+            document.getElementById('infoCreated').textContent = '정보를 가져올 수 없습니다';
+            document.getElementById('infoModified').textContent = '정보를 가져올 수 없습니다';
+            document.getElementById('infoPermissionsRow').style.display = 'none';
+            
+            // 모달 표시
+            document.getElementById('fileInfoModal').style.display = 'flex';
+        });
+}
+
+// 파일 유형 가져오기
+function getFileType(fileName) {
+    const extension = fileName.split('.').pop().toLowerCase();
+    
+    // 확장자별 유형 매핑
+    const typeMap = {
+        'txt': '텍스트 문서',
+        'pdf': 'PDF 문서',
+        'doc': 'Word 문서',
+        'docx': 'Word 문서',
+        'xls': 'Excel 문서',
+        'xlsx': 'Excel 문서',
+        'ppt': 'PowerPoint 문서',
+        'pptx': 'PowerPoint 문서',
+        'jpg': '이미지 파일',
+        'jpeg': '이미지 파일',
+        'png': '이미지 파일',
+        'gif': '이미지 파일',
+        'mp3': '오디오 파일',
+        'mp4': '비디오 파일',
+        'mov': '비디오 파일',
+        'zip': '압축 파일',
+        'rar': '압축 파일',
+        '7z': '압축 파일',
+        'html': 'HTML 문서',
+        'css': 'CSS 파일',
+        'js': 'JavaScript 파일',
+        'json': 'JSON 파일',
+        'php': 'PHP 파일',
+        'py': 'Python 파일',
+        'java': 'Java 파일',
+        'c': 'C 소스 파일',
+        'cpp': 'C++ 소스 파일',
+        'h': 'C/C++ 헤더 파일',
+        'sql': 'SQL 파일'
+    };
+    
+    return extension && typeMap[extension] ? typeMap[extension] : `${extension.toUpperCase()} 파일`;
+}
+
+// 내부 드래그인지 확인하는 함수 (파일 경로 기반 + 기본값은 내부)
+// ... existing code ...
 

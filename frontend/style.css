@@ -324,7 +324,7 @@ h1 {
 }
 
 .file-item.drag-over {
-    background-color: rgba(0, 123, 255, 0.3);
+    /* background-color: rgba(0, 123, 255, 0.3); */
     border: 2px dashed #0056b3 !important;
     box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
     transform: scale(1.03);
@@ -596,7 +596,7 @@ h1 {
 }
 
 .file-item.drag-over {
-    background-color: rgba(0, 123, 255, 0.3);
+    /* background-color: rgba(0, 123, 255, 0.3); */
     border: 2px dashed #0056b3 !important;
     box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
     transform: scale(1.03);
@@ -606,7 +606,7 @@ h1 {
 
 /* 폴더에 드래그 오버 시 강조 효과 강화 */
 .file-item[data-is-folder="true"].drag-over {
-    background-color: rgba(33, 150, 243, 0.3);
+    /* background-color: rgba(33, 150, 243, 0.3); */ /* 배경색 제거 */
     border: 3px dashed #0056b3 !important;
     box-shadow: 0 0 25px rgba(0, 123, 255, 0.8);
     transform: scale(1.08);
@@ -658,24 +658,24 @@ h1 {
 @keyframes folderPulse {
     0% {
         border-color: #0056b3;
-        background-color: rgba(33, 150, 243, 0.2);
+        /* background-color: rgba(33, 150, 243, 0.2); */ /* 배경색 제거 */
         box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
     }
     50% {
         border-color: #2196F3;
-        background-color: rgba(33, 150, 243, 0.4);
+        /* background-color: rgba(33, 150, 243, 0.4); */ /* 배경색 제거 */
         box-shadow: 0 0 25px rgba(0, 123, 255, 0.8);
     }
     100% {
         border-color: #0056b3;
-        background-color: rgba(33, 150, 243, 0.2);
+        /* background-color: rgba(33, 150, 243, 0.2); */ /* 배경색 제거 */
         box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
     }
 }
 
 /* 리스트 뷰에서 폴더 드래그 오버 스타일 보완 */
 .list-view .file-item[data-is-folder="true"].drag-over {
-    background-color: rgba(0, 123, 255, 0.2);
+    /* background-color: rgba(0, 123, 255, 0.2); */ /* 배경색 제거 */
     border-left: 4px solid #0056b3 !important;
     border-top: 1px solid #e0e0e0 !important;
     border-right: 1px solid #e0e0e0 !important;
@@ -774,7 +774,7 @@ h1 {
 }
 
 .list-view .file-item.drag-over {
-    background-color: rgba(0, 123, 255, 0.15);
+    /* background-color: rgba(0, 123, 255, 0.15); */ /* 배경색 제거 */
     border: 1px dashed #007bff;
 }
 
@@ -917,6 +917,7 @@ h1 {
     background-color: #f8f8f8;
     border-bottom: 1px solid #ddd;
     font-weight: bold;
+    font-size: 0.9rem;
     align-items: center;
     width: 100%;
     box-sizing: border-box;
@@ -933,12 +934,14 @@ h1 {
     flex: 2;
     cursor: pointer;
     padding: 0 10px;
+    font-size: 0.9rem;
 }
 
 .header-size {
     flex: 1;
     text-align: right;
     cursor: pointer;
+    font-size: 0.9rem;
 }
 
 .header-date {
@@ -946,6 +949,7 @@ h1 {
     text-align: right;
     cursor: pointer;
     margin-left: 10px;
+    font-size: 0.9rem;
 }
 
 /* 일반 모드에서 숨김 처리 */
@@ -1007,7 +1011,7 @@ h1 {
 
 /* 드래그 중인 폴더 강조 */
 .file-item[data-is-folder="true"].drag-over {
-    background-color: rgba(0, 123, 255, 0.3);
+    /* background-color: rgba(0, 123, 255, 0.3); */
     border: 2px dashed #0056b3;
     box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
 }
@@ -1135,4 +1139,48 @@ h1 {
 
 .toast-error {
     background-color: #e74c3c;
+}
+
+/* 파일 정보 모달 스타일 */
+.file-info-content {
+    padding: 10px 0;
+}
+
+.file-info-item {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+    display: flex;
+}
+
+.file-info-item:last-child {
+    border-bottom: none;
+}
+
+.file-info-item strong {
+    min-width: 80px;
+    display: inline-block;
+    color: #555;
+}
+
+.file-info-item span {
+    flex: 1;
+    word-break: break-all;
+}
+
+/* 복사 버튼 스타일 */
+.copy-path-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    margin-left: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.copy-path-btn:hover {
+    background-color: #e9ecef;
 }
