@@ -3680,7 +3680,11 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
             
             // 선택된 모든 항목 이동
             const movePromises = finalItemsToMove.map(item => {
-                const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                // const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                // 위 로직은 루트 폴더에서는 맞지만 하위 폴더에서는 문제를 일으킴
+                // finalItemsToMove 배열의 'item'은 이미 전체 경로를 포함하고 있을 수 있음
+                // 따라서 currentPath를 추가하지 않고 item 자체를 sourcePath로 사용
+                const sourceFullPath = item;
                 return moveItem(sourceFullPath, targetPath, shouldOverwrite);
             });
             
