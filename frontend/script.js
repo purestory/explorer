@@ -4536,7 +4536,7 @@ function initDropZone() {
 }
 
 // 파일/폴더가 폴더 위에 드롭되었을 때 호출되는 함수
-function handleFileDrop(e, targetFolderItem) {
+function handleFileDrop_renamed1(e, targetFolderItem) {
     preventDefaults(e);
     
     // 드래그 상태 초기화
@@ -4723,7 +4723,7 @@ function determineDropType(e) {
 }
 
 // 파일/폴더가 드롭되었을 때 호출되는 통합 함수
-function handleFileDrop(e, targetFolderItem = null) {
+function handleFileDrop_renamed2(e, targetFolderItem = null) {
     preventDefaults(e);
     
     // 드래그 상태 초기화
