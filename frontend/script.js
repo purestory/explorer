@@ -3878,29 +3878,29 @@ function loadLockStatus() {
         });
 }
 
-// 경로가 잠긴 폴더인지 확인하는 함수
-function isPathLocked(path) {
-    // 잠금 기능을 사용할 수 없으면 항상 false 반환
-    if (!lockFeatureAvailable) {
-        return false;
-    }
-    
-    if (!lockedFolders || lockedFolders.length === 0) {
-        return false;
-    }
-    
-    return lockedFolders.some(lockedPath => {
-        // 경로가 잠긴 폴더 자체인 경우
-        if (path === lockedPath) {
-            return true;
-        }
-        
-        // 경로가 잠긴 폴더의 하위 경로인 경우 (접근 제한)
-        if (path.startsWith(lockedPath + '/')) {
-            return true;
-        }
-        
-        return false;
+// 중복 함수 제거 - // 경로가 잠긴 폴더인지 확인하는 함수
+// 중복 함수 제거 - function isPathLocked(path) {
+// 중복 함수 제거 -     // 잠금 기능을 사용할 수 없으면 항상 false 반환
+// 중복 함수 제거 -     if (!lockFeatureAvailable) {
+// 중복 함수 제거 -         return false;
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     if (!lockedFolders || lockedFolders.length === 0) {
+// 중복 함수 제거 -         return false;
+// 중복 함수 제거 -     }
+// 중복 함수 제거 -     
+// 중복 함수 제거 -     return lockedFolders.some(lockedPath => {
+// 중복 함수 제거 -         // 경로가 잠긴 폴더 자체인 경우
+// 중복 함수 제거 -         if (path === lockedPath) {
+// 중복 함수 제거 -             return true;
+// 중복 함수 제거 -         }
+// 중복 함수 제거 -         
+// 중복 함수 제거 -         // 경로가 잠긴 폴더의 하위 경로인 경우 (접근 제한)
+// 중복 함수 제거 -         if (path.startsWith(lockedPath + '/')) {
+// 중복 함수 제거 -             return true;
+// 중복 함수 제거 -         }
+// 중복 함수 제거 -         
+// 중복 함수 제거 -         return false;
     });
 }
 
