@@ -3638,8 +3638,48 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
             
             // 선택된 모든 항목 이동
             const movePromises = finalItemsToMove.map(item => {
-                const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
-                return moveItem(sourceFullPath, targetPath, shouldOverwrite);
+                // 기존 로직: const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                // 수정된 로직: item 자체가 이미 전체 경로이므로 그대로 사용
+                const sourceFullPath = item;
+                
+                // 대상 경로도 정규화 (안전 장치)
+                function normalizeFilePath(path) {
+                    if (!path) return '';
+                    const normalized = path.replace(/\/+/g, '/').replace(/\/\/+/g, '/').trim();
+                    const parts = normalized.split('/');
+                    const newParts = [];
+                    for (const part of parts) {
+                        if (part === '' && newParts.length > 0) continue;
+                        if (part === '.') continue;
+                        if (part === '..') {
+                            if (newParts.length > 0 && newParts[newParts.length - 1] !== '..') {
+                                newParts.pop();
+                            } else {
+                                newParts.push('..');
+                            }
+                        } else if (part) {
+                            newParts.push(part);
+                        }
+                    }
+                    const finalParts = [];
+                    for (let i = 0; i < newParts.length; i++) {
+                        if (i + 1 < newParts.length && newParts[i] === newParts[i+1]) {
+                            continue;
+                        }
+                        finalParts.push(newParts[i]);
+                    }
+                    let resultPath = finalParts.join('/');
+                    if (normalized.startsWith('/') && !resultPath.startsWith('/') && resultPath !== '') {
+                        resultPath = '/' + resultPath;
+                    }
+                    return resultPath;
+                }
+                const normalizedTargetPath = normalizeFilePath(targetPath);
+                
+                // 로그 추가: 정규화된 경로 확인
+                console.log(`[moveToFolder] 이동 호출: ${sourceFullPath} -> ${normalizedTargetPath}`);
+                
+                return moveItem(sourceFullPath, normalizedTargetPath, shouldOverwrite);
             });
             
             return Promise.allSettled(movePromises)
