@@ -152,7 +152,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 
 // 로깅 미들웨어
 app.use((req, res, next) => {
-  log(`${req.method} ${req.url}`);
+  logWithIP(`${req.method} ${req.url}`, req);
   next();
 });
 
@@ -175,13 +175,13 @@ const storage = multer.diskStorage({
       fs.chmodSync(uploadPath, 0o777);
     }
     
-    log(`업로드 대상 폴더: ${uploadPath}`);
+    logWithIP(`업로드 대상 폴더: ${uploadPath}`, req);
     cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
     // 원본 파일명에서 한글 인코딩 처리
     const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    log(`업로드 파일명: ${originalName}`);
+    logWithIP(`업로드 파일명: ${originalName}`, req);
     cb(null, originalName);
   }
 });
@@ -301,11 +301,11 @@ app.post('/api/files/*', (req, res) => {
     const folderPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, folderPath);
     
-    log(`폴더 생성 요청: ${fullPath}`);
+    logWithIP(`폴더 생성 요청: ${fullPath}`, req);
 
     // 이미 존재하는지 확인
     if (fs.existsSync(fullPath)) {
-      errorLog(`이미 존재하는 폴더: ${fullPath}`);
+      errorLogWithIP(`이미 존재하는 폴더: ${fullPath}`, null, req);
       return res.status(409).send('이미 존재하는 이름입니다.');
     }
 
@@ -313,10 +313,10 @@ app.post('/api/files/*', (req, res) => {
     fs.mkdirSync(fullPath, { recursive: true });
     fs.chmodSync(fullPath, 0o777);
     
-    log(`폴더 생성 완료: ${fullPath}`);
+    logWithIP(`폴더 생성 완료: ${fullPath}`, req);
     res.status(201).send('폴더가 생성되었습니다.');
   } catch (error) {
-    errorLog('폴더 생성 오류:', error);
+    errorLogWithIP('폴더 생성 오류:', error, req);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
@@ -328,10 +328,10 @@ app.put('/api/files/*', (req, res) => {
     const oldPath = decodeURIComponent(req.params[0] || '');
     const { newName, targetPath, overwrite } = req.body;
     
-    log(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`);
+    logWithIP(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`, req);
     
     if (!newName) {
-      errorLog('새 이름이 제공되지 않음');
+      errorLogWithIP('새 이름이 제공되지 않음', null, req);
       return res.status(400).send('새 이름이 제공되지 않았습니다.');
     }
 
@@ -339,7 +339,7 @@ app.put('/api/files/*', (req, res) => {
     
     // 원본이 존재하는지 확인
     if (!fs.existsSync(fullOldPath)) {
-      errorLog(`원본 파일/폴더를 찾을 수 없음: ${fullOldPath}`);
+      errorLogWithIP(`원본 파일/폴더를 찾을 수 없음: ${fullOldPath}`, null, req);
       return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPath}`);
     }
 
@@ -350,18 +350,18 @@ app.put('/api/files/*', (req, res) => {
       
     const fullNewPath = path.join(fullTargetPath, newName);
       
-    log(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`);
-    log(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`);
+    logWithIP(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`);
+    logWithIP(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`);
 
     // 원본과 대상이 같은 경로인지 확인
     if (fullOldPath === fullNewPath) {
-      log(`동일한 경로로의 이동 무시: ${fullOldPath}`);
+      logWithIP(`동일한 경로로의 이동 무시: ${fullOldPath}`);
       return res.status(200).send('이동이 완료되었습니다.');
     }
 
     // 대상 경로의 디렉토리가 없으면 생성
     if (!fs.existsSync(fullTargetPath)) {
-      log(`대상 디렉토리 생성: ${fullTargetPath}`);
+      logWithIP(`대상 디렉토리 생성: ${fullTargetPath}`);
       fs.mkdirSync(fullTargetPath, { recursive: true });
       fs.chmodSync(fullTargetPath, 0o777);
     }
@@ -370,7 +370,7 @@ app.put('/api/files/*', (req, res) => {
     if (fs.existsSync(fullNewPath)) {
       if (overwrite) {
         // 덮어쓰기 옵션이 true면 기존 파일/폴더 삭제
-        log(`파일이 이미 존재하나 덮어쓰기 옵션 사용: ${fullNewPath}`);
+        logWithIP(`파일이 이미 존재하나 덮어쓰기 옵션 사용: ${fullNewPath}`);
         try {
           // 폴더인지 파일인지 확인하여 적절하게 삭제
           const stats = fs.statSync(fullNewPath);
@@ -380,12 +380,12 @@ app.put('/api/files/*', (req, res) => {
             fs.unlinkSync(fullNewPath);
           }
         } catch (deleteError) {
-          errorLog(`기존 파일/폴더 삭제 오류: ${fullNewPath}`, deleteError);
+          errorLogWithIP(`기존 파일/폴더 삭제 오류: ${fullNewPath}`, deleteError, req);
           return res.status(500).send(`기존 파일 삭제 중 오류가 발생했습니다: ${deleteError.message}`);
         }
       } else {
         // 덮어쓰기 옵션이 없으면 409 Conflict 반환
-        errorLog(`이미 존재하는 이름: ${fullNewPath}`);
+        errorLogWithIP(`이미 존재하는 이름: ${fullNewPath}`);
         return res.status(409).send('이미 존재하는 이름입니다.');
       }
     }
@@ -393,21 +393,21 @@ app.put('/api/files/*', (req, res) => {
     // 이름 변경 (파일 이동)
     try {
       fs.renameSync(fullOldPath, fullNewPath);
-      log(`이동 완료: ${fullOldPath} -> ${fullNewPath}`);
+      logWithIP(`이동 완료: ${fullOldPath} -> ${fullNewPath}`);
       
       res.status(200).send('이동이 완료되었습니다.');
     } catch (renameError) {
       // EXDEV 오류는 서로 다른 디바이스 간 이동 시 발생
       if (renameError.code === 'EXDEV') {
-        errorLog('서로 다른 파일 시스템 간 이동 오류 (EXDEV)', renameError);
+        errorLogWithIP('서로 다른 파일 시스템 간 이동 오류 (EXDEV)', renameError, req);
         return res.status(500).send('서로 다른 디바이스 간에 파일을 이동할 수 없습니다. 파일을 복사 후 원본을 삭제해주세요.');
       }
       
-      errorLog(`이름 변경/이동 오류: ${fullOldPath} -> ${fullNewPath}`, renameError);
+      errorLogWithIP(`이름 변경/이동 오류: ${fullOldPath} -> ${fullNewPath}`, renameError, req);
       return res.status(500).send(`이동 오류: ${renameError.message}`);
     }
   } catch (error) {
-    errorLog('이름 변경 오류:', error);
+    errorLogWithIP('이름 변경 오류:', error, req);
     res.status(500).send(`서버 오류가 발생했습니다: ${error.message}`);
   }
 });
@@ -935,14 +935,14 @@ app.post('/api/lock/:path(*)', (req, res) => {
 
     // 폴더가 존재하는지 확인
     if (!fs.existsSync(fullPath)) {
-      errorLog(`폴더를 찾을 수 없음: ${fullPath}`);
+      errorLogWithIP(`폴더를 찾을 수 없음: ${fullPath}`, null, req);
       return res.status(404).send('폴더를 찾을 수 없습니다.');
     }
 
     // 디렉토리인지 확인
     const stats = fs.statSync(fullPath);
     if (!stats.isDirectory()) {
-      errorLog(`잠금 대상이 폴더가 아님: ${fullPath}`);
+      errorLogWithIP(`잠금 대상이 폴더가 아님: ${fullPath}`);
       return res.status(400).send('폴더만 잠금/해제할 수 있습니다.');
     }
 
