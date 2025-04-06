@@ -14,14 +14,31 @@ if (!fs.existsSync(LOGS_DIRECTORY)) {
   fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
 }
 
-// 로깅 설정
+// --- 로그 레벨 설정 ---
+const LOG_LEVELS = { minimal: 0, info: 1, debug: 2 };
+let currentLogLevel = LOG_LEVELS.minimal; // 기본값: 최소 로그
+
+// 로그 레벨 설정 함수
+function setLogLevel(levelName) {
+  if (LOG_LEVELS.hasOwnProperty(levelName)) {
+    currentLogLevel = LOG_LEVELS[levelName];
+    log(`Log level set to: ${levelName} (${currentLogLevel})`, 'info'); // 로그 레벨 변경은 info 레벨
+  } else {
+    errorLog(`Invalid log level specified: ${levelName}. Keeping current level: ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel)}`);
+  }
+}
+
+// 로그 파일 스트림
 const logFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'server.log'), { flags: 'a' });
 const errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
 
-function log(message) {
-  // KST 시간으로 변환 및 형식 지정
+// --- 로그 함수 수정 ---
+function log(message, levelName = 'debug') {
+  const level = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.debug;
+  if (level > currentLogLevel) return; // 현재 레벨보다 높은 레벨의 로그는 기록하지 않음
+
   const now = new Date();
-  const kstOffset = 9 * 60 * 60 * 1000; // KST는 UTC+9
+  const kstOffset = 9 * 60 * 60 * 1000;
   const kstDate = new Date(now.getTime() + kstOffset);
   const year = kstDate.getUTCFullYear();
   const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -31,24 +48,27 @@ function log(message) {
   const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
   const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
 
-  const logMessage = `${timestamp} - ${message}\n`;
+  const logMessage = `${timestamp} - [${levelName.toUpperCase()}] ${message}\n`;
   logFile.write(logMessage);
-  console.log(message);
+  console.log(`[${levelName.toUpperCase()}] ${message}`);
 }
 
-function logWithIP(message, req) {
+function logWithIP(message, req, levelName = 'debug') {
+  const level = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.debug;
+  if (level > currentLogLevel) return;
+
   let ip = 'unknown';
   if (req && req.headers) {
-    ip = req.headers['x-forwarded-for'] || 
+    ip = req.headers['x-forwarded-for'] ||
          req.headers['x-real-ip'] ||
          (req.connection && req.connection.remoteAddress) ||
          (req.socket && req.socket.remoteAddress) ||
          (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
          'unknown';
   }
-  // KST 시간으로 변환 및 형식 지정
+
   const now = new Date();
-  const kstOffset = 9 * 60 * 60 * 1000; // KST는 UTC+9
+  const kstOffset = 9 * 60 * 60 * 1000;
   const kstDate = new Date(now.getTime() + kstOffset);
   const year = kstDate.getUTCFullYear();
   const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -58,15 +78,14 @@ function logWithIP(message, req) {
   const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
   const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
 
-  const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
+  const logMessage = `${timestamp} - [${levelName.toUpperCase()}] [IP: ${ip}] ${message}\n`;
   logFile.write(logMessage);
-  console.log(`[IP: ${ip}] ${message}`);
+  console.log(`[${levelName.toUpperCase()}] [IP: ${ip}] ${message}`);
 }
 
-function errorLog(message, error) {
-  // KST 시간으로 변환 및 형식 지정
+function errorLog(message, error) { // 오류 로그는 항상 기록
   const now = new Date();
-  const kstOffset = 9 * 60 * 60 * 1000; // KST는 UTC+9
+  const kstOffset = 9 * 60 * 60 * 1000;
   const kstDate = new Date(now.getTime() + kstOffset);
   const year = kstDate.getUTCFullYear();
   const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -81,19 +100,19 @@ function errorLog(message, error) {
   console.error(message, error);
 }
 
-function errorLogWithIP(message, error, req) {
+function errorLogWithIP(message, error, req) { // 오류 로그는 항상 기록
   let ip = 'unknown';
   if (req && req.headers) {
-    ip = req.headers['x-forwarded-for'] || 
+    ip = req.headers['x-forwarded-for'] ||
          req.headers['x-real-ip'] ||
          (req.connection && req.connection.remoteAddress) ||
          (req.socket && req.socket.remoteAddress) ||
          (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
          'unknown';
   }
-  // KST 시간으로 변환 및 형식 지정
+
   const now = new Date();
-  const kstOffset = 9 * 60 * 60 * 1000; // KST는 UTC+9
+  const kstOffset = 9 * 60 * 60 * 1000;
   const kstDate = new Date(now.getTime() + kstOffset);
   const year = kstDate.getUTCFullYear();
   const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -151,12 +170,12 @@ const server = new webdav.WebDAVServer({
 const ROOT_DIRECTORY = path.join(__dirname, 'share-folder');
 if (!fs.existsSync(ROOT_DIRECTORY)) {
   fs.mkdirSync(ROOT_DIRECTORY, { recursive: true });
-  log(`루트 디렉토리 생성: ${ROOT_DIRECTORY}`);
+  log(`루트 디렉토리 생성: ${ROOT_DIRECTORY}`, 'info');
 }
 
 // 권한 설정
 fs.chmodSync(ROOT_DIRECTORY, 0o777);
-log(`루트 디렉토리 권한 설정: ${ROOT_DIRECTORY}`);
+log(`루트 디렉토리 권한 설정: ${ROOT_DIRECTORY}`, 'info');
 
 // WebDAV 파일시스템 설정
 const fileSystem = new webdav.PhysicalFileSystem(ROOT_DIRECTORY);
@@ -254,7 +273,14 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 
 // 로깅 미들웨어
 app.use((req, res, next) => {
-  logWithIP(`${req.method} ${req.url}`, req);
+  // 요청 시작 로그는 minimal 레벨로 변경
+  logWithIP(`${req.method} ${req.url}`, req, 'minimal');
+  
+  // 응답 완료 시 로그 (기존 방식 대신) - minimal 레벨
+  res.on('finish', () => {
+      logWithIP(`${req.method} ${req.url} - ${res.statusCode}`, req, 'minimal');
+  });
+  
   next();
 });
 
@@ -265,6 +291,8 @@ app.get('/', (req, res) => {
 
 // 파일 업로드 API 수정 (diskStorage 로직으로 복구)
 app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
+  // minimal 레벨 로그: 요청 시작/종료는 로깅 미들웨어에서 처리
+
   // 1. 기존 오류 처리 및 정보 파싱 (이전 상태로 복구)
   if (!req.files || req.files.length === 0) {
     errorLogWithIP('업로드 요청에 파일이 없거나 처리 중 오류 발생.', null, req);
@@ -280,12 +308,26 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
   let fileInfoArray;
   try {
     fileInfoArray = JSON.parse(req.body.fileInfo);
-    logWithIP(`[Upload Start] 파일 정보 수신: ${fileInfoArray.length}개 항목`, req);
+    // --- 추가: minimal 레벨 작업 상세 로그 (파일명 포함) ---
+    const fileCount = fileInfoArray.length;
+    let fileSummary = '';
+    if (fileCount > 0) {
+        if (fileCount <= 3) {
+            fileSummary = fileInfoArray.map(f => `'${f.originalName}'`).join(', ');
+        } else {
+            fileSummary = fileInfoArray.slice(0, 3).map(f => `'${f.originalName}'`).join(', ') + ` 외 ${fileCount - 3}개`;
+        }
+    } else {
+        fileSummary = '0개'; // 파일이 없는 경우
+    }
+    logWithIP(`[Upload Request] ${fileSummary} 파일 업로드 요청 (${baseUploadPath || '루트'})`, req, 'minimal');
+    // ----------------------------------------------
+    logWithIP(`[Upload Start] 파일 정보 수신: ${fileInfoArray.length}개 항목`, req, 'info');
   } catch (parseError) {
     errorLogWithIP('fileInfo JSON 파싱 오류:', parseError, req);
     return res.status(400).json({ error: '잘못된 파일 정보 형식입니다.' });
   }
-  logWithIP(`기본 업로드 경로: ${baseUploadPath || '루트 디렉토리'}, 절대 경로: ${rootUploadDir}`, req);
+  logWithIP(`기본 업로드 경로: ${baseUploadPath || '루트'}, 절대 경로: ${rootUploadDir}`, req);
 
   // 2. 처리 변수 초기화 (이전 상태로 복구)
   const processedFiles = [];
@@ -294,7 +336,7 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
   // 파일명 길이 제한 함수 (바이트 기준)
   function truncateFileName(filename) {
     const originalBytes = Buffer.byteLength(filename);
-    log(`[Filename Check] 파일명 길이 확인 시작: ${filename} (${originalBytes} bytes)`);
+    log(`[Filename Check] 파일명 길이 확인 시작: ${filename} (${originalBytes} bytes)`, 'debug');
     if (originalBytes <= MAX_FILENAME_BYTES) {
       return filename;
     }
@@ -306,14 +348,14 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
       if (truncatedName.length === 0) break;
     }
     const newFileName = truncatedName + '...' + extension;
-    log(`[Filename Check] 파일명 길이 제한 결과: '${newFileName}' (${Buffer.byteLength(newFileName)} bytes)`);
+    log(`[Filename Check] 파일명 길이 제한 결과: '${newFileName}' (${Buffer.byteLength(newFileName)} bytes)`, 'debug');
     return newFileName;
   }
 
   // 경로 길이 확인 및 제한 함수
   function checkAndTruncatePath(fullPath) {
     const fullPathBytes = Buffer.byteLength(fullPath);
-    log(`[Path Check] 경로 길이 확인 시작: ${fullPath} (${fullPathBytes} bytes)`);
+    log(`[Path Check] 경로 길이 확인 시작: ${fullPath} (${fullPathBytes} bytes)`, 'debug');
     if (fullPathBytes <= MAX_PATH_BYTES) {
       return { path: fullPath, truncated: false };
     }
@@ -361,7 +403,7 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
     }
     const truncatedPath = truncatedParts.join(path.sep);
     const finalPathBytes = Buffer.byteLength(truncatedPath);
-    log(`[Path Check] 경로 길이 제한 결과: '${truncatedPath}' (${finalPathBytes} bytes)`);
+    log(`[Path Check] 경로 길이 제한 결과: '${truncatedPath}' (${finalPathBytes} bytes)`, 'debug');
     if (finalPathBytes > MAX_PATH_BYTES) {
       const rootAndFile = isLastElementFile ? 
         [driveOrRoot, truncateFileName(lastElement)] : 
@@ -375,7 +417,7 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
 
   // 4. 파일 처리 루프 (이전 상태로 복구)
   for (const fileInfo of fileInfoArray) {
-    logWithIP(`[Upload Loop] 처리 시작: ${fileInfo.originalName}, 상대 경로: ${fileInfo.relativePath}`, req);
+    logWithIP(`[Upload Loop] 처리 시작: ${fileInfo.originalName}, 상대 경로: ${fileInfo.relativePath}`, req, 'debug');
 
     // 파일 처리 루프: 인덱스 기반으로 파일 찾기
     const expectedFieldName = `file_${fileInfo.index}`;
@@ -383,56 +425,56 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
 
     // 로그 추가: 찾은 파일 정보 확인
     if (file) {
-      logWithIP(`[File Index Match] Found file for index ${fileInfo.index}: fieldname='${file.fieldname}', originalname='${file.originalname}' (may be corrupted)`, req);
+      logWithIP(`[File Index Match] Found file for index ${fileInfo.index}: fieldname='${file.fieldname}', originalname='${file.originalname}' (may be corrupted)`, req, 'debug');
     } else {
-      logWithIP(`[File Index Match] File NOT found for index ${fileInfo.index} (expected fieldname: ${expectedFieldName})`, req);
+      logWithIP(`[File Index Match] File NOT found for index ${fileInfo.index} (expected fieldname: ${expectedFieldName})`, req, 'debug');
     }
 
     if (!file || !file.path) {
         // 오류 메시지에 정규화된 이름도 포함하여 디버깅 용이성 향상 (선택 사항)
         errorLogWithIP(`[Upload Loop Error] 업로드된 파일 목록에서 정보를 찾을 수 없음: Original='${fileInfo.originalName}', Index=${fileInfo.index}`, null, req);
-        errors.push(`파일 ${fileInfo.originalName} (Index: ${fileInfo.index})의 정보를 찾을 수 없거나 임시 파일이 없습니다.`);
+        errors.push(`파일 ${fileInfo.originalName} (Index: ${fileInfo.index})의 정보를 찾을 수 없거나 임시 파일이 없습니다.`, 'debug');
         continue; // 다음 파일 처리로 넘어감
     }
-    logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName} (Index: ${fileInfo.index}), 임시 경로: ${file.path}`, req);
+    logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName} (Index: ${fileInfo.index}), 임시 경로: ${file.path}`, req, 'debug');
 
     try {
       let relativeFilePath = fileInfo.relativePath;
       const originalFileName = path.basename(relativeFilePath);
       let finalFileName = originalFileName;
-      logWithIP(`[Upload Try] 파일명 처리 시작: Original='${originalFileName}', Relative='${relativeFilePath}'`, req);
+      logWithIP(`[Upload Try] 파일명 처리 시작: Original='${originalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
 
       if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
           finalFileName = truncateFileName(originalFileName);
           const dirName = path.dirname(relativeFilePath);
           relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
-          logWithIP(`[Upload Try] 파일명 길이 제한 적용됨: Final='${finalFileName}', Relative='${relativeFilePath}'`, req);
+          logWithIP(`[Upload Try] 파일명 길이 제한 적용됨: Final='${finalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
       }
 
       let destinationPath = path.join(rootUploadDir, relativeFilePath);
-      logWithIP(`[Upload Try] 초기 목적지 경로 계산됨: ${destinationPath}`, req);
+      logWithIP(`[Upload Try] 초기 목적지 경로 계산됨: ${destinationPath}`, req, 'debug');
 
       const pathResult = checkAndTruncatePath(destinationPath);
       if (pathResult.truncated) {
           destinationPath = pathResult.path;
           relativeFilePath = destinationPath.substring(rootUploadDir.length).replace(/^\\+|^\//, '');
-          logWithIP(`[Upload Try] 전체 경로 길이 제한 적용됨: Final Dest='${destinationPath}', Relative='${relativeFilePath}'`, req);
+          logWithIP(`[Upload Try] 전체 경로 길이 제한 적용됨: Final Dest='${destinationPath}', Relative='${relativeFilePath}'`, req, 'debug');
       }
 
       const destinationDir = path.dirname(destinationPath);
-      logWithIP(`[Upload Try] 최종 목적지 디렉토리: ${destinationDir}`, req);
+      logWithIP(`[Upload Try] 최종 목적지 디렉토리: ${destinationDir}`, req, 'debug');
 
       if (!fs.existsSync(destinationDir)) {
           fs.mkdirSync(destinationDir, { recursive: true });
           fs.chmodSync(destinationDir, 0o777);
-          logWithIP(`[Upload Try] 하위 디렉토리 생성됨: ${destinationDir}`, req);
+          logWithIP(`[Upload Try] 하위 디렉토리 생성됨: ${destinationDir}`, req, 'debug');
       }
 
-      logWithIP(`[Upload Try] 최종 저장 경로 확인: ${destinationPath}`, req);
+      logWithIP(`[Upload Try] 최종 저장 경로 확인: ${destinationPath}`, req, 'debug');
 
       fs.copyFileSync(file.path, destinationPath);
       fs.chmodSync(destinationPath, 0o666);
-      logWithIP(`[Upload Try] 파일 저장 완료 (Disk): ${destinationPath}`, req);
+      logWithIP(`[Upload Try] 파일 저장 완료 (Disk): ${destinationPath}`, req, 'debug');
 
       processedFiles.push({
         name: path.basename(destinationPath),
@@ -446,15 +488,15 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
 
     } catch (writeError) {
         errorLogWithIP(`[Upload Catch Error] 파일 저장 중 오류 발생: ${fileInfo.relativePath}`, writeError, req);
-        errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`);
+        errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`, 'debug');
     }
-    logWithIP(`[Upload Loop] 처리 완료: ${fileInfo.originalName}`, req);
+    logWithIP(`[Upload Loop] 처리 완료: ${fileInfo.originalName}`, req, 'debug');
   } // end for loop
 
   // 5. 요청별 임시 폴더 삭제
   if (req.uniqueTmpDir) {
     const tempDirToDelete = req.uniqueTmpDir;
-    logWithIP(`[Upload Cleanup] 임시 폴더 삭제 시도: ${tempDirToDelete}`, req);
+    logWithIP(`[Upload Cleanup] 임시 폴더 삭제 시도: ${tempDirToDelete}`, req, 'debug');
     fs.rm(tempDirToDelete, { recursive: true, force: true }, (err) => {
       if (err) {
         // ENOENT 오류는 무시 (이미 삭제되었거나 존재하지 않을 수 있음)
@@ -462,23 +504,23 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
           errorLogWithIP(`임시 폴더 삭제 중 오류 발생: ${tempDirToDelete}`, err, req);
         }
       } else {
-        logWithIP(`[Upload Cleanup] 임시 폴더 삭제 완료: ${tempDirToDelete}`, req);
+        logWithIP(`[Upload Cleanup] 임시 폴더 삭제 완료: ${tempDirToDelete}`, req, 'debug');
       }
     });
   } else {
-    logWithIP(`[Upload Cleanup] 삭제할 임시 폴더 정보 없음`, req);
+    logWithIP(`[Upload Cleanup] 삭제할 임시 폴더 정보 없음`, req, 'debug');
   }
 
   // 6. 최종 응답 전송 (이전 상태로 복구)
   if (errors.length > 0) {
-    logWithIP(`파일 업로드 중 ${errors.length}개의 오류 발생`, req);
+    logWithIP(`파일 업로드 중 ${errors.length}개의 오류 발생`, req, 'info');
     res.status(207).json({ // Multi-Status 응답
       message: `일부 파일 업로드 중 오류 발생 (${processedFiles.length}개 성공, ${errors.length}개 실패)`,
       processedFiles: processedFiles,
       errors: errors
     });
   } else {
-    logWithIP(`${processedFiles.length}개 파일 업로드 성공`, req);
+    logWithIP(`${processedFiles.length}개 파일 업로드 성공`, req, 'info');
     res.status(201).json({
       message: '파일 업로드 성공',
       files: processedFiles
@@ -553,7 +595,7 @@ app.use('/webdav', webdav.extensions.express('/webdav', server));
 app.get('/api/disk-usage', (req, res) => {
   try {
     const diskUsage = getDiskUsage();
-    log(`디스크 사용량 조회: ${formatFileSize(diskUsage.used)} / ${formatFileSize(diskUsage.total)} (${diskUsage.percent}%)`);
+    log(`디스크 사용량 조회: ${formatFileSize(diskUsage.used)} / ${formatFileSize(diskUsage.total)} (${diskUsage.percent}%)`, 'info');
     res.json(diskUsage);
   } catch (error) {
     errorLog('디스크 사용량 조회 오류:', error);
@@ -569,6 +611,8 @@ app.post('/api/compress', bodyParser.json(), (req, res) => {
   try {
     const { files, targetPath, zipName } = req.body;
     
+    logWithIP(`[Compress Request] ${files.length}개 파일 '${zipName}'으로 압축 요청 (${targetPath || '루트'})`, req, 'minimal');
+
     if (!files || !Array.isArray(files) || files.length === 0) {
       return res.status(400).json({ error: '압축할 파일이 선택되지 않았습니다.' });
     }
@@ -577,7 +621,7 @@ app.post('/api/compress', bodyParser.json(), (req, res) => {
       return res.status(400).json({ error: '압축 파일 이름이 필요합니다.' });
     }
     
-    log(`압축 요청: ${files.length}개 파일, 대상 경로: ${targetPath || '루트'}, 압축파일명: ${zipName}`);
+    log(`압축 요청: ${files.length}개 파일, 대상 경로: ${targetPath || '루트'}, 압축파일명: ${zipName}`, 'info');
     
     // 압축 파일 전체 경로
     const basePath = targetPath ? path.join(ROOT_DIRECTORY, targetPath) : ROOT_DIRECTORY;
@@ -605,13 +649,13 @@ app.post('/api/compress', bodyParser.json(), (req, res) => {
     });
     
     // 압축 실행
-    log(`실행 명령어: ${zipCommand}`);
+    log(`실행 명령어: ${zipCommand}`, 'debug');
     execSync(zipCommand);
     
     // 압축 파일 권한 설정
     fs.chmodSync(zipFilePath, 0o666);
     
-    log(`압축 완료: ${zipFilePath}`);
+    log(`압축 완료: ${zipFilePath}`, 'info');
     res.status(200).json({ 
       success: true, 
       message: '압축이 완료되었습니다.',
@@ -642,7 +686,7 @@ app.get('/api/lock-status', (req, res) => {
       fs.writeFileSync(lockedFoldersPath, JSON.stringify({ lockState: [] }), 'utf8');
     }
     
-    log(`잠금 상태 조회: ${lockState.length}개 폴더 잠김`);
+    log(`잠금 상태 조회: ${lockState.length}개 폴더 잠김`, 'info');
     res.status(200).json({ lockState });
   } catch (error) {
     errorLog('잠금 상태 조회 오류:', error);
@@ -653,12 +697,13 @@ app.get('/api/lock-status', (req, res) => {
 // 폴더 잠금/해제 API
 app.post('/api/lock/:path(*)', (req, res) => {
   try {
-    // URL 디코딩하여 한글 경로 처리
     const folderPath = decodeURIComponent(req.params.path || '');
     const action = req.body.action || 'lock'; // 'lock' 또는 'unlock'
     const fullPath = path.join(ROOT_DIRECTORY, folderPath);
     
-    log(`폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 요청: ${fullPath}`);
+    logWithIP(`[Lock Request] '${folderPath}' ${action === 'lock' ? '잠금' : '잠금 해제'} 요청`, req, 'minimal');
+
+    log(`폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 요청: ${fullPath}`, 'info');
 
     // 폴더가 존재하는지 확인
     if (!fs.existsSync(fullPath)) {
@@ -698,7 +743,7 @@ app.post('/api/lock/:path(*)', (req, res) => {
           folderPath.startsWith(lockedPath + '/'));
         
         if (isParentLocked) {
-          log(`상위 폴더가 이미 잠겨 있어 ${folderPath} 폴더는 잠그지 않습니다.`);
+          log(`상위 폴더가 이미 잠겨 있어 ${folderPath} 폴더는 잠그지 않습니다.`, 'info');
           return res.status(200).json({
             success: true,
             message: "상위 폴더가 이미 잠겨 있습니다.",
@@ -713,7 +758,7 @@ app.post('/api/lock/:path(*)', (req, res) => {
           lockedPath.startsWith(folderPath + '/'));
         
         if (subLockedFolders.length > 0) {
-          log(`${folderPath} 폴더 잠금으로 인해 ${subLockedFolders.length}개의 하위 폴더 잠금이 해제됩니다.`);
+          log(`${folderPath} 폴더 잠금으로 인해 ${subLockedFolders.length}개의 하위 폴더 잠금이 해제됩니다.`, 'info');
           // 하위 폴더는 잠금 해제
           lockedFolders.lockState = lockedFolders.lockState.filter(path => 
             !path.startsWith(folderPath + '/'));
@@ -721,14 +766,14 @@ app.post('/api/lock/:path(*)', (req, res) => {
         
         // 현재 폴더 잠금
         lockedFolders.lockState.push(folderPath);
-        log(`폴더 잠금 완료: ${folderPath}`);
+        log(`폴더 잠금 완료: ${folderPath}`, 'info');
       } else {
-        log(`폴더가 이미 잠겨 있음: ${folderPath}`);
+        log(`폴더가 이미 잠겨 있음: ${folderPath}`, 'info');
       }
     } else if (action === 'unlock') {
       // 잠금 해제
       lockedFolders.lockState = lockedFolders.lockState.filter(path => path !== folderPath);
-      log(`폴더 잠금 해제 완료: ${folderPath}`);
+      log(`폴더 잠금 해제 완료: ${folderPath}`, 'info');
     }
 
     // 변경된 목록 저장
@@ -755,7 +800,7 @@ app.get('/api/files/*', async (req, res) => {
     let requestPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, requestPath);
     
-    logWithIP(`파일 목록 요청: ${fullPath}`, req);
+    logWithIP(`파일 목록 요청: ${fullPath}`, req, 'info');
 
     // 경로가 존재하는지 확인
     if (!fs.existsSync(fullPath)) {
@@ -767,7 +812,7 @@ app.get('/api/files/*', async (req, res) => {
     const stats = fs.statSync(fullPath);
     if (!stats.isDirectory()) {
       // 파일인 경우 처리
-      logWithIP(`파일 다운로드 요청: ${fullPath}`, req);
+      logWithIP(`파일 다운로드 요청: ${fullPath}`, req, 'info');
       
       // 파일명 추출
       const fileName = path.basename(fullPath);
@@ -819,7 +864,7 @@ app.get('/api/files/*', async (req, res) => {
           if (err) {
             errorLogWithIP(`파일 다운로드 중 오류: ${fullPath}`, err, req);
           } else {
-            logWithIP(`파일 다운로드 완료: ${fullPath}`, req);
+            logWithIP(`파일 다운로드 완료: ${fullPath}`, req, 'info');
           }
         });
       }
@@ -841,7 +886,7 @@ app.get('/api/files/*', async (req, res) => {
       };
     });
 
-    logWithIP(`파일 목록 반환: ${fileItems.length}개 항목`, req);
+    logWithIP(`파일 목록 반환: ${fileItems.length}개 항목`, req, 'info');
     res.json(fileItems);
   } catch (error) {
     errorLogWithIP('파일 목록 오류:', error, req);
@@ -856,7 +901,7 @@ app.post('/api/files/*', (req, res) => {
     const folderPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, folderPath);
     
-    logWithIP(`폴더 생성 요청: ${fullPath}`, req);
+    logWithIP(`폴더 생성 요청: ${fullPath}`, req, 'info');
 
     // 이미 존재하는지 확인
     if (fs.existsSync(fullPath)) {
@@ -868,7 +913,7 @@ app.post('/api/files/*', (req, res) => {
     fs.mkdirSync(fullPath, { recursive: true });
     fs.chmodSync(fullPath, 0o777);
     
-    logWithIP(`폴더 생성 완료: ${fullPath}`, req);
+    logWithIP(`폴더 생성 완료: ${fullPath}`, req, 'info');
     res.status(201).send('폴더가 생성되었습니다.');
   } catch (error) {
     errorLogWithIP('폴더 생성 오류:', error, req);
@@ -879,11 +924,12 @@ app.post('/api/files/*', (req, res) => {
 // 파일/폴더 이름 변경 또는 이동
 app.put('/api/files/*', (req, res) => {
   try {
-    // URL 디코딩하여 한글 경로 처리
     const oldPath = decodeURIComponent(req.params[0] || '');
     const { newName, targetPath, overwrite } = req.body;
     
-    logWithIP(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`, req);
+    logWithIP(`[Move/Rename Request] '${oldPath}' -> '${newName}' (대상: ${targetPath !== undefined ? targetPath : '동일 경로'})`, req, 'minimal');
+
+    logWithIP(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`, req, 'info');
     
     if (!newName) {
       errorLogWithIP('새 이름이 제공되지 않음', null, req);
@@ -924,18 +970,18 @@ app.put('/api/files/*', (req, res) => {
       
     const fullNewPath = path.join(fullTargetPath, newName);
       
-    logWithIP(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`);
-    logWithIP(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`);
+    logWithIP(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`, 'debug');
+    logWithIP(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`, 'debug');
 
     // 원본과 대상이 같은 경로인지 확인
     if (fullOldPath === fullNewPath) {
-      logWithIP(`동일한 경로로의 이동 무시: ${fullOldPath}`);
+      logWithIP(`동일한 경로로의 이동 무시: ${fullOldPath}`, 'debug');
       return res.status(200).send('이동이 완료되었습니다.');
     }
 
     // 대상 경로의 디렉토리가 없으면 생성
     if (!fs.existsSync(fullTargetPath)) {
-      logWithIP(`대상 디렉토리 생성: ${fullTargetPath}`);
+      logWithIP(`대상 디렉토리 생성: ${fullTargetPath}`, 'debug');
       fs.mkdirSync(fullTargetPath, { recursive: true });
       fs.chmodSync(fullTargetPath, 0o777);
     }
@@ -944,7 +990,7 @@ app.put('/api/files/*', (req, res) => {
     if (fs.existsSync(fullNewPath)) {
       if (overwrite) {
         // 덮어쓰기 옵션이 true면 기존 파일/폴더 삭제
-        logWithIP(`파일이 이미 존재하나 덮어쓰기 옵션 사용: ${fullNewPath}`);
+        logWithIP(`파일이 이미 존재하나 덮어쓰기 옵션 사용: ${fullNewPath}`, 'debug');
         try {
           // 폴더인지 파일인지 확인하여 적절하게 삭제
           const stats = fs.statSync(fullNewPath);
@@ -967,7 +1013,7 @@ app.put('/api/files/*', (req, res) => {
     // 이름 변경 (파일 이동)
     try {
       fs.renameSync(fullOldPath, fullNewPath);
-      logWithIP(`이동 완료: ${fullOldPath} -> ${fullNewPath}`);
+      logWithIP(`이동 완료: ${fullOldPath} -> ${fullNewPath}`, 'info');
       
       res.status(200).send('이동이 완료되었습니다.');
     } catch (renameError) {
@@ -989,11 +1035,12 @@ app.put('/api/files/*', (req, res) => {
 // 파일/폴더 삭제
 app.delete('/api/files/*', (req, res) => {
   try {
-    // URL 디코딩하여 한글 경로 처리
     const itemPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, itemPath);
     
-    logWithIP(`삭제 요청: ${fullPath}`, req);
+    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청`, req, 'minimal');
+
+    logWithIP(`삭제 요청: ${fullPath}`, req, 'info');
 
     // 존재하는지 확인
     if (!fs.existsSync(fullPath)) {
@@ -1031,11 +1078,11 @@ app.delete('/api/files/*', (req, res) => {
     if (isDirectory) {
       // 폴더 삭제 (재귀적)
       fs.rmdirSync(fullPath, { recursive: true });
-      logWithIP(`폴더 삭제 완료: ${fullPath}`, req);
+      logWithIP(`폴더 삭제 완료: ${fullPath}`, req, 'info');
     } else {
       // 파일 삭제
       fs.unlinkSync(fullPath);
-      logWithIP(`파일 삭제 완료: ${fullPath}`, req);
+      logWithIP(`파일 삭제 완료: ${fullPath}`, req, 'info');
     }
 
     res.status(200).send('삭제되었습니다.');
@@ -1045,8 +1092,20 @@ app.delete('/api/files/*', (req, res) => {
   }
 });
 
+// 로그 레벨 변경 API
+app.put('/api/log-level', (req, res) => {
+  const { level } = req.body;
+  if (level && LOG_LEVELS.hasOwnProperty(level)) {
+    setLogLevel(level);
+    res.status(200).json({ success: true, message: `Log level set to ${level}` });
+  } else {
+    errorLogWithIP(`Invalid log level requested: ${level}`, null, req);
+    res.status(400).json({ success: false, error: 'Invalid log level provided. Use minimal, info, or debug.' });
+  }
+});
+
 // 서버 시작
 app.listen(PORT, () => {
-  log(`서버가 시작되었습니다. http://localhost:${PORT}`);
-  log(`WebDAV 서버: http://localhost:${PORT}/webdav`);
+  log(`서버가 ${PORT} 포트에서 실행 중입니다. 로그 레벨: ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel)}`, 'minimal'); // 서버 시작은 minimal 레벨
+  log(`WebDAV 서버: http://localhost:${PORT}/webdav`, 'info');
 }); 
