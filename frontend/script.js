@@ -34,6 +34,9 @@ window.dragSelectState = {
     startedOnSelectedItem: false
 };
 
+// 파일 최상단 또는 적절한 전역 스코프에 추가
+let wasDragging = false;
+
 // DOM 요소
 const fileView = document.getElementById('fileView');
 const breadcrumb = document.getElementById('breadcrumb');
@@ -491,6 +494,9 @@ function initDragSelect() {
         selectionBox.dataset.startClientY = startClientY;
         selectionBox.dataset.initialScrollTop = initialScrollTop;
         selectionBox.dataset.initialScrollLeft = initialScrollLeft; // 수평 스크롤 위치도 저장
+
+        // 드래그 플래그 초기화
+        wasDragging = false;
     });
     
     // 마우스 이동 이벤트
@@ -522,6 +528,8 @@ function initDragSelect() {
         // 최소 드래그 거리를 넘으면 드래그 선택 시작
         if (!window.dragSelectState.dragStarted && dragDistance >= minDragDistance) {
             window.dragSelectState.dragStarted = true;
+            // 드래그 시작 시 플래그 설정
+            wasDragging = true;
             
             // 선택 박스 표시
             selectionBox.style.display = 'block';
@@ -1426,14 +1434,6 @@ function handleFileDblClick(e, fileItem) {
     }
     
     if (isFolder) {
-        // 폴더로 이동 전 접근 제한 확인 (주석 처리)
-        // const folderPath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        // if (isPathAccessRestricted(folderPath) && !isPathLocked(folderPath)) {
-        //     // 직접 잠기지 않았지만 상위 폴더가 잠긴 경우
-        //     alert(`'${fileName}' 폴더의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
-        //     return;
-        // }
-        
         // 폴더로 이동 전에 더블클릭 비활성화
         window.doubleClickEnabled = false;
         // 폴더로 이동
@@ -1442,12 +1442,6 @@ function handleFileDblClick(e, fileItem) {
         // 파일 확장자에 따라 처리
         const fileExt = fileName.split('.').pop().toLowerCase();
         const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        
-        // 파일 접근 제한 확인 (주석 처리)
-        // if (isPathAccessRestricted(filePath)) {
-        //     alert(`'${fileName}' 파일의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
-        //     return;
-        // }
         
         const encodedPath = encodeURIComponent(filePath);
         
@@ -3998,6 +3992,8 @@ function initDragSelect() {
         // 최소 드래그 거리를 넘으면 드래그 선택 시작
         if (!window.dragSelectState.dragStarted && dragDistance >= minDragDistance) {
             window.dragSelectState.dragStarted = true;
+            // 드래그 시작 시 플래그 설정
+            wasDragging = true;
             
             // 선택 박스 표시
             selectionBox.style.display = 'block';
@@ -4691,7 +4687,7 @@ function renderFiles(files) {
                     fileItem.addEventListener('click', (e) => {
                         if (e.target.classList.contains('rename-input')) return;
                         
-                        // 상위 폴더(..)는 선택되지 않도록 처리
+                        // 상위 폴더(..)는 선택 처리하지 않음
                         if (fileItem.getAttribute('data-parent-dir') === 'true') {
                             // 원클릭으로 상위 폴더 이동을 하지 않도록 수정
                             // 대신 handleFileClick 함수로 처리하여 더블클릭 이벤트에서만 이동하도록 함
@@ -4902,14 +4898,6 @@ function handleFileDblClick(e, fileItem) {
     }
     
     if (isFolder) {
-        // 폴더로 이동 전 접근 제한 확인
-        const folderPath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        if (isPathAccessRestricted(folderPath) && !isPathLocked(folderPath)) {
-            // 직접 잠기지 않았지만 상위 폴더가 잠긴 경우
-            alert(`'${fileName}' 폴더의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
-            return;
-        }
-        
         // 폴더로 이동 전에 더블클릭 비활성화
         window.doubleClickEnabled = false;
         // 폴더로 이동
@@ -4918,12 +4906,6 @@ function handleFileDblClick(e, fileItem) {
         // 파일 확장자에 따라 처리
         const fileExt = fileName.split('.').pop().toLowerCase();
         const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        
-        // 파일 접근 제한 확인
-        if (isPathAccessRestricted(filePath)) {
-            alert(`'${fileName}' 파일의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
-            return;
-        }
         
         const encodedPath = encodeURIComponent(filePath);
         
@@ -6937,6 +6919,29 @@ function init() {
 // 페이지 로드 시 애플리케이션 초기화
 document.addEventListener('DOMContentLoaded', init);
 
+
+// 화면 클릭 시 파일 선택 해제 리스너 수정
+document.addEventListener('click', (event) => {
+    // 드래그 직후의 클릭이면 무시하고 플래그 초기화
+    if (wasDragging) {
+        wasDragging = false;
+        return;
+    }
+
+    // 클릭된 요소가 파일 아이템 또는 그 하위 요소가 아니고,
+    // 파일 작업을 위한 컨텍스트 메뉴 관련 요소도 아닌 경우
+    if (!event.target.closest('.file-item') && !event.target.closest('#contextMenu') && !event.target.closest('.action-button')) {
+        // 현재 선택된 모든 파일 아이템 가져오기
+        const selectedItems = document.querySelectorAll('.file-item.selected');
+        // 각 선택된 아이템에서 'selected' 클래스 제거
+        selectedItems.forEach(item => {
+            item.classList.remove('selected');
+        });
+
+    }
+});
+
+
 // 선택한 파일 압축
 function compressSelectedItems() {
     if (selectedItems.size === 0) return;
@@ -8158,3 +8163,4 @@ function handleFileDrop(e, targetFolderItem = null) {
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
     }
 }
+

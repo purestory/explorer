@@ -8,15 +8,6 @@ const { execSync } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3333;
 
-// Multer 설정 (Memory Storage 사용)
-const storage = multer.memoryStorage(); // memoryStorage 사용으로 변경
-const uploadMiddleware = multer({
-  storage: storage, // memoryStorage 사용
-  limits: {
-    fileSize: 10 * 1024 * 1024 * 1024 // 10GB
-  }
-});
-
 // 로그 디렉토리 확인 및 생성
 const LOGS_DIRECTORY = path.join(__dirname, 'logs');
 if (!fs.existsSync(LOGS_DIRECTORY)) {
@@ -75,6 +66,10 @@ function errorLogWithIP(message, error, req) {
 
 // 최대 저장 용량 설정 (100GB)
 const MAX_STORAGE_SIZE = 100 * 1024 * 1024 * 1024; // 100GB in bytes
+
+// 최대 파일명/경로 길이 제한 설정 (전역으로 이동)
+const MAX_FILENAME_BYTES = 229;
+const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로 설정
 
 // 디스크 사용량 확인 함수
 function getDiskUsage() {
@@ -139,7 +134,8 @@ app.use((req, res, next) => {
 
 // 용량 확인 미들웨어
 app.use((req, res, next) => {
-  // 파일 업로드 요청의 경우 용량 체크
+  // 파일 업로드 요청의 경우 용량 체크 - 일시적으로 주석 처리
+  /*
   if (req.method === 'POST' && req.path === '/api/upload') {
     const diskUsage = getDiskUsage();
     
@@ -157,6 +153,7 @@ app.use((req, res, next) => {
       }
     }
   }
+  */
   
   next();
 });
@@ -164,6 +161,31 @@ app.use((req, res, next) => {
 // Express 내장 body-parser 설정 (크기 제한 증가)
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// 임시 업로드 디렉토리 설정 - 복구
+const TMP_UPLOAD_DIR = path.join(__dirname, 'tmp');
+if (!fs.existsSync(TMP_UPLOAD_DIR)) {
+  fs.mkdirSync(TMP_UPLOAD_DIR, { recursive: true });
+}
+
+// Multer 설정 (Disk Storage 사용) - 복구
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, TMP_UPLOAD_DIR);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + Math.random().toString(36).substring(2, 15) + '-' + Buffer.from(file.originalname, 'latin1').toString('utf8'));
+  }
+});
+
+const uploadMiddleware = multer({
+  storage: storage, // diskStorage 사용으로 복구
+  limits: {
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB
+    fieldSize: 50 * 1024 * 1024, // 텍스트 필드 크기 제한 50MB로 증가
+    // 대량 파일 처리 안정성을 위해 files, fields 제한은 일단 제거 (필요 시 추가)
+  }
+});
 
 // 기본 미들웨어 설정
 app.use(express.static(path.join(__dirname, '../frontend')));
@@ -179,126 +201,85 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-// 파일 업로드 API (Multer 미들웨어 직접 적용)
-app.post('/api/upload', uploadMiddleware.any(), (req, res) => {
-  // Multer 미들웨어가 먼저 실행됨. 수동 실행 로직 제거.
-
-  // 오류 처리 (Multer 오류는 Express 오류 핸들러나 try-catch로 처리 가능하나 여기선 간단히 확인)
+// 파일 업로드 API 수정 (diskStorage 로직으로 복구)
+app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
+  // 1. 기존 오류 처리 및 정보 파싱 (이전 상태로 복구)
   if (!req.files || req.files.length === 0) {
-    // Multer가 파일을 처리하지 못했거나 파일이 없는 경우
-    // (파일 크기 초과 등의 Multer 자체 오류는 별도 오류 핸들러 필요)
     errorLogWithIP('업로드 요청에 파일이 없거나 처리 중 오류 발생.', null, req);
-    // 413 오류가 Multer에서 발생했다면 err 객체가 있을 수 있으나, 여기서는 일반적인 실패로 처리
-    // 실제 Multer 에러 메시지를 받으려면 에러 핸들링 미들웨어 필요
     return res.status(400).json({ error: '파일이 없거나 업로드 처리 중 오류가 발생했습니다.' }); 
   }
   if (!req.body.fileInfo) {
     errorLogWithIP('업로드 요청에 파일 정보(fileInfo)가 없습니다.', null, req);
     return res.status(400).json({ error: '파일 정보가 누락되었습니다.' });
   }
-  
-  // 이하 기존 파일 처리 로직 (upload(req, res, ...) 콜백 함수 내부 로직을 여기로 이동)
-  // 4. 데이터 파싱 및 경로 설정
-  const baseUploadPath = req.body.path || ''; // 클라이언트가 지정한 기본 업로드 경로
+
+  const baseUploadPath = req.body.path || '';
   const rootUploadDir = path.join(ROOT_DIRECTORY, baseUploadPath);
   let fileInfoArray;
-
   try {
     fileInfoArray = JSON.parse(req.body.fileInfo);
-    logWithIP(`파일 정보 수신: ${fileInfoArray.length}개 항목`, req);
+    logWithIP(`[Upload Start] 파일 정보 수신: ${fileInfoArray.length}개 항목`, req);
   } catch (parseError) {
     errorLogWithIP('fileInfo JSON 파싱 오류:', parseError, req);
     return res.status(400).json({ error: '잘못된 파일 정보 형식입니다.' });
   }
-
   logWithIP(`기본 업로드 경로: ${baseUploadPath || '루트 디렉토리'}, 절대 경로: ${rootUploadDir}`, req);
 
-  // 5. 각 파일 처리 및 저장
+  // 2. 처리 변수 초기화 (이전 상태로 복구)
   const processedFiles = [];
   const errors = [];
-
-  // 최대 파일명 길이 제한 설정 (바이트 기준, 시스템 최대치의 90%)
-  const MAX_FILENAME_BYTES = 229;
-  // 최대 경로 길이 제한 (시스템마다 다를 수 있음)
-  const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로 설정
+  const cleanupFiles = [];
 
   // 파일명 길이 제한 함수 (바이트 기준)
   function truncateFileName(filename) {
-    if (Buffer.byteLength(filename) <= MAX_FILENAME_BYTES) {
+    const originalBytes = Buffer.byteLength(filename);
+    log(`[Filename Check] 파일명 길이 확인 시작: ${filename} (${originalBytes} bytes)`);
+    if (originalBytes <= MAX_FILENAME_BYTES) {
       return filename;
     }
-    
     const extension = filename.lastIndexOf('.') > 0 ? filename.substring(filename.lastIndexOf('.')) : '';
     const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') > 0 ? filename.lastIndexOf('.') : filename.length);
-    
-    // 바이트 길이 기준으로 자르기
     let truncatedName = nameWithoutExt;
     while (Buffer.byteLength(truncatedName + '...' + extension) > MAX_FILENAME_BYTES) {
-      // 문자열 끝에서 한 글자씩 제거 (멀티바이트 문자 고려)
-      truncatedName = truncatedName.slice(0, -1); 
-      if (truncatedName.length === 0) break; // 이름 부분이 없어지면 중단
+      truncatedName = truncatedName.slice(0, -1);
+      if (truncatedName.length === 0) break;
     }
-    
     const newFileName = truncatedName + '...' + extension;
-    
-    logWithIP(`파일명이 너무 김(Bytes: ${Buffer.byteLength(filename)}): ${filename} → ${newFileName}`, req);
+    log(`[Filename Check] 파일명 길이 제한 결과: '${newFileName}' (${Buffer.byteLength(newFileName)} bytes)`);
     return newFileName;
   }
 
   // 경로 길이 확인 및 제한 함수
   function checkAndTruncatePath(fullPath) {
     const fullPathBytes = Buffer.byteLength(fullPath);
+    log(`[Path Check] 경로 길이 확인 시작: ${fullPath} (${fullPathBytes} bytes)`);
     if (fullPathBytes <= MAX_PATH_BYTES) {
       return { path: fullPath, truncated: false };
     }
-    
-    // 경로가 너무 길 경우 처리 로직
-    logWithIP(`경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`, req);
-    
-    // 경로 분해 및 분석
+    log(`[Path Check] 경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`);
     const pathParts = fullPath.split(path.sep);
-    const driveOrRoot = pathParts[0] || '/'; // 드라이브 또는 루트 디렉토리
-    
-    // 마지막 요소는 파일명일 수 있으므로 보존 우선
+    const driveOrRoot = pathParts[0] || '/';
     const lastElement = pathParts[pathParts.length - 1];
     const isLastElementFile = lastElement.includes('.');
-    
-    // 각 디렉토리 이름의 최대 바이트 수를 계산
-    // 파일명, 루트, 구분자 길이를 뺀 나머지 공간을 디렉토리들이 공유
     const fileNameBytes = isLastElementFile ? Buffer.byteLength(lastElement) : 0;
     const rootBytes = Buffer.byteLength(driveOrRoot);
     const separatorBytes = (pathParts.length - 1) * Buffer.byteLength(path.sep);
-    
-    // 디렉토리에 할당할 수 있는 총 바이트 (파일명 제외)
     const totalDirBytes = MAX_PATH_BYTES - fileNameBytes - rootBytes - separatorBytes;
-    
-    // 디렉토리 수 (파일명 제외)
     const dirCount = isLastElementFile ? pathParts.length - 2 : pathParts.length - 1;
-    
-    // 각 디렉토리당 평균 할당 바이트 (최소 20바이트 보장)
     const avgMaxBytes = Math.max(20, Math.floor(totalDirBytes / (dirCount > 0 ? dirCount : 1)));
-    
-    // 각 경로 부분 순회하며 길이 제한
     const truncatedParts = [driveOrRoot];
     let bytesUsed = rootBytes + separatorBytes;
-    
     for (let i = 1; i < pathParts.length; i++) {
       let part = pathParts[i];
       const partBytes = Buffer.byteLength(part);
-      
-      // 마지막 요소이고 파일이면 가능한 한 원본 유지
       if (i === pathParts.length - 1 && isLastElementFile) {
-        // 파일명이 너무 긴 경우 별도 처리 (마지막 요소만 truncateFileName 호출)
         if (partBytes > MAX_FILENAME_BYTES) {
           part = truncateFileName(part);
         }
         truncatedParts.push(part);
         continue;
       }
-      
-      // 디렉토리 이름이 할당된 바이트 수를 초과하는 경우 자르기
       if (partBytes > avgMaxBytes) {
-        // 디렉토리 이름 자르기 (한글 등 멀티바이트 문자 고려)
         let truncatedPart = '';
         for (let j = 0; j < part.length; j++) {
           const nextChar = part[j];
@@ -309,123 +290,111 @@ app.post('/api/upload', uploadMiddleware.any(), (req, res) => {
             break;
           }
         }
-        
-        // 이름이 너무 짧아졌다면 최소 한 글자 이상 포함하도록 함
         if (truncatedPart.length === 0 && part.length > 0) {
           truncatedPart = part.substring(0, 1);
         }
-        
         part = truncatedPart + '...';
       }
-      
       truncatedParts.push(part);
       bytesUsed += Buffer.byteLength(part) + Buffer.byteLength(path.sep);
     }
-    
     const truncatedPath = truncatedParts.join(path.sep);
     const finalPathBytes = Buffer.byteLength(truncatedPath);
-    
-    logWithIP(`경로 길이 제한: ${fullPathBytes} → ${finalPathBytes} 바이트`, req);
-    logWithIP(`줄어든 경로: ${truncatedPath}`, req);
-    
-    // 최종 확인 - 여전히 너무 길면 더 강력하게 줄이기
+    log(`[Path Check] 경로 길이 제한 결과: '${truncatedPath}' (${finalPathBytes} bytes)`);
     if (finalPathBytes > MAX_PATH_BYTES) {
-      // 문제 해결을 위한 비상 대책 - 파일명 유지하고 중간 경로 크게 축소
       const rootAndFile = isLastElementFile ? 
         [driveOrRoot, truncateFileName(lastElement)] : 
         [driveOrRoot, truncatedParts[truncatedParts.length - 1]];
-        
-      // 파일명과 루트 사이에 "..." 추가하여 모든 중간 경로 제거
       const emergencyPath = rootAndFile.join(path.sep + '...' + path.sep);
-      logWithIP(`비상 경로 축소: ${truncatedPath} → ${emergencyPath}`, req);
+      log(`[Path Check] 비상 경로 축소: ${truncatedPath} → ${emergencyPath}`);
       return { path: emergencyPath, truncated: true, emergency: true };
     }
-    
     return { path: truncatedPath, truncated: true };
   }
 
-  // req.files 배열과 fileInfoArray 매핑 (순서가 같다고 가정)
-  // 클라이언트에서 file_${index} 와 fileInfo 순서를 일치시킴
-  req.files.forEach((file, index) => {
-      // fileInfoArray 에서 현재 파일과 매칭되는 정보 찾기
-      // 클라이언트에서 보낸 file_${index} 의 index를 사용하거나, 순서를 신뢰
-      const fileInfo = fileInfoArray.find(info => info.index === index || info.originalName === Buffer.from(file.originalname, 'latin1').toString('utf8'));
+  // 4. 파일 처리 루프 (이전 상태로 복구)
+  for (const fileInfo of fileInfoArray) {
+    logWithIP(`[Upload Loop] 처리 시작: ${fileInfo.originalName}, 상대 경로: ${fileInfo.relativePath}`, req);
 
-      if (!fileInfo || !fileInfo.relativePath) {
-          const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-          errorLogWithIP(`파일 정보 불일치 또는 상대 경로 누락: ${originalName} (index: ${index})`, null, req);
-          errors.push(`파일 ${originalName}의 정보를 찾을 수 없거나 상대 경로가 없습니다.`);
-          return; // 다음 파일로 이동
+    const file = req.files.find(f => {
+       const originalName = Buffer.from(f.originalname, 'latin1').toString('utf8');
+       return originalName === fileInfo.originalName;
+    });
+
+    if (!file || !file.path) {
+        errorLogWithIP(`[Upload Loop Error] 업로드된 파일 목록에서 정보를 찾을 수 없음: ${fileInfo.originalName}`, null, req);
+        errors.push(`파일 ${fileInfo.originalName}의 정보를 찾을 수 없거나 임시 파일이 없습니다.`);
+        continue;
+    }
+    logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName}, 임시 경로: ${file.path}`, req);
+    cleanupFiles.push(file.path);
+
+    try {
+      let relativeFilePath = fileInfo.relativePath;
+      const originalFileName = path.basename(relativeFilePath);
+      let finalFileName = originalFileName;
+      logWithIP(`[Upload Try] 파일명 처리 시작: Original='${originalFileName}', Relative='${relativeFilePath}'`, req);
+
+      if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
+          finalFileName = truncateFileName(originalFileName);
+          const dirName = path.dirname(relativeFilePath);
+          relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
+          logWithIP(`[Upload Try] 파일명 길이 제한 적용됨: Final='${finalFileName}', Relative='${relativeFilePath}'`, req);
       }
 
-      try {
-          // 파일명 길이 확인 및 처리 (바이트 기준)
-          let relativeFilePath = fileInfo.relativePath;
-          const originalFileName = path.basename(relativeFilePath);
-          let finalFileName = originalFileName; // 최종 파일명 변수 추가
-          
-          // 파일명 바이트 길이가 너무 길면 자르기
-          if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
-              finalFileName = truncateFileName(originalFileName);
-              const dirName = path.dirname(relativeFilePath);
-              relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
-              logWithIP(`파일명 길이 제한(Bytes)으로 변경: ${fileInfo.relativePath} → ${relativeFilePath}`, req);
-          }
-          
-          // 전체 저장 경로 계산 (루트 업로드 디렉토리 + 수정된 상대 경로)
-          let destinationPath = path.join(rootUploadDir, relativeFilePath);
-          
-          // 전체 경로 길이 확인 및 처리
-          const pathResult = checkAndTruncatePath(destinationPath);
-          if (pathResult.truncated) {
-              destinationPath = pathResult.path;
-              // 경로 변경에 따른 상대 경로 재계산 (저장용)
-              relativeFilePath = destinationPath.substring(rootUploadDir.length);
-              // 경로 시작에 '/' 있으면 제거
-              if (relativeFilePath.startsWith(path.sep)) {
-                  relativeFilePath = relativeFilePath.substring(1);
-              }
-              logWithIP(`전체 경로가 너무 길어 변경됨: ${relativeFilePath}`, req);
-          }
+      let destinationPath = path.join(rootUploadDir, relativeFilePath);
+      logWithIP(`[Upload Try] 초기 목적지 경로 계산됨: ${destinationPath}`, req);
 
-          // 저장될 디렉토리 경로 추출
-          const destinationDir = path.dirname(destinationPath);
-
-          // 디렉토리 생성 (필요한 경우)
-          if (!fs.existsSync(destinationDir)) {
-              fs.mkdirSync(destinationDir, { recursive: true });
-              fs.chmodSync(destinationDir, 0o777); // 생성된 디렉토리 권한 설정
-              logWithIP(`하위 디렉토리 생성됨: ${destinationDir}`, req);
-          }
-
-          logWithIP(`[Upload Detail] 최종 경로: ${destinationPath}`, req);
-
-          // 파일 시스템에 저장 (메모리 버퍼 사용)
-          fs.writeFileSync(destinationPath, file.buffer); // <--- renameSync 대신 writeFileSync 사용
-          fs.chmodSync(destinationPath, 0o666); // 저장된 파일 권한 설정
-
-          // 처리된 파일 정보 저장
-          processedFiles.push({
-              name: path.basename(destinationPath), // 실제 저장된 파일명
-              originalName: fileInfo.originalName,
-              relativePath: destinationPath.substring(rootUploadDir.length).replace(/^\\+|^\//, ''), // 실제 저장된 경로 기준 상대경로
-              size: file.size,
-              path: baseUploadPath,
-              mimetype: file.mimetype,
-              fullPath: destinationPath
-          });
-
-          logWithIP(`파일 저장 완료 (메모리 사용): ${destinationPath} (크기: ${formatBytes(file.size)})`, req);
-
-      } catch (writeError) {
-          errorLogWithIP(`파일 저장 중 오류: ${fileInfo.relativePath}`, writeError, req);
-          errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`);
+      const pathResult = checkAndTruncatePath(destinationPath);
+      if (pathResult.truncated) {
+          destinationPath = pathResult.path;
+          relativeFilePath = destinationPath.substring(rootUploadDir.length).replace(/^\\+|^\//, '');
+          logWithIP(`[Upload Try] 전체 경로 길이 제한 적용됨: Final Dest='${destinationPath}', Relative='${relativeFilePath}'`, req);
       }
+
+      const destinationDir = path.dirname(destinationPath);
+      logWithIP(`[Upload Try] 최종 목적지 디렉토리: ${destinationDir}`, req);
+
+      if (!fs.existsSync(destinationDir)) {
+          fs.mkdirSync(destinationDir, { recursive: true });
+          fs.chmodSync(destinationDir, 0o777);
+          logWithIP(`[Upload Try] 하위 디렉토리 생성됨: ${destinationDir}`, req);
+      }
+
+      logWithIP(`[Upload Try] 최종 저장 경로 확인: ${destinationPath}`, req);
+
+      fs.copyFileSync(file.path, destinationPath);
+      fs.chmodSync(destinationPath, 0o666);
+      logWithIP(`[Upload Try] 파일 저장 완료 (Disk): ${destinationPath}`, req);
+
+      processedFiles.push({
+        name: path.basename(destinationPath),
+        originalName: fileInfo.originalName,
+        relativePath: relativeFilePath,
+        size: file.size,
+        path: baseUploadPath,
+        mimetype: file.mimetype,
+        fullPath: destinationPath
+      });
+
+    } catch (writeError) {
+        errorLogWithIP(`[Upload Catch Error] 파일 저장 중 오류 발생: ${fileInfo.relativePath}`, writeError, req);
+        errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`);
+    }
+    logWithIP(`[Upload Loop] 처리 완료: ${fileInfo.originalName}`, req);
+  } // end for loop
+
+  // 5. 임시 파일 삭제 (이전 상태로 복구)
+  Promise.all(cleanupFiles.map(filePath => {
+    return fs.promises.unlink(filePath).catch(err => {
+      errorLogWithIP(`임시 파일 삭제 오류: ${filePath}`, err, req);
+    });
+  })).then(() => {
+    logWithIP('임시 업로드 파일 정리 완료', req);
   });
 
-  // 6. 최종 응답 전송
+  // 6. 최종 응답 전송 (이전 상태로 복구)
   if (errors.length > 0) {
-    // 일부 오류 발생
     logWithIP(`파일 업로드 중 ${errors.length}개의 오류 발생`, req);
     res.status(207).json({ // Multi-Status 응답
       message: `일부 파일 업로드 중 오류 발생 (${processedFiles.length}개 성공, ${errors.length}개 실패)`,
@@ -433,7 +402,6 @@ app.post('/api/upload', uploadMiddleware.any(), (req, res) => {
       errors: errors
     });
   } else {
-    // 모든 파일 성공
     logWithIP(`${processedFiles.length}개 파일 업로드 성공`, req);
     res.status(201).json({
       message: '파일 업로드 성공',
