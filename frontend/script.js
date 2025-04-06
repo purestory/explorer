@@ -1573,86 +1573,6 @@ function showRenameDialog() {
     }
 }
 
-// 선택 항목 삭제
-function deleteSelectedItems() {
-    // 선택된 항목이 없으면 무시
-    if (selectedItems.size === 0) {
-        return;
-    }
-    
-    // 선택된 항목 목록 생성
-    const itemList = Array.from(selectedItems);
-    const itemCount = itemList.length;
-    
-    // 관리자 권한이 필요한 항목이 있는지 확인
-    const hasRestrictedItems = itemList.some(itemName => {
-        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
-        if (!element) return false;
-        
-        const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-        return isPathAccessRestricted(itemPath);
-    });
-    
-    // 관리자 권한이 필요한 항목이 있으면 삭제를 중단하고 경고 표시
-    if (hasRestrictedItems) {
-        alert('잠긴 폴더 또는 파일은 삭제할 수 없습니다.');
-        return;
-    }
-    
-    // 삭제 확인
-    if (!confirm(`선택한 ${itemCount}개 항목을 삭제하시겠습니까?`)) {
-        return;
-    }
-    
-    // 삭제 처리
-    showLoading();
-    statusInfo.textContent = '파일 삭제 중...';
-    
-    // 재귀적으로 항목 삭제
-    const deleteNextItem = (index) => {
-        if (index >= itemList.length) {
-            // 모든 항목 삭제 완료
-            loadFiles(currentPath);
-            return;
-        }
-        
-        const itemName = itemList[index];
-        const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-        const encodedPath = encodeURIComponent(itemPath);
-        
-        // 이 항목이 잠긴 폴더인지 다시 확인
-        if (isPathAccessRestricted(itemPath)) {
-            console.error(`'${itemName}'은(는) 잠긴 폴더이므로 삭제할 수 없습니다.`);
-            deleteNextItem(index + 1);
-            return;
-        }
-        
-        fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
-            method: 'DELETE'
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`${itemName} 삭제 실패: ${response.status} ${response.statusText}`);
-            }
-            // 응답이 JSON이 아니므로 text()로 처리
-            return response.text();
-        })
-        .then(text => {
-            console.log(`'${itemName}' 삭제 완료:`, text);
-            // 다음 항목 삭제
-            deleteNextItem(index + 1);
-        })
-        .catch(error => {
-            console.error(`'${itemName}' 삭제 오류:`, error);
-            alert(`'${itemName}' 삭제 오류: ${error.message}`);
-            // 오류가 있더라도 다음 항목 삭제 시도
-            deleteNextItem(index + 1);
-        });
-    };
-    
-    // 첫 번째 항목부터 삭제 시작
-    deleteNextItem(0);
-}
 
 // 선택 항목 잘라내기
 function cutSelectedItems() {
@@ -4960,85 +4880,94 @@ function showRenameDialog() {
     }
 }
 
-// 선택 항목 삭제
-function deleteSelectedItems() {
-    // 선택된 항목이 없으면 무시
-    if (selectedItems.size === 0) {
-        return;
-    }
-    
-    // 선택된 항목 목록 생성
+// 선택 항목 삭제 (백그라운드 처리 UX 개선)
+async function deleteSelectedItems() { // async 키워드 추가
+    if (selectedItems.size === 0) return;
+
     const itemList = Array.from(selectedItems);
     const itemCount = itemList.length;
-    
-    // 관리자 권한이 필요한 항목이 있는지 확인
+
+    // 잠긴 폴더 확인 (기존 로직 유지)
     const hasRestrictedItems = itemList.some(itemName => {
-        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
-        if (!element) return false;
-        
         const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
         return isPathAccessRestricted(itemPath);
     });
-    
-    // 관리자 권한이 필요한 항목이 있으면 삭제를 중단하고 경고 표시
     if (hasRestrictedItems) {
         alert('잠긴 폴더 또는 파일은 삭제할 수 없습니다.');
         return;
     }
-    
-    // 삭제 확인
-    if (!confirm(`선택한 ${itemCount}개 항목을 삭제하시겠습니까?`)) {
+
+    if (!confirm(`선택한 ${itemCount}개 항목을 삭제하시겠습니까?\n(대용량 폴더는 백그라운드에서 처리됩니다.)`)) {
         return;
     }
-    
-    // 삭제 처리
+
     showLoading();
-    statusInfo.textContent = '파일 삭제 중...';
-    
-    // 재귀적으로 항목 삭제
-    const deleteNextItem = (index) => {
-        if (index >= itemList.length) {
-            // 모든 항목 삭제 완료
-            loadFiles(currentPath);
-            return;
-        }
-        
-        const itemName = itemList[index];
+    statusInfo.textContent = `삭제 요청 중... (0/${itemCount})`;
+
+    let successCount = 0;
+    let failureCount = 0;
+    const itemsToDeleteUI = []; // UI에서 숨길 항목들
+
+    // 모든 삭제 요청을 병렬로 보냄
+    const deletePromises = itemList.map(async (itemName, index) => {
         const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
         const encodedPath = encodeURIComponent(itemPath);
-        
-        // 이 항목이 잠긴 폴더인지 다시 확인
-        if (isPathAccessRestricted(itemPath)) {
-            console.error(`'${itemName}'은(는) 잠긴 폴더이므로 삭제할 수 없습니다.`);
-            deleteNextItem(index + 1);
-            return;
-        }
-        
-        fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
-            method: 'DELETE'
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`${itemName} 삭제 실패: ${response.status} ${response.statusText}`);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
+                method: 'DELETE'
+            });
+
+            statusInfo.textContent = `삭제 요청 중... (${index + 1}/${itemCount})`;
+
+            // 202 (Accepted) 또는 200/204 (OK/No Content)면 성공으로 간주하고 UI에서 숨김
+            if (response.status === 202 || response.status === 200 || response.status === 204) {
+                console.log(`'${itemName}' 삭제 요청 성공 (상태: ${response.status})`);
+                successCount++;
+                // UI에서 숨길 항목 추가
+                const element = document.querySelector(`.file-item[data-name=\"${CSS.escape(itemName)}\"]`);
+                if (element) itemsToDeleteUI.push(element);
+            } else {
+                // 기타 응답은 실패로 간주
+                failureCount++;
+                const errorText = await response.text();
+                console.error(`'${itemName}' 삭제 요청 실패: ${response.status} ${errorText}`);
+                // 실패한 항목은 UI에 그대로 둠 (오류 메시지는 아래에서 한번에)
             }
-            // 응답이 JSON이 아니므로 text()로 처리
-            return response.text();
-        })
-        .then(text => {
-            console.log(`'${itemName}' 삭제 완료:`, text);
-            // 다음 항목 삭제
-            deleteNextItem(index + 1);
-        })
-        .catch(error => {
-            console.error(`'${itemName}' 삭제 오류:`, error);
-            alert(`'${itemName}' 삭제 오류: ${error.message}`);
-            // 오류가 있더라도 다음 항목 삭제 시도
-            deleteNextItem(index + 1);
-        });
-    };
-    
-    // 첫 번째 항목부터 삭제 시작
-    deleteNextItem(0);
+        } catch (error) {
+            failureCount++;
+            console.error(`'${itemName}' 삭제 요청 오류:`, error);
+        }
+    });
+
+    // 모든 요청이 완료될 때까지 기다림
+    await Promise.all(deletePromises);
+
+    hideLoading();
+
+    // 성공한 항목들 UI에서 숨기기
+    itemsToDeleteUI.forEach(element => {
+        element.remove(); // 또는 element.style.display = 'none';
+    });
+
+    // 선택 해제
+    clearSelection();
+    selectedItems.clear(); // Set 비우기
+    updateButtonStates();
+
+    // 최종 상태 메시지 표시
+    let finalMessage = '';
+    if (failureCount > 0) {
+        finalMessage = `${successCount}개 항목 삭제 요청 성공, ${failureCount}개 실패.`;
+        alert(`일부 항목 삭제 요청에 실패했습니다. 로그를 확인하세요.`); // 간단한 알림
+    } else {
+        finalMessage = `${successCount}개 항목 삭제 작업이 백그라운드에서 시작되었습니다.`;
+    }
+    statusInfo.textContent = finalMessage;
+
+    // 중요: 여기서 loadFiles()를 호출하지 않음!
+    // 필요하다면 몇 초 후 새로고침하는 타이머 추가 가능
+    // setTimeout(() => loadFiles(currentPath), 15000); // 예: 15초 후 새로고침
 }
 
 // 선택 항목 잘라내기
