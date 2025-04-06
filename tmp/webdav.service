@@ -1,0 +1,18 @@
+[Unit]
+Description=WebDAV Explorer Server
+After=network.target
+
+[Service]
+Type=simple
+User=purestory
+WorkingDirectory=/home/purestory/webdav
+ExecStart=/usr/bin/node /home/purestory/webdav/backend/server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=webdav-server
+Environment="NODE_ENV=development" "UV_THREADPOOL_SIZE=8"
+
+[Install]
+WantedBy=multi-user.target 

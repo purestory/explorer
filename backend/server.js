@@ -296,243 +296,260 @@ app.get('/', (req, res) => {
 
 // 파일 업로드 API 수정 (diskStorage 로직으로 복구)
 app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
-  // minimal 레벨 로그: 요청 시작/종료는 로깅 미들웨어에서 처리
+  // *** 전체 핸들러 로직을 감싸는 try 블록 시작 ***
+  try { 
+    // minimal 레벨 로그: 요청 시작/종료는 로깅 미들웨어에서 처리
 
-  // 1. 기존 오류 처리 및 정보 파싱 (이전 상태로 복구)
-  if (!req.files || req.files.length === 0) {
-    errorLogWithIP('업로드 요청에 파일이 없거나 처리 중 오류 발생.', null, req);
-    return res.status(400).json({ error: '파일이 없거나 업로드 처리 중 오류가 발생했습니다.' }); 
-  }
-  if (!req.body.fileInfo) {
-    errorLogWithIP('업로드 요청에 파일 정보(fileInfo)가 없습니다.', null, req);
-    return res.status(400).json({ error: '파일 정보가 누락되었습니다.' });
-  }
+    // 1. 기존 오류 처리 및 정보 파싱 (이전 상태로 복구)
+    if (!req.files || req.files.length === 0) {
+      errorLogWithIP('업로드 요청에 파일이 없거나 처리 중 오류 발생.', null, req);
+      return res.status(400).json({ error: '파일이 없거나 업로드 처리 중 오류가 발생했습니다.' }); 
+    }
+    if (!req.body.fileInfo) {
+      errorLogWithIP('업로드 요청에 파일 정보(fileInfo)가 없습니다.', null, req);
+      return res.status(400).json({ error: '파일 정보가 누락되었습니다.' });
+    }
 
-  const baseUploadPath = req.body.path || '';
-  const rootUploadDir = path.join(ROOT_DIRECTORY, baseUploadPath);
-  let fileInfoArray;
-  try {
-    fileInfoArray = JSON.parse(req.body.fileInfo);
-    // --- 추가: minimal 레벨 작업 상세 로그 (파일명 포함) ---
-    const fileCount = fileInfoArray.length;
-    let fileSummary = '';
-    if (fileCount > 0) {
-        if (fileCount <= 3) {
-            fileSummary = fileInfoArray.map(f => `'${f.originalName}'`).join(', ');
-        } else {
-            fileSummary = fileInfoArray.slice(0, 3).map(f => `'${f.originalName}'`).join(', ') + ` 외 ${fileCount - 3}개`;
+    const baseUploadPath = req.body.path || '';
+    const rootUploadDir = path.join(ROOT_DIRECTORY, baseUploadPath);
+    let fileInfoArray;
+    try {
+      fileInfoArray = JSON.parse(req.body.fileInfo);
+      // --- 추가: minimal 레벨 작업 상세 로그 (파일명 포함) ---
+      const fileCount = fileInfoArray.length;
+      let fileSummary = '';
+      if (fileCount > 0) {
+          if (fileCount <= 3) {
+              fileSummary = fileInfoArray.map(f => `'${f.originalName}'`).join(', ');
+          } else {
+              fileSummary = fileInfoArray.slice(0, 3).map(f => `'${f.originalName}'`).join(', ') + ` 외 ${fileCount - 3}개`;
+          }
+      } else {
+          fileSummary = '0개'; // 파일이 없는 경우
+      }
+      logWithIP(`[Upload Request] ${fileSummary} 파일 업로드 요청 (${baseUploadPath || '루트'})`, req, 'minimal');
+      // ----------------------------------------------
+      logWithIP(`[Upload Start] 파일 정보 수신: ${fileInfoArray.length}개 항목`, req, 'info');
+    } catch (parseError) {
+      errorLogWithIP('fileInfo JSON 파싱 오류:', parseError, req);
+      return res.status(400).json({ error: '잘못된 파일 정보 형식입니다.' });
+    }
+    logWithIP(`기본 업로드 경로: ${baseUploadPath || '루트'}, 절대 경로: ${rootUploadDir}`, req);
+
+    // 2. 처리 변수 초기화 (이전 상태로 복구)
+    const processedFiles = [];
+    const errors = [];
+
+    // 파일명 길이 제한 함수 (바이트 기준)
+    function truncateFileName(filename) {
+      const originalBytes = Buffer.byteLength(filename);
+      log(`[Filename Check] 파일명 길이 확인 시작: ${filename} (${originalBytes} bytes)`, 'debug');
+      if (originalBytes <= MAX_FILENAME_BYTES) {
+        return filename;
+      }
+      const extension = filename.lastIndexOf('.') > 0 ? filename.substring(filename.lastIndexOf('.')) : '';
+      const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') > 0 ? filename.lastIndexOf('.') : filename.length);
+      let truncatedName = nameWithoutExt;
+      while (Buffer.byteLength(truncatedName + '...' + extension) > MAX_FILENAME_BYTES) {
+        truncatedName = truncatedName.slice(0, -1);
+        if (truncatedName.length === 0) break;
+      }
+      const newFileName = truncatedName + '...' + extension;
+      log(`[Filename Check] 파일명 길이 제한 결과: '${newFileName}' (${Buffer.byteLength(newFileName)} bytes)`, 'debug');
+      return newFileName;
+    }
+
+    // 경로 길이 확인 및 제한 함수
+    function checkAndTruncatePath(fullPath) {
+      const fullPathBytes = Buffer.byteLength(fullPath);
+      log(`[Path Check] 경로 길이 확인 시작: ${fullPath} (${fullPathBytes} bytes)`, 'debug');
+      if (fullPathBytes <= MAX_PATH_BYTES) {
+        return { path: fullPath, truncated: false };
+      }
+      log(`[Path Check] 경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`);
+      const pathParts = fullPath.split(path.sep);
+      const driveOrRoot = pathParts[0] || '/';
+      const lastElement = pathParts[pathParts.length - 1];
+      const isLastElementFile = lastElement.includes('.');
+      const fileNameBytes = isLastElementFile ? Buffer.byteLength(lastElement) : 0;
+      const rootBytes = Buffer.byteLength(driveOrRoot);
+      const separatorBytes = (pathParts.length - 1) * Buffer.byteLength(path.sep);
+      const totalDirBytes = MAX_PATH_BYTES - fileNameBytes - rootBytes - separatorBytes;
+      const dirCount = isLastElementFile ? pathParts.length - 2 : pathParts.length - 1;
+      const avgMaxBytes = Math.max(20, Math.floor(totalDirBytes / (dirCount > 0 ? dirCount : 1)));
+      const truncatedParts = [driveOrRoot];
+      let bytesUsed = rootBytes + separatorBytes;
+      for (let i = 1; i < pathParts.length; i++) {
+        let part = pathParts[i];
+        const partBytes = Buffer.byteLength(part);
+        if (i === pathParts.length - 1 && isLastElementFile) {
+          if (partBytes > MAX_FILENAME_BYTES) {
+            part = truncateFileName(part);
+          }
+          truncatedParts.push(part);
+          continue;
         }
-    } else {
-        fileSummary = '0개'; // 파일이 없는 경우
-    }
-    logWithIP(`[Upload Request] ${fileSummary} 파일 업로드 요청 (${baseUploadPath || '루트'})`, req, 'minimal');
-    // ----------------------------------------------
-    logWithIP(`[Upload Start] 파일 정보 수신: ${fileInfoArray.length}개 항목`, req, 'info');
-  } catch (parseError) {
-    errorLogWithIP('fileInfo JSON 파싱 오류:', parseError, req);
-    return res.status(400).json({ error: '잘못된 파일 정보 형식입니다.' });
-  }
-  logWithIP(`기본 업로드 경로: ${baseUploadPath || '루트'}, 절대 경로: ${rootUploadDir}`, req);
-
-  // 2. 처리 변수 초기화 (이전 상태로 복구)
-  const processedFiles = [];
-  const errors = [];
-
-  // 파일명 길이 제한 함수 (바이트 기준)
-  function truncateFileName(filename) {
-    const originalBytes = Buffer.byteLength(filename);
-    log(`[Filename Check] 파일명 길이 확인 시작: ${filename} (${originalBytes} bytes)`, 'debug');
-    if (originalBytes <= MAX_FILENAME_BYTES) {
-      return filename;
-    }
-    const extension = filename.lastIndexOf('.') > 0 ? filename.substring(filename.lastIndexOf('.')) : '';
-    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') > 0 ? filename.lastIndexOf('.') : filename.length);
-    let truncatedName = nameWithoutExt;
-    while (Buffer.byteLength(truncatedName + '...' + extension) > MAX_FILENAME_BYTES) {
-      truncatedName = truncatedName.slice(0, -1);
-      if (truncatedName.length === 0) break;
-    }
-    const newFileName = truncatedName + '...' + extension;
-    log(`[Filename Check] 파일명 길이 제한 결과: '${newFileName}' (${Buffer.byteLength(newFileName)} bytes)`, 'debug');
-    return newFileName;
-  }
-
-  // 경로 길이 확인 및 제한 함수
-  function checkAndTruncatePath(fullPath) {
-    const fullPathBytes = Buffer.byteLength(fullPath);
-    log(`[Path Check] 경로 길이 확인 시작: ${fullPath} (${fullPathBytes} bytes)`, 'debug');
-    if (fullPathBytes <= MAX_PATH_BYTES) {
-      return { path: fullPath, truncated: false };
-    }
-    log(`[Path Check] 경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`);
-    const pathParts = fullPath.split(path.sep);
-    const driveOrRoot = pathParts[0] || '/';
-    const lastElement = pathParts[pathParts.length - 1];
-    const isLastElementFile = lastElement.includes('.');
-    const fileNameBytes = isLastElementFile ? Buffer.byteLength(lastElement) : 0;
-    const rootBytes = Buffer.byteLength(driveOrRoot);
-    const separatorBytes = (pathParts.length - 1) * Buffer.byteLength(path.sep);
-    const totalDirBytes = MAX_PATH_BYTES - fileNameBytes - rootBytes - separatorBytes;
-    const dirCount = isLastElementFile ? pathParts.length - 2 : pathParts.length - 1;
-    const avgMaxBytes = Math.max(20, Math.floor(totalDirBytes / (dirCount > 0 ? dirCount : 1)));
-    const truncatedParts = [driveOrRoot];
-    let bytesUsed = rootBytes + separatorBytes;
-    for (let i = 1; i < pathParts.length; i++) {
-      let part = pathParts[i];
-      const partBytes = Buffer.byteLength(part);
-      if (i === pathParts.length - 1 && isLastElementFile) {
-        if (partBytes > MAX_FILENAME_BYTES) {
-          part = truncateFileName(part);
+        if (partBytes > avgMaxBytes) {
+          let truncatedPart = '';
+          for (let j = 0; j < part.length; j++) {
+            const nextChar = part[j];
+            const potentialNew = truncatedPart + nextChar;
+            if (Buffer.byteLength(potentialNew + '...') <= avgMaxBytes) {
+              truncatedPart = potentialNew;
+            } else {
+              break;
+            }
+          }
+          if (truncatedPart.length === 0 && part.length > 0) {
+            truncatedPart = part.substring(0, 1);
+          }
+          part = truncatedPart + '...';
         }
         truncatedParts.push(part);
-        continue;
+        bytesUsed += Buffer.byteLength(part) + Buffer.byteLength(path.sep);
       }
-      if (partBytes > avgMaxBytes) {
-        let truncatedPart = '';
-        for (let j = 0; j < part.length; j++) {
-          const nextChar = part[j];
-          const potentialNew = truncatedPart + nextChar;
-          if (Buffer.byteLength(potentialNew + '...') <= avgMaxBytes) {
-            truncatedPart = potentialNew;
-          } else {
-            break;
+      const truncatedPath = truncatedParts.join(path.sep);
+      const finalPathBytes = Buffer.byteLength(truncatedPath);
+      log(`[Path Check] 경로 길이 제한 결과: '${truncatedPath}' (${finalPathBytes} bytes)`, 'debug');
+      if (finalPathBytes > MAX_PATH_BYTES) {
+        const rootAndFile = isLastElementFile ? 
+          [driveOrRoot, truncateFileName(lastElement)] : 
+          [driveOrRoot, truncatedParts[truncatedParts.length - 1]];
+        const emergencyPath = rootAndFile.join(path.sep + '...' + path.sep);
+        log(`[Path Check] 비상 경로 축소: ${truncatedPath} → ${emergencyPath}`);
+        return { path: emergencyPath, truncated: true, emergency: true };
+      }
+      return { path: truncatedPath, truncated: true };
+    }
+
+    // 4. 파일 처리 루프 (이전 상태로 복구)
+    for (const fileInfo of fileInfoArray) {
+      logWithIP(`[Upload Loop] 처리 시작: ${fileInfo.originalName}, 상대 경로: ${fileInfo.relativePath}`, req, 'debug');
+
+      // 파일 처리 루프: 인덱스 기반으로 파일 찾기
+      const expectedFieldName = `file_${fileInfo.index}`;
+      const file = req.files.find(f => f.fieldname === expectedFieldName);
+
+      // 로그 추가: 찾은 파일 정보 확인
+      if (file) {
+        logWithIP(`[File Index Match] Found file for index ${fileInfo.index}: fieldname='${file.fieldname}', originalname='${file.originalname}' (may be corrupted)`, req, 'debug');
+      } else {
+        logWithIP(`[File Index Match] File NOT found for index ${fileInfo.index} (expected fieldname: ${expectedFieldName})`, req, 'debug');
+      }
+
+      if (!file || !file.path) {
+          // 오류 메시지에 정규화된 이름도 포함하여 디버깅 용이성 향상 (선택 사항)
+          errorLogWithIP(`[Upload Loop Error] 업로드된 파일 목록에서 정보를 찾을 수 없음: Original='${fileInfo.originalName}', Index=${fileInfo.index}`, null, req);
+          errors.push(`파일 ${fileInfo.originalName} (Index: ${fileInfo.index})의 정보를 찾을 수 없거나 임시 파일이 없습니다.`); // 수정: 로그 레벨 제거
+          continue; // 다음 파일 처리로 넘어감
+      }
+      logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName} (Index: ${fileInfo.index}), 임시 경로: ${file.path}`, req, 'debug');
+
+      try { // *** 개별 파일 처리 try 블록 (기존 유지) ***
+        let relativeFilePath = fileInfo.relativePath;
+        const originalFileName = path.basename(relativeFilePath);
+        let finalFileName = originalFileName;
+        logWithIP(`[Upload Try] 파일명 처리 시작: Original='${originalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
+
+        if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
+            finalFileName = truncateFileName(originalFileName);
+            const dirName = path.dirname(relativeFilePath);
+            relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
+            logWithIP(`[Upload Try] 파일명 길이 제한 적용됨: Final='${finalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
+        }
+
+        let destinationPath = path.join(rootUploadDir, relativeFilePath);
+        logWithIP(`[Upload Try] 초기 목적지 경로 계산됨: ${destinationPath}`, req, 'debug');
+
+        const pathResult = checkAndTruncatePath(destinationPath);
+        if (pathResult.truncated) {
+            destinationPath = pathResult.path;
+            relativeFilePath = destinationPath.substring(rootUploadDir.length).replace(/^\\+|^\//, '');
+            logWithIP(`[Upload Try] 전체 경로 길이 제한 적용됨: Final Dest='${destinationPath}', Relative='${relativeFilePath}'`, req, 'debug');
+        }
+
+        const destinationDir = path.dirname(destinationPath);
+        logWithIP(`[Upload Try] 최종 목적지 디렉토리: ${destinationDir}`, req, 'debug');
+
+        if (!fs.existsSync(destinationDir)) {
+            fs.mkdirSync(destinationDir, { recursive: true });
+            fs.chmodSync(destinationDir, 0o777);
+            logWithIP(`[Upload Try] 하위 디렉토리 생성됨: ${destinationDir}`, req, 'debug');
+        }
+
+        logWithIP(`[Upload Try] 최종 저장 경로 확인: ${destinationPath}`, req, 'debug');
+
+        fs.copyFileSync(file.path, destinationPath);
+        fs.chmodSync(destinationPath, 0o666);
+        logWithIP(`[Upload Try] 파일 저장 완료 (Disk): ${destinationPath}`, req, 'debug');
+
+        processedFiles.push({
+          name: path.basename(destinationPath),
+          originalName: fileInfo.originalName,
+          relativePath: relativeFilePath,
+          size: file.size,
+          path: baseUploadPath,
+          mimetype: file.mimetype,
+          fullPath: destinationPath
+        });
+
+      } catch (writeError) { // *** 개별 파일 처리 catch 블록 (기존 유지) ***
+          errorLogWithIP(`[Upload Write Error] 파일 처리 중 오류 발생 (${fileInfo.originalName}):`, writeError, req);
+          // 원본 파일 이름과 오류 메시지를 포함하여 errors 배열에 추가
+          errors.push(`${fileInfo.originalName}: ${writeError.message}`); 
+          // 임시 파일 삭제 시도 (실패해도 계속 진행)
+          if (file && file.path && fs.existsSync(file.path)) {
+            try {
+              fs.unlinkSync(file.path);
+              logWithIP(`[Upload Write Error] 임시 파일 삭제 완료: ${file.path}`, req, 'debug');
+            } catch (unlinkErr) {
+              errorLogWithIP(`[Upload Write Error] 임시 파일 삭제 실패 (${file.path}):`, unlinkErr, req);
+            }
+          }
+      } finally { // *** 개별 파일 처리 finally 블록 (추가) ***
+        // 성공/실패 여부와 관계없이 임시 파일 삭제 (writeError 발생 안했을 경우)
+        if (file && file.path && fs.existsSync(file.path)) {
+          // catch 블록에서 이미 삭제 시도했을 수 있으므로 다시 확인
+          try {
+            fs.unlinkSync(file.path);
+            logWithIP(`[Upload Loop Finally] 임시 파일 정리 완료: ${file.path}`, req, 'debug');
+          } catch (unlinkErr) {
+            // finally 블록에서는 오류를 다시 던지지 않고 로깅만 함
+            errorLogWithIP(`[Upload Loop Finally] 임시 파일 정리 실패 (${file.path}):`, unlinkErr, req);
           }
         }
-        if (truncatedPart.length === 0 && part.length > 0) {
-          truncatedPart = part.substring(0, 1);
-        }
-        part = truncatedPart + '...';
       }
-      truncatedParts.push(part);
-      bytesUsed += Buffer.byteLength(part) + Buffer.byteLength(path.sep);
-    }
-    const truncatedPath = truncatedParts.join(path.sep);
-    const finalPathBytes = Buffer.byteLength(truncatedPath);
-    log(`[Path Check] 경로 길이 제한 결과: '${truncatedPath}' (${finalPathBytes} bytes)`, 'debug');
-    if (finalPathBytes > MAX_PATH_BYTES) {
-      const rootAndFile = isLastElementFile ? 
-        [driveOrRoot, truncateFileName(lastElement)] : 
-        [driveOrRoot, truncatedParts[truncatedParts.length - 1]];
-      const emergencyPath = rootAndFile.join(path.sep + '...' + path.sep);
-      log(`[Path Check] 비상 경로 축소: ${truncatedPath} → ${emergencyPath}`);
-      return { path: emergencyPath, truncated: true, emergency: true };
-    }
-    return { path: truncatedPath, truncated: true };
-  }
+    } // End of for loop
 
-  // 4. 파일 처리 루프 (이전 상태로 복구)
-  for (const fileInfo of fileInfoArray) {
-    logWithIP(`[Upload Loop] 처리 시작: ${fileInfo.originalName}, 상대 경로: ${fileInfo.relativePath}`, req, 'debug');
-
-    // 파일 처리 루프: 인덱스 기반으로 파일 찾기
-    const expectedFieldName = `file_${fileInfo.index}`;
-    const file = req.files.find(f => f.fieldname === expectedFieldName);
-
-    // 로그 추가: 찾은 파일 정보 확인
-    if (file) {
-      logWithIP(`[File Index Match] Found file for index ${fileInfo.index}: fieldname='${file.fieldname}', originalname='${file.originalname}' (may be corrupted)`, req, 'debug');
+    // 5. 결과 응답 (이전 상태로 복구)
+    if (errors.length > 0) {
+        logWithIP(`[Upload Finish] ${processedFiles.length}개 파일 성공, ${errors.length}개 파일 실패`, req, 'warn');
+        // 실패한 파일 목록을 포함하여 응답
+        return res.status(207).json({ // Multi-Status 응답
+            message: `일부 파일 업로드 실패 (${errors.length}개).`,
+            processedFiles: processedFiles,
+            errors: errors 
+        });
     } else {
-      logWithIP(`[File Index Match] File NOT found for index ${fileInfo.index} (expected fieldname: ${expectedFieldName})`, req, 'debug');
+        logWithIP(`[Upload Finish] 모든 파일(${processedFiles.length}개) 성공적으로 업로드됨`, req, 'info');
+        return res.status(201).json({ 
+            message: '모든 파일이 성공적으로 업로드되었습니다.',
+            processedFiles: processedFiles 
+        });
     }
-
-    if (!file || !file.path) {
-        // 오류 메시지에 정규화된 이름도 포함하여 디버깅 용이성 향상 (선택 사항)
-        errorLogWithIP(`[Upload Loop Error] 업로드된 파일 목록에서 정보를 찾을 수 없음: Original='${fileInfo.originalName}', Index=${fileInfo.index}`, null, req);
-        errors.push(`파일 ${fileInfo.originalName} (Index: ${fileInfo.index})의 정보를 찾을 수 없거나 임시 파일이 없습니다.`, 'debug');
-        continue; // 다음 파일 처리로 넘어감
+  // *** 전체 핸들러 로직을 감싸는 catch 블록 시작 ***
+  } catch (error) {
+    // 예상치 못한 모든 오류 로깅
+    errorLogWithIP('[/api/upload] 처리 중 예상치 못한 오류 발생:', error, req);
+    
+    // 클라이언트에게 일반적인 500 오류 응답 전송
+    // 이미 응답이 전송된 경우 추가 전송 방지
+    if (!res.headersSent) {
+      res.status(500).json({ error: '파일 업로드 중 서버 내부 오류가 발생했습니다.' });
+    } else {
+      // 이미 응답이 시작되었다면, 로그만 남기고 추가 작업 X
+      logWithIP('[/api/upload] 오류 발생했으나 응답 헤더가 이미 전송됨.', req, 'warn');
     }
-    logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName} (Index: ${fileInfo.index}), 임시 경로: ${file.path}`, req, 'debug');
-
-    try {
-      let relativeFilePath = fileInfo.relativePath;
-      const originalFileName = path.basename(relativeFilePath);
-      let finalFileName = originalFileName;
-      logWithIP(`[Upload Try] 파일명 처리 시작: Original='${originalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
-
-      if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
-          finalFileName = truncateFileName(originalFileName);
-          const dirName = path.dirname(relativeFilePath);
-          relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
-          logWithIP(`[Upload Try] 파일명 길이 제한 적용됨: Final='${finalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
-      }
-
-      let destinationPath = path.join(rootUploadDir, relativeFilePath);
-      logWithIP(`[Upload Try] 초기 목적지 경로 계산됨: ${destinationPath}`, req, 'debug');
-
-      const pathResult = checkAndTruncatePath(destinationPath);
-      if (pathResult.truncated) {
-          destinationPath = pathResult.path;
-          relativeFilePath = destinationPath.substring(rootUploadDir.length).replace(/^\\+|^\//, '');
-          logWithIP(`[Upload Try] 전체 경로 길이 제한 적용됨: Final Dest='${destinationPath}', Relative='${relativeFilePath}'`, req, 'debug');
-      }
-
-      const destinationDir = path.dirname(destinationPath);
-      logWithIP(`[Upload Try] 최종 목적지 디렉토리: ${destinationDir}`, req, 'debug');
-
-      if (!fs.existsSync(destinationDir)) {
-          fs.mkdirSync(destinationDir, { recursive: true });
-          fs.chmodSync(destinationDir, 0o777);
-          logWithIP(`[Upload Try] 하위 디렉토리 생성됨: ${destinationDir}`, req, 'debug');
-      }
-
-      logWithIP(`[Upload Try] 최종 저장 경로 확인: ${destinationPath}`, req, 'debug');
-
-      fs.copyFileSync(file.path, destinationPath);
-      fs.chmodSync(destinationPath, 0o666);
-      logWithIP(`[Upload Try] 파일 저장 완료 (Disk): ${destinationPath}`, req, 'debug');
-
-      processedFiles.push({
-        name: path.basename(destinationPath),
-        originalName: fileInfo.originalName,
-        relativePath: relativeFilePath,
-        size: file.size,
-        path: baseUploadPath,
-        mimetype: file.mimetype,
-        fullPath: destinationPath
-      });
-
-    } catch (writeError) {
-        errorLogWithIP(`[Upload Catch Error] 파일 저장 중 오류 발생: ${fileInfo.relativePath}`, writeError, req);
-        errors.push(`파일 ${fileInfo.relativePath} 저장 중 오류 발생: ${writeError.message}`, 'debug');
-    }
-    logWithIP(`[Upload Loop] 처리 완료: ${fileInfo.originalName}`, req, 'debug');
-  } // end for loop
-
-  // 5. 요청별 임시 폴더 삭제 (async/await 사용)
-  if (req.uniqueTmpDir) {
-    const tempDirToDelete = req.uniqueTmpDir;
-    logWithIP(`[Upload Cleanup] 임시 폴더 삭제 시도: ${tempDirToDelete}`, req, 'debug');
-    try {
-      // await를 사용하여 삭제 완료를 기다림
-      await fs.promises.rm(tempDirToDelete, { recursive: true, force: true });
-      logWithIP(`[Upload Cleanup] 임시 폴더 삭제 완료: ${tempDirToDelete}`, req, 'debug');
-    } catch (cleanupError) {
-      // ENOENT 오류는 무시
-      if (cleanupError.code !== 'ENOENT') {
-        errorLogWithIP(`임시 폴더 삭제 중 오류 발생: ${tempDirToDelete}`, cleanupError, req);
-        // 참고: 여기서 클라이언트 응답을 변경하지는 않음.
-      } else {
-        logWithIP(`[Upload Cleanup] 임시 폴더 이미 없거나 삭제됨: ${tempDirToDelete}`, req, 'debug');
-      }
-    }
-  } else {
-    logWithIP(`[Upload Cleanup] 삭제할 임시 폴더 정보 없음`, req, 'debug');
-  }
-
-  // 6. 최종 응답 전송 (이전 상태로 복구)
-  if (errors.length > 0) {
-    logWithIP(`파일 업로드 중 ${errors.length}개의 오류 발생`, req, 'info');
-    res.status(207).json({ // Multi-Status 응답
-      message: `일부 파일 업로드 중 오류 발생 (${processedFiles.length}개 성공, ${errors.length}개 실패)`,
-      processedFiles: processedFiles,
-      errors: errors
-    });
-  } else {
-    logWithIP(`${processedFiles.length}개 파일 업로드 성공`, req, 'info');
-    res.status(201).json({
-      message: '파일 업로드 성공',
-      files: processedFiles
-    });
   }
 });
 
@@ -608,8 +625,7 @@ app.get('/api/disk-usage', (req, res) => {
   } catch (error) {
     errorLog('디스크 사용량 조회 오류:', error);
     res.status(500).json({
-      error: '디스크 사용량 조회 오류',
-      message: '디스크 사용량 조회 중 오류가 발생했습니다.'
+      error: '디스크 사용량 조회 중 오류가 발생했습니다.'
     });
   }
 });
