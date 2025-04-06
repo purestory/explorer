@@ -14,9 +14,15 @@ if (!fs.existsSync(LOGS_DIRECTORY)) {
   fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
 }
 
-// --- 로그 레벨 설정 ---
+// --- 로그 레벨 및 모드 설정 ---
 const LOG_LEVELS = { minimal: 0, info: 1, debug: 2 };
-let currentLogLevel = LOG_LEVELS.minimal; // 기본값: 최소 로그
+const isDevelopment = process.env.NODE_ENV === 'development';
+let currentLogLevel = isDevelopment ? LOG_LEVELS.info : LOG_LEVELS.minimal;
+const requestLogLevel = isDevelopment ? 'info' : 'minimal'; // 요청 로그 레벨
+
+console.log(`Server running in ${isDevelopment ? 'development' : 'production'} mode.`);
+console.log(`Initial log level set to: ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel)} (${currentLogLevel})`);
+console.log(`Request log level set to: ${requestLogLevel}`);
 
 // 로그 레벨 설정 함수
 function setLogLevel(levelName) {
@@ -48,9 +54,10 @@ function log(message, levelName = 'debug') {
   const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
   const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
 
-  const logMessage = `${timestamp} - [${levelName.toUpperCase()}] ${message}\n`;
+  // 로그 레벨 태그 제거
+  const logMessage = `${timestamp} - ${message}\n`;
   logFile.write(logMessage);
-  console.log(`[${levelName.toUpperCase()}] ${message}`);
+  console.log(`${timestamp} - ${message}`); // 콘솔 로그에도 태그 제거
 }
 
 function logWithIP(message, req, levelName = 'debug') {
@@ -78,9 +85,10 @@ function logWithIP(message, req, levelName = 'debug') {
   const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
   const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
 
-  const logMessage = `${timestamp} - [${levelName.toUpperCase()}] [IP: ${ip}] ${message}\n`;
+  // 로그 레벨 태그 제거, IP 정보는 유지
+  const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
   logFile.write(logMessage);
-  console.log(`[${levelName.toUpperCase()}] [IP: ${ip}] ${message}`);
+  console.log(`${timestamp} - [IP: ${ip}] ${message}`); // 콘솔 로그에도 태그 제거
 }
 
 function errorLog(message, error) { // 오류 로그는 항상 기록
@@ -271,16 +279,12 @@ const uploadMiddleware = multer({
 // 기본 미들웨어 설정
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// 로깅 미들웨어
+// --- 로그 미들웨어 (모드 기반 레벨 적용 및 원래 방식으로 복원) ---
 app.use((req, res, next) => {
-  // 요청 시작 로그는 minimal 레벨로 변경
-  logWithIP(`${req.method} ${req.url}`, req, 'minimal');
-  
-  // 응답 완료 시 로그 (기존 방식 대신) - minimal 레벨
+  logWithIP(`${req.method} ${req.url}`, req, requestLogLevel);
   res.on('finish', () => {
-      logWithIP(`${req.method} ${req.url} - ${res.statusCode}`, req, 'minimal');
+    logWithIP(`${req.method} ${req.url} - ${res.statusCode}`, req, requestLogLevel);
   });
-  
   next();
 });
 
@@ -493,20 +497,23 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
     logWithIP(`[Upload Loop] 처리 완료: ${fileInfo.originalName}`, req, 'debug');
   } // end for loop
 
-  // 5. 요청별 임시 폴더 삭제
+  // 5. 요청별 임시 폴더 삭제 (async/await 사용)
   if (req.uniqueTmpDir) {
     const tempDirToDelete = req.uniqueTmpDir;
     logWithIP(`[Upload Cleanup] 임시 폴더 삭제 시도: ${tempDirToDelete}`, req, 'debug');
-    fs.rm(tempDirToDelete, { recursive: true, force: true }, (err) => {
-      if (err) {
-        // ENOENT 오류는 무시 (이미 삭제되었거나 존재하지 않을 수 있음)
-        if (err.code !== 'ENOENT') {
-          errorLogWithIP(`임시 폴더 삭제 중 오류 발생: ${tempDirToDelete}`, err, req);
-        }
+    try {
+      // await를 사용하여 삭제 완료를 기다림
+      await fs.promises.rm(tempDirToDelete, { recursive: true, force: true });
+      logWithIP(`[Upload Cleanup] 임시 폴더 삭제 완료: ${tempDirToDelete}`, req, 'debug');
+    } catch (cleanupError) {
+      // ENOENT 오류는 무시
+      if (cleanupError.code !== 'ENOENT') {
+        errorLogWithIP(`임시 폴더 삭제 중 오류 발생: ${tempDirToDelete}`, cleanupError, req);
+        // 참고: 여기서 클라이언트 응답을 변경하지는 않음.
       } else {
-        logWithIP(`[Upload Cleanup] 임시 폴더 삭제 완료: ${tempDirToDelete}`, req, 'debug');
+        logWithIP(`[Upload Cleanup] 임시 폴더 이미 없거나 삭제됨: ${tempDirToDelete}`, req, 'debug');
       }
-    });
+    }
   } else {
     logWithIP(`[Upload Cleanup] 삭제할 임시 폴더 정보 없음`, req, 'debug');
   }
@@ -1032,62 +1039,61 @@ app.put('/api/files/*', (req, res) => {
   }
 });
 
-// 파일/폴더 삭제
-app.delete('/api/files/*', (req, res) => {
+// 파일/폴더 삭제 (비동기 처리로 수정)
+app.delete('/api/files/*', async (req, res) => {
   try {
     const itemPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, itemPath);
-    
-    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청`, req, 'minimal');
 
+    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청`, req, 'info');
     logWithIP(`삭제 요청: ${fullPath}`, req, 'info');
 
-    // 존재하는지 확인
-    if (!fs.existsSync(fullPath)) {
-      errorLogWithIP(`파일/폴더를 찾을 수 없음: ${fullPath}`, null, req);
-      return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
-    }
+    // --- 비동기 처리 시작 ---
+    try {
+      // 존재하는지 확인 (stat으로 대체, 없으면 에러 발생)
+      const stats = await fs.promises.stat(fullPath); // 비동기 stat 사용
 
-    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
-    let lockedFolders = [];
-    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
-    if (fs.existsSync(lockedFoldersPath)) {
-      try {
-        lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
-      } catch (e) {
-        errorLogWithIP('잠긴 폴더 목록 로드 오류:', e, req);
-        lockedFolders = [];
+      // lockedFolders.json 파일에서 잠긴 폴더 목록 로드 (동기 방식 유지 가능)
+      let lockedFolders = [];
+      const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+      if (fs.existsSync(lockedFoldersPath)) {
+        try {
+          lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
+        } catch (e) {
+          errorLogWithIP('잠긴 폴더 목록 로드 오류:', e, req);
+          lockedFolders = [];
+        }
       }
+
+      // 현재 경로가 잠긴 폴더 자체인지 확인
+      const isLocked = lockedFolders.some(lockedPath => itemPath === lockedPath);
+      if (isLocked) {
+        errorLogWithIP(`잠긴 폴더 삭제 시도: ${fullPath}`, null, req);
+        // 403 Forbidden 반환
+        return res.status(403).send('잠긴 폴더는 삭제할 수 없습니다.');
+      }
+
+      // 비동기 삭제 실행 (폴더/파일 구분 없이 rm 사용 가능)
+      await fs.promises.rm(fullPath, { recursive: true, force: true });
+      logWithIP(`삭제 완료: ${fullPath}`, req, 'info');
+
+      res.status(200).send('삭제되었습니다.');
+
+    } catch (error) {
+      // 파일/폴더가 없는 경우 (stat 에러)
+      if (error.code === 'ENOENT') {
+        errorLogWithIP(`삭제 대상 없음: ${fullPath}`, error, req);
+        return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
+      }
+      // 기타 삭제 오류
+      errorLogWithIP(`삭제 오류: ${fullPath}`, error, req);
+      return res.status(500).send(`서버 오류가 발생했습니다: ${error.message}`);
     }
+    // --- 비동기 처리 종료 ---
 
-    // 디렉토리인지 확인
-    const stats = fs.statSync(fullPath);
-    const isDirectory = stats.isDirectory();
-
-    // 현재 경로가 잠긴 폴더 자체인지 확인
-    const isLocked = lockedFolders.some(lockedPath => {
-      return itemPath === lockedPath;
-    });
-
-    // 잠금 확인 (삭제 대상 자체가 잠긴 경우만)
-    if (isLocked) {
-      errorLogWithIP(`잠긴 폴더 삭제 시도: ${fullPath}`, null, req);
-      return res.status(403).send('잠긴 폴더는 삭제할 수 없습니다.');
-    }
-
-    if (isDirectory) {
-      // 폴더 삭제 (재귀적)
-      fs.rmdirSync(fullPath, { recursive: true });
-      logWithIP(`폴더 삭제 완료: ${fullPath}`, req, 'info');
-    } else {
-      // 파일 삭제
-      fs.unlinkSync(fullPath);
-      logWithIP(`파일 삭제 완료: ${fullPath}`, req, 'info');
-    }
-
-    res.status(200).send('삭제되었습니다.');
   } catch (error) {
-    errorLogWithIP('삭제 오류:', error, req);
+    // 핸들러 자체의 예외 처리 (예: decodeURIComponent 오류 등)
+    errorLogWithIP('삭제 API 핸들러 오류:', error, req);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
