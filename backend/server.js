@@ -19,7 +19,18 @@ const logFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'server.log'), { 
 const errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
 
 function log(message) {
-  const timestamp = new Date().toISOString();
+  // KST 시간으로 변환 및 형식 지정
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000; // KST는 UTC+9
+  const kstDate = new Date(now.getTime() + kstOffset);
+  const year = kstDate.getUTCFullYear();
+  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = kstDate.getUTCDate().toString().padStart(2, '0');
+  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
+  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
+  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
+
   const logMessage = `${timestamp} - ${message}\n`;
   logFile.write(logMessage);
   console.log(message);
@@ -35,14 +46,36 @@ function logWithIP(message, req) {
          (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
          'unknown';
   }
-  const timestamp = new Date().toISOString();
+  // KST 시간으로 변환 및 형식 지정
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000; // KST는 UTC+9
+  const kstDate = new Date(now.getTime() + kstOffset);
+  const year = kstDate.getUTCFullYear();
+  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = kstDate.getUTCDate().toString().padStart(2, '0');
+  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
+  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
+  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
+
   const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
   logFile.write(logMessage);
   console.log(`[IP: ${ip}] ${message}`);
 }
 
 function errorLog(message, error) {
-  const timestamp = new Date().toISOString();
+  // KST 시간으로 변환 및 형식 지정
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000; // KST는 UTC+9
+  const kstDate = new Date(now.getTime() + kstOffset);
+  const year = kstDate.getUTCFullYear();
+  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = kstDate.getUTCDate().toString().padStart(2, '0');
+  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
+  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
+  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
+
   const logMessage = `${timestamp} - ERROR: ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
   errorLogFile.write(logMessage);
   console.error(message, error);
@@ -58,7 +91,18 @@ function errorLogWithIP(message, error, req) {
          (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
          'unknown';
   }
-  const timestamp = new Date().toISOString();
+  // KST 시간으로 변환 및 형식 지정
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000; // KST는 UTC+9
+  const kstDate = new Date(now.getTime() + kstOffset);
+  const year = kstDate.getUTCFullYear();
+  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = kstDate.getUTCDate().toString().padStart(2, '0');
+  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
+  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
+  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
+
   const logMessage = `${timestamp} - ERROR: [IP: ${ip}] ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
   errorLogFile.write(logMessage);
   console.error(`[IP: ${ip}] ${message}`, error);
@@ -186,9 +230,13 @@ const storage = multer.diskStorage({
     cb(null, req.uniqueTmpDir);
   },
   filename: function (req, file, cb) {
-    // 파일명 충돌 방지 (고유 디렉토리 사용으로 단순화 가능하나 일단 유지)
-    const safeOriginalName = Buffer.from(file.originalname, 'latin1').toString('utf8')
-                                   .replace(/[\\/:*?"<>|]/g, '_'); // 혹시 모를 특수문자 제거
+    // 파일명 충돌 방지 및 인코딩 변환 제거
+    // file.originalname을 직접 사용하고 필요한 특수문자만 제거
+    const safeOriginalName = file.originalname.replace(/[/\\:*?\"<>|]/g, '_');
+    // 로그 추가: 변환 전후 이름 확인
+    if (safeOriginalName !== file.originalname) {
+        logWithIP(`[Multer Filename] 특수문자 제거됨: '${file.originalname}' -> '${safeOriginalName}'`, req);
+    }
     cb(null, Date.now() + '-' + Math.random().toString(36).substring(2, 9) + '-' + safeOriginalName);
   }
 });
@@ -329,17 +377,24 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
   for (const fileInfo of fileInfoArray) {
     logWithIP(`[Upload Loop] 처리 시작: ${fileInfo.originalName}, 상대 경로: ${fileInfo.relativePath}`, req);
 
-    const file = req.files.find(f => {
-       // 파일명 직접 비교 (인코딩 변환 제거)
-       return f.originalname === fileInfo.originalName;
-    });
+    // 파일 처리 루프: 인덱스 기반으로 파일 찾기
+    const expectedFieldName = `file_${fileInfo.index}`;
+    const file = req.files.find(f => f.fieldname === expectedFieldName);
+
+    // 로그 추가: 찾은 파일 정보 확인
+    if (file) {
+      logWithIP(`[File Index Match] Found file for index ${fileInfo.index}: fieldname='${file.fieldname}', originalname='${file.originalname}' (may be corrupted)`, req);
+    } else {
+      logWithIP(`[File Index Match] File NOT found for index ${fileInfo.index} (expected fieldname: ${expectedFieldName})`, req);
+    }
 
     if (!file || !file.path) {
-        errorLogWithIP(`[Upload Loop Error] 업로드된 파일 목록에서 정보를 찾을 수 없음: ${fileInfo.originalName}`, null, req);
-        errors.push(`파일 ${fileInfo.originalName}의 정보를 찾을 수 없거나 임시 파일이 없습니다.`);
-        continue;
+        // 오류 메시지에 정규화된 이름도 포함하여 디버깅 용이성 향상 (선택 사항)
+        errorLogWithIP(`[Upload Loop Error] 업로드된 파일 목록에서 정보를 찾을 수 없음: Original='${fileInfo.originalName}', Index=${fileInfo.index}`, null, req);
+        errors.push(`파일 ${fileInfo.originalName} (Index: ${fileInfo.index})의 정보를 찾을 수 없거나 임시 파일이 없습니다.`);
+        continue; // 다음 파일 처리로 넘어감
     }
-    logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName}, 임시 경로: ${file.path}`, req);
+    logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName} (Index: ${fileInfo.index}), 임시 경로: ${file.path}`, req);
 
     try {
       let relativeFilePath = fileInfo.relativePath;

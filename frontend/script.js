@@ -2607,7 +2607,7 @@ function uploadFiles(filesWithPaths, targetUploadPath = currentPath) {
     formData.append('path', targetUploadPath); // 기본 업로드 경로 (폴더 드롭 시 해당 폴더 경로)
 
     filesWithPaths.forEach(({ file }, index) => {
-        formData.append(`file_${index}`, file); // 각 파일을 고유한 키로 추가
+        formData.append(`file_${index}`, file, file.name); // 수정: 파일명을 명시적으로 지정
     });
     formData.append('fileInfo', JSON.stringify(fileInfoArray)); // 파일 정보 배열 추가 (상대 경로 포함)
 

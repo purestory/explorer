@@ -34,6 +34,9 @@ window.dragSelectState = {
     startedOnSelectedItem: false
 };
 
+// 파일 최상단 또는 적절한 전역 스코프에 추가
+let wasDragging = false;
+
 // DOM 요소
 const fileView = document.getElementById('fileView');
 const breadcrumb = document.getElementById('breadcrumb');
@@ -491,6 +494,9 @@ function initDragSelect() {
         selectionBox.dataset.startClientY = startClientY;
         selectionBox.dataset.initialScrollTop = initialScrollTop;
         selectionBox.dataset.initialScrollLeft = initialScrollLeft; // 수평 스크롤 위치도 저장
+
+        // 드래그 플래그 초기화
+        wasDragging = false;
     });
     
     // 마우스 이동 이벤트
@@ -522,6 +528,8 @@ function initDragSelect() {
         // 최소 드래그 거리를 넘으면 드래그 선택 시작
         if (!window.dragSelectState.dragStarted && dragDistance >= minDragDistance) {
             window.dragSelectState.dragStarted = true;
+            // 드래그 시작 시 플래그 설정
+            wasDragging = true;
             
             // 선택 박스 표시
             selectionBox.style.display = 'block';
@@ -1426,14 +1434,6 @@ function handleFileDblClick(e, fileItem) {
     }
     
     if (isFolder) {
-        // 폴더로 이동 전 접근 제한 확인 (주석 처리)
-        // const folderPath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        // if (isPathAccessRestricted(folderPath) && !isPathLocked(folderPath)) {
-        //     // 직접 잠기지 않았지만 상위 폴더가 잠긴 경우
-        //     alert(`'${fileName}' 폴더의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
-        //     return;
-        // }
-        
         // 폴더로 이동 전에 더블클릭 비활성화
         window.doubleClickEnabled = false;
         // 폴더로 이동
@@ -1442,12 +1442,6 @@ function handleFileDblClick(e, fileItem) {
         // 파일 확장자에 따라 처리
         const fileExt = fileName.split('.').pop().toLowerCase();
         const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        
-        // 파일 접근 제한 확인 (주석 처리)
-        // if (isPathAccessRestricted(filePath)) {
-        //     alert(`'${fileName}' 파일의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
-        //     return;
-        // }
         
         const encodedPath = encodeURIComponent(filePath);
         
@@ -2019,84 +2013,7 @@ function handleFileDragOver(e) {
         }
     }
     
-// 중복 함수 제거 -     function handleFileDrop(e) {
-// 중복 함수 제거 -         preventDefaults(e);
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         // 드래그 상태 초기화
-// 중복 함수 제거 -         window.draggingInProgress = false;
-// 중복 함수 제거 -     
-// 중복 함수 제거 -         // 드롭존 비활성화
-// 중복 함수 제거 -         dropZone.classList.remove('active');
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 파일 항목 찾기
-// 중복 함수 제거 -         const fileItem = e.target.closest('.file-item');
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 드롭 위치 및 상태 로깅
-// 중복 함수 제거 -         console.log('드롭 이벤트 발생 위치:', e.target.className);
-// 중복 함수 제거 -         console.log('DataTransfer Types:', Array.from(e.dataTransfer.types));
-// 중복 함수 제거 -         console.log('DataTransfer Files Length:', e.dataTransfer.files.length);
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 상위 폴더에 드롭되는 경우 차단
-// 중복 함수 제거 -         if (fileItem && fileItem.getAttribute('data-parent-dir') === 'true') {
-// 중복 함수 제거 -             console.log('상위 폴더에 드롭되어 무시됨');
-// 중복 함수 제거 -             return;
-// 중복 함수 제거 -         }
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 드래그 오버 스타일 제거 (폴더 항목에서)
-// 중복 함수 제거 -         if (fileItem) {
-// 중복 함수 제거 -             fileItem.classList.remove('drag-over');
-// 중복 함수 제거 -             console.log('드롭 대상 항목:', fileItem.getAttribute('data-name'), 
-// 중복 함수 제거 -                       '폴더 여부:', fileItem.getAttribute('data-is-folder'));
-// 중복 함수 제거 -         }
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 내부/외부 파일 판단
-// 중복 함수 제거 -         const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         // 최종 판단 로그 출력
-// 중복 함수 제거 -         console.log(`파일 드롭 처리: ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리 (우선순위)
-// 중복 함수 제거 -         if (isExternalDrop) {
-// 중복 함수 제거 -             console.log('외부 파일 드롭으로 최종 판단');
-// 중복 함수 제거 -             
-// 중복 함수 제거 -             // 폴더가 아닌 항목 또는 빈 공간에 드롭된 경우 현재 경로에 업로드
-// 중복 함수 제거 -             if (!fileItem || fileItem.getAttribute('data-is-folder') !== 'true') {
-// 중복 함수 제거 -                 console.log('현재 디렉토리에 외부 파일 업로드');
-// 중복 함수 제거 -                 handleExternalFileDrop(e); // 현재 경로에 업로드
-// 중복 함수 제거 -             } else {
-// 중복 함수 제거 -                 // 폴더 항목에 드롭된 경우 해당 폴더를 타겟으로 지정
-// 중복 함수 제거 -                 console.log(`'${fileItem.getAttribute('data-name')}' 폴더에 외부 파일 업로드`);
-// 중복 함수 제거 -                 handleExternalFileDrop(e, fileItem);
-// 중복 함수 제거 -             }
-// 중복 함수 제거 -         } 
-// 중복 함수 제거 -         // 내부 파일 이동 처리
-// 중복 함수 제거 -         else if (isInternalDrop && draggedPaths.length > 0) {
-// 중복 함수 제거 -             console.log('내부 파일 이동으로 최종 판단');
-// 중복 함수 제거 -             
-// 중복 함수 제거 -             // 자기 자신에게 드롭하거나 선택된 항목에 드롭하는 경우 방지
-// 중복 함수 제거 -             if (fileItem && fileItem.classList.contains('selected')) {
-// 중복 함수 제거 -                 console.log('선택된 항목에는 드롭할 수 없음');
-// 중복 함수 제거 -                 return;
-// 중복 함수 제거 -             }
-// 중복 함수 제거 -             
-// 중복 함수 제거 -             // 타겟이 폴더인 경우에만 이동 처리
-// 중복 함수 제거 -             if (!fileItem || fileItem.getAttribute('data-is-folder') === 'true') {
-// 중복 함수 제거 -                 // 내부 파일 이동 처리 (경로 배열과 타겟 폴더 정보 전달)
-// 중복 함수 제거 -                 handleInternalFileDrop(draggedPaths, fileItem);
-// 중복 함수 제거 -             } else {
-// 중복 함수 제거 -                 console.log('파일에 드롭됨: 폴더가 아니므로 이동할 수 없습니다.');
-// 중복 함수 제거 -             }
-// 중복 함수 제거 -         } 
-// 중복 함수 제거 -         // 처리할 수 없는 드롭
-// 중복 함수 제거 -         else {
-// 중복 함수 제거 -             console.log('처리할 수 없는 드롭 형식 또는 데이터 없음');
-// 중복 함수 제거 -             showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
-// 중복 함수 제거 -         }
-// 중복 함수 제거 -     }
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     // 이벤트 리스너 등록
-// 중복 함수 제거 -     fileList.addEventListener('dragstart', handleFileDragStart);
-// 중복 함수 제거 -     fileList.addEventListener('dragend', handleFileDragEnd);
+
     fileList.addEventListener('dragenter', handleFileDragEnter);
     fileList.addEventListener('dragover', handleFileDragOver);
     fileList.addEventListener('dragleave', handleFileDragLeave);
@@ -2690,7 +2607,7 @@ function uploadFiles(filesWithPaths, targetUploadPath = currentPath) {
     formData.append('path', targetUploadPath); // 기본 업로드 경로 (폴더 드롭 시 해당 폴더 경로)
 
     filesWithPaths.forEach(({ file }, index) => {
-        formData.append(`file_${index}`, file); // 각 파일을 고유한 키로 추가
+        formData.append(`file_${index}`, file, file.name); // 수정: 파일명을 명시적으로 지정
     });
     formData.append('fileInfo', JSON.stringify(fileInfoArray)); // 파일 정보 배열 추가 (상대 경로 포함)
 
@@ -3654,29 +3571,9 @@ function hideLoading() {
 
 // 컨텍스트 메뉴 초기화
 function initContextMenu() {
-    // 컨텍스트 메뉴 숨기기 및 빈 곳 클릭 시 선택 해제
-    document.addEventListener('click', (e) => {
-        // 컨텍스트 메뉴 숨기기
+    // 컨텍스트 메뉴 숨기기
+    document.addEventListener('click', () => {
         contextMenu.style.display = 'none';
-
-        // 클릭된 요소가 파일 목록 영역(fileView) 내부인지 확인
-        const isClickInsideFileView = fileView.contains(e.target);
-        // 클릭된 요소가 파일 항목, 버튼, 모달, 입력 필드 등이 아닌지 확인
-        const isClickOnFileItem = e.target.closest('.file-item, .file-item-grid');
-        const isClickOnButton = e.target.closest('button, input[type="button"], .button');
-        const isClickOnModal = e.target.closest('.modal');
-        const isClickOnInput = e.target.closest('input, textarea, select');
-
-        // 파일 목록 영역 바깥을 클릭했거나,
-        // 파일 목록 영역 안이지만 파일 항목이나 관련 UI 요소가 아닌 곳을 클릭했을 때 선택 해제
-        if (!isClickInsideFileView || 
-            (isClickInsideFileView && !isClickOnFileItem && !isClickOnButton && !isClickOnModal && !isClickOnInput)) {
-            // 드래그 선택 중이 아닐 때만 선택 해제 (드래그 완료 시 mousedown에서 처리)
-            if (!window.dragSelectState || !window.dragSelectState.isSelecting) {
-                console.log('빈 영역 클릭 감지됨. 선택 해제.');
-                clearSelection();
-            }
-        }
     });
     
     // 항목에 대한 컨텍스트 메뉴
@@ -3685,12 +3582,11 @@ function initContextMenu() {
         
         const fileItem = e.target.closest('.file-item');
         if (fileItem) {
-            // 선택되지 않은 항목을 우클릭하면 먼저 선택
             if (!fileItem.classList.contains('selected')) {
                 clearSelection();
                 selectItem(fileItem);
             }
-
+            
             // 파일 타입에 따라 열기/다운로드 메뉴 표시 조정
             const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
             const ctxOpen = document.getElementById('ctxOpen');
@@ -3726,11 +3622,6 @@ function initContextMenu() {
             // 메뉴 표시
             contextMenu.style.display = 'block';
             contextMenu.style.left = `${e.pageX}px`;
-        }
-    });
-} // 함수 정의 끝
-
-// 다음 함수 시작 (또는 다른 코드)
             contextMenu.style.top = `${e.pageY}px`;
             
             // 컨텍스트 메뉴가 화면 밖으로 나가는지 확인
@@ -3741,8 +3632,8 @@ function initContextMenu() {
             if (menuRect.bottom > window.innerHeight) {
                 contextMenu.style.top = `${e.pageY - menuRect.height}px`;
             }
-        
-    
+        }
+    });
     
     // 빈 공간에 대한 컨텍스트 메뉴
     fileList.addEventListener('contextmenu', (e) => {
@@ -4024,6 +3915,8 @@ function initDragSelect() {
         // 최소 드래그 거리를 넘으면 드래그 선택 시작
         if (!window.dragSelectState.dragStarted && dragDistance >= minDragDistance) {
             window.dragSelectState.dragStarted = true;
+            // 드래그 시작 시 플래그 설정
+            wasDragging = true;
             
             // 선택 박스 표시
             selectionBox.style.display = 'block';
@@ -4717,7 +4610,7 @@ function renderFiles(files) {
                     fileItem.addEventListener('click', (e) => {
                         if (e.target.classList.contains('rename-input')) return;
                         
-                        // 상위 폴더(..)는 선택되지 않도록 처리
+                        // 상위 폴더(..)는 선택 처리하지 않음
                         if (fileItem.getAttribute('data-parent-dir') === 'true') {
                             // 원클릭으로 상위 폴더 이동을 하지 않도록 수정
                             // 대신 handleFileClick 함수로 처리하여 더블클릭 이벤트에서만 이동하도록 함
@@ -4928,14 +4821,6 @@ function handleFileDblClick(e, fileItem) {
     }
     
     if (isFolder) {
-        // 폴더로 이동 전 접근 제한 확인
-        const folderPath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        if (isPathAccessRestricted(folderPath) && !isPathLocked(folderPath)) {
-            // 직접 잠기지 않았지만 상위 폴더가 잠긴 경우
-            alert(`'${fileName}' 폴더의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
-            return;
-        }
-        
         // 폴더로 이동 전에 더블클릭 비활성화
         window.doubleClickEnabled = false;
         // 폴더로 이동
@@ -4944,12 +4829,6 @@ function handleFileDblClick(e, fileItem) {
         // 파일 확장자에 따라 처리
         const fileExt = fileName.split('.').pop().toLowerCase();
         const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        
-        // 파일 접근 제한 확인
-        if (isPathAccessRestricted(filePath)) {
-            alert(`'${fileName}' 파일의 상위 폴더가 잠겨 있어 접근할 수 없습니다.`);
-            return;
-        }
         
         const encodedPath = encodeURIComponent(filePath);
         
@@ -5521,84 +5400,7 @@ function handleFileDragOver(e) {
         }
     }
     
-// 중복 함수 제거 -     function handleFileDrop(e) {
-// 중복 함수 제거 -         preventDefaults(e);
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         // 드래그 상태 초기화
-// 중복 함수 제거 -         window.draggingInProgress = false;
-// 중복 함수 제거 -     
-// 중복 함수 제거 -         // 드롭존 비활성화
-// 중복 함수 제거 -         dropZone.classList.remove('active');
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 파일 항목 찾기
-// 중복 함수 제거 -         const fileItem = e.target.closest('.file-item');
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 드롭 위치 및 상태 로깅
-// 중복 함수 제거 -         console.log('드롭 이벤트 발생 위치:', e.target.className);
-// 중복 함수 제거 -         console.log('DataTransfer Types:', Array.from(e.dataTransfer.types));
-// 중복 함수 제거 -         console.log('DataTransfer Files Length:', e.dataTransfer.files.length);
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 상위 폴더에 드롭되는 경우 차단
-// 중복 함수 제거 -         if (fileItem && fileItem.getAttribute('data-parent-dir') === 'true') {
-// 중복 함수 제거 -             console.log('상위 폴더에 드롭되어 무시됨');
-// 중복 함수 제거 -             return;
-// 중복 함수 제거 -         }
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 드래그 오버 스타일 제거 (폴더 항목에서)
-// 중복 함수 제거 -         if (fileItem) {
-// 중복 함수 제거 -             fileItem.classList.remove('drag-over');
-// 중복 함수 제거 -             console.log('드롭 대상 항목:', fileItem.getAttribute('data-name'), 
-// 중복 함수 제거 -                       '폴더 여부:', fileItem.getAttribute('data-is-folder'));
-// 중복 함수 제거 -         }
-// 중복 함수 제거 - 
-// 중복 함수 제거 -         // 내부/외부 파일 판단
-// 중복 함수 제거 -         const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         // 최종 판단 로그 출력
-// 중복 함수 제거 -         console.log(`파일 드롭 처리: ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리 (우선순위)
-// 중복 함수 제거 -         if (isExternalDrop) {
-// 중복 함수 제거 -             console.log('외부 파일 드롭으로 최종 판단');
-// 중복 함수 제거 -             
-// 중복 함수 제거 -             // 폴더가 아닌 항목 또는 빈 공간에 드롭된 경우 현재 경로에 업로드
-// 중복 함수 제거 -             if (!fileItem || fileItem.getAttribute('data-is-folder') !== 'true') {
-// 중복 함수 제거 -                 console.log('현재 디렉토리에 외부 파일 업로드');
-// 중복 함수 제거 -                 handleExternalFileDrop(e); // 현재 경로에 업로드
-// 중복 함수 제거 -             } else {
-// 중복 함수 제거 -                 // 폴더 항목에 드롭된 경우 해당 폴더를 타겟으로 지정
-// 중복 함수 제거 -                 console.log(`'${fileItem.getAttribute('data-name')}' 폴더에 외부 파일 업로드`);
-// 중복 함수 제거 -                 handleExternalFileDrop(e, fileItem);
-// 중복 함수 제거 -             }
-// 중복 함수 제거 -         } 
-// 중복 함수 제거 -         // 내부 파일 이동 처리
-// 중복 함수 제거 -         else if (isInternalDrop && draggedPaths.length > 0) {
-// 중복 함수 제거 -             console.log('내부 파일 이동으로 최종 판단');
-// 중복 함수 제거 -             
-// 중복 함수 제거 -             // 자기 자신에게 드롭하거나 선택된 항목에 드롭하는 경우 방지
-// 중복 함수 제거 -             if (fileItem && fileItem.classList.contains('selected')) {
-// 중복 함수 제거 -                 console.log('선택된 항목에는 드롭할 수 없음');
-// 중복 함수 제거 -                 return;
-// 중복 함수 제거 -             }
-// 중복 함수 제거 -             
-// 중복 함수 제거 -             // 타겟이 폴더인 경우에만 이동 처리
-// 중복 함수 제거 -             if (!fileItem || fileItem.getAttribute('data-is-folder') === 'true') {
-// 중복 함수 제거 -                 // 내부 파일 이동 처리 (경로 배열과 타겟 폴더 정보 전달)
-// 중복 함수 제거 -                 handleInternalFileDrop(draggedPaths, fileItem);
-// 중복 함수 제거 -             } else {
-// 중복 함수 제거 -                 console.log('파일에 드롭됨: 폴더가 아니므로 이동할 수 없습니다.');
-// 중복 함수 제거 -             }
-// 중복 함수 제거 -         } 
-// 중복 함수 제거 -         // 처리할 수 없는 드롭
-// 중복 함수 제거 -         else {
-// 중복 함수 제거 -             console.log('처리할 수 없는 드롭 형식 또는 데이터 없음');
-// 중복 함수 제거 -             showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
-// 중복 함수 제거 -         }
-// 중복 함수 제거 -     }
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     // 이벤트 리스너 등록
-// 중복 함수 제거 -     fileList.addEventListener('dragstart', handleFileDragStart);
-// 중복 함수 제거 -     fileList.addEventListener('dragend', handleFileDragEnd);
+
     fileList.addEventListener('dragenter', handleFileDragEnter);
     fileList.addEventListener('dragover', handleFileDragOver);
     fileList.addEventListener('dragleave', handleFileDragLeave);
@@ -6963,6 +6765,29 @@ function init() {
 // 페이지 로드 시 애플리케이션 초기화
 document.addEventListener('DOMContentLoaded', init);
 
+
+// 화면 클릭 시 파일 선택 해제 리스너 수정
+document.addEventListener('click', (event) => {
+    // 드래그 직후의 클릭이면 무시하고 플래그 초기화
+    if (wasDragging) {
+        wasDragging = false;
+        return;
+    }
+
+    // 클릭된 요소가 파일 아이템 또는 그 하위 요소가 아니고,
+    // 파일 작업을 위한 컨텍스트 메뉴 관련 요소도 아닌 경우
+    if (!event.target.closest('.file-item') && !event.target.closest('#contextMenu') && !event.target.closest('.action-button')) {
+        // 현재 선택된 모든 파일 아이템 가져오기
+        const selectedItems = document.querySelectorAll('.file-item.selected');
+        // 각 선택된 아이템에서 'selected' 클래스 제거
+        selectedItems.forEach(item => {
+            item.classList.remove('selected');
+        });
+
+    }
+});
+
+
 // 선택한 파일 압축
 function compressSelectedItems() {
     if (selectedItems.size === 0) return;
@@ -7243,114 +7068,7 @@ function isPathAccessRestricted(path) {
     return lockedFolders.includes(path);
 }
 
-// 폴더 잠금 토글 함수 (수정: 명령 인자 추가)
-// 중복 함수 제거 - function toggleFolderLock(action) {
-// 중복 함수 제거 -     // 잠금 기능을 사용할 수 없으면 경고 표시
-// 중복 함수 제거 -     if (!lockFeatureAvailable) {
-// 중복 함수 제거 -         console.log('폴더 잠금 기능을 사용할 수 없습니다.');
-// 중복 함수 제거 -         // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
-// 중복 함수 제거 -         return;
-// 중복 함수 제거 -     }
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     // 선택된 폴더 항목들 확인
-// 중복 함수 제거 -     const selectedFolders = [];
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     // 선택된 항목들 중에서 폴더만 필터링
-// 중복 함수 제거 -     selectedItems.forEach(itemName => {
-// 중복 함수 제거 -         const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
-// 중복 함수 제거 -         if (element && element.getAttribute('data-is-folder') === 'true') {
-// 중복 함수 제거 -             const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-// 중복 함수 제거 -             selectedFolders.push({
-// 중복 함수 제거 -                 name: itemName,
-// 중복 함수 제거 -                 path: folderPath,
-// 중복 함수 제거 -                 isLocked: isPathLocked(folderPath)
-// 중복 함수 제거 -             });
-// 중복 함수 제거 -         }
-// 중복 함수 제거 -     });
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     if (selectedFolders.length === 0) {
-// 중복 함수 제거 -         // 폴더가 선택되지 않았으면 조용히 리턴
-// 중복 함수 제거 -         return;
-// 중복 함수 제거 -     }
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     // 처리할 폴더들을 필터링 (선택된 동작에 따라)
-// 중복 함수 제거 -     const foldersToProcess = action === 'lock' 
-// 중복 함수 제거 -         ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
-// 중복 함수 제거 -         : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     if (foldersToProcess.length === 0) {
-// 중복 함수 제거 -         if (action === 'lock') {
-// 중복 함수 제거 -             statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
-// 중복 함수 제거 -     } else {
-// 중복 함수 제거 -             statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
-// 중복 함수 제거 -         }
-// 중복 함수 제거 -         return;
-// 중복 함수 제거 -     }
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     showLoading();
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
-// 중복 함수 제거 -     const processNextFolder = (index) => {
-// 중복 함수 제거 -         if (index >= foldersToProcess.length) {
-// 중복 함수 제거 -             // 모든 폴더 처리 완료
-// 중복 함수 제거 -             loadLockStatus().then(() => {
-// 중복 함수 제거 -                 loadFiles(currentPath); // 파일 목록 새로고침
-// 중복 함수 제거 -                 const actionText = action === 'lock' ? '잠금' : '잠금 해제';
-// 중복 함수 제거 -                 statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
-// 중복 함수 제거 -                 hideLoading();
-// 중복 함수 제거 -             });
-// 중복 함수 제거 -             return;
-// 중복 함수 제거 -         }
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         const folder = foldersToProcess[index];
-// 중복 함수 제거 -         const encodedPath = encodeURIComponent(folder.path);
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
-// 중복 함수 제거 -             method: 'POST',
-// 중복 함수 제거 -             headers: {
-// 중복 함수 제거 -                 'Content-Type': 'application/json'
-// 중복 함수 제거 -             },
-// 중복 함수 제거 -             body: JSON.stringify({ action: action })
-// 중복 함수 제거 -         })
-// 중복 함수 제거 -         .then(response => {
-// 중복 함수 제거 -             if (!response.ok) {
-// 중복 함수 제거 -                 // 404 에러인 경우 기능을 사용할 수 없다고 설정
-// 중복 함수 제거 -                 if (response.status === 404) {
-// 중복 함수 제거 -                     lockFeatureAvailable = false;
-// 중복 함수 제거 -                     console.log('폴더 잠금 API가 서버에 구현되어 있지 않습니다.');
-// 중복 함수 제거 -                     throw new Error('폴더 잠금 기능을 사용할 수 없습니다.');
-// 중복 함수 제거 -                 }
-// 중복 함수 제거 -                 throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
-// 중복 함수 제거 -             }
-// 중복 함수 제거 -             return response.json();
-// 중복 함수 제거 -         })
-// 중복 함수 제거 -         .then(() => {
-// 중복 함수 제거 -             // 다음 폴더 처리
-// 중복 함수 제거 -             processNextFolder(index + 1);
-// 중복 함수 제거 -         })
-// 중복 함수 제거 -         .catch(error => {
-// 중복 함수 제거 -             // 서버에 API가 구현되어 있지 않은 경우 조용히 처리
-// 중복 함수 제거 -             if (!lockFeatureAvailable) {
-// 중복 함수 제거 -                 console.log('폴더 잠금 기능을 사용할 수 없습니다.');
-// 중복 함수 제거 -                 hideLoading();
-// 중복 함수 제거 -                 loadFiles(currentPath);
-// 중복 함수 제거 -                 return;
-// 중복 함수 제거 -             }
-// 중복 함수 제거 -             
-// 중복 함수 제거 -             // 일반 오류 발생 시 알림 표시
-// 중복 함수 제거 -             console.error('폴더 잠금/해제 오류:', error);
-// 중복 함수 제거 -             alert(`오류 발생: ${error.message}`);
-// 중복 함수 제거 -             hideLoading();
-// 중복 함수 제거 -             loadFiles(currentPath);
-// 중복 함수 제거 -         });
-// 중복 함수 제거 -     };
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     // 첫 번째 폴더부터 처리 시작
-// 중복 함수 제거 -     processNextFolder(0);
-// 중복 함수 제거 - }
-// 중복 함수 제거 - 
-// 중복 함수 제거 - // 잠금 상태 로드 함수
+// 잠금 상태 로드 함수
 function loadLockStatus() {
     // 이미 잠금 기능을 사용할 수 없다고 판단되면 바로 빈 배열 반환
     if (!lockFeatureAvailable) {
@@ -7393,31 +7111,7 @@ function loadLockStatus() {
         });
 }
 
-// 중복 함수 제거 - // 경로가 잠긴 폴더인지 확인하는 함수
-// 중복 함수 제거 - function isPathLocked(path) {
-// 중복 함수 제거 -     // 잠금 기능을 사용할 수 없으면 항상 false 반환
-// 중복 함수 제거 -     if (!lockFeatureAvailable) {
-// 중복 함수 제거 -         return false;
-// 중복 함수 제거 -     }
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     if (!lockedFolders || lockedFolders.length === 0) {
-// 중복 함수 제거 -         return false;
-// 중복 함수 제거 -     }
-// 중복 함수 제거 -     
-// 중복 함수 제거 -     return lockedFolders.some(lockedPath => {
-// 중복 함수 제거 -         // 경로가 잠긴 폴더 자체인 경우
-// 중복 함수 제거 -         if (path === lockedPath) {
-// 중복 함수 제거 -             return true;
-// 중복 함수 제거 -         }
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         // 경로가 잠긴 폴더의 하위 경로인 경우 (접근 제한)
-// 중복 함수 제거 -         if (path.startsWith(lockedPath + '/')) {
-// 중복 함수 제거 -             return true;
-// 중복 함수 제거 -         }
-// 중복 함수 제거 -         
-// 중복 함수 제거 -         return false;
-// 중복 함수 제거 -     });
-// 중복 함수 제거 - }
+
 
 // 폴더 잠금 토글 기능
 function toggleFolderLock(action = 'lock') {
@@ -8184,3 +7878,4 @@ function handleFileDrop(e, targetFolderItem = null) {
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
     }
 }
+
