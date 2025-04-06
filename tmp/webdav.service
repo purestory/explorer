@@ -3,16 +3,19 @@ Description=WebDAV Explorer Server
 After=network.target
 
 [Service]
-Type=simple
 User=purestory
-WorkingDirectory=/home/purestory/webdav
-ExecStart=/usr/bin/node /home/purestory/webdav/backend/server.js
-Restart=on-failure
+Group=purestory
+WorkingDirectory=/home/purestory/webdav/backend
+ExecStart=/home/purestory/.nvm/versions/node/v20.3.0/bin/node /home/purestory/webdav/backend/server.js
+Restart=always
 RestartSec=10
-StandardOutput=syslog
-StandardError=syslog
-SyslogIdentifier=webdav-server
-Environment="NODE_ENV=development" "UV_THREADPOOL_SIZE=8"
+# 환경 변수 설정 (각 줄에 하나씩)
+Environment="NODE_ENV=development"
+Environment="UV_THREADPOOL_SIZE=8"
+# Environment="NODE_OPTIONS=--no-experimental-io-uring" # io_uring 관련 설정은 주석 처리 (사용자 요청)
+# 로그 기록 복원
+StandardOutput=append:/home/purestory/webdav/backend/logs/server.log
+StandardError=append:/home/purestory/webdav/backend/logs/error.log
 
 [Install]
 WantedBy=multi-user.target 
