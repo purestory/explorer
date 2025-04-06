@@ -126,3 +126,6 @@ dist
 
 # Temporary files
 backend/tmp/
+
+# Test files
+frontend/upload-test/

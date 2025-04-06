@@ -162,28 +162,42 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// 임시 업로드 디렉토리 설정 - 복구
+// 임시 업로드 디렉토리 설정
 const TMP_UPLOAD_DIR = path.join(__dirname, 'tmp');
 if (!fs.existsSync(TMP_UPLOAD_DIR)) {
   fs.mkdirSync(TMP_UPLOAD_DIR, { recursive: true });
 }
 
-// Multer 설정 (Disk Storage 사용) - 복구
+// Multer 설정 (Disk Storage 사용 - 요청별 임시 폴더 생성)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, TMP_UPLOAD_DIR);
+    // 각 요청별 고유 임시 디렉토리 생성
+    if (!req.uniqueTmpDir) {
+      const uniqueId = Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+      req.uniqueTmpDir = path.join(TMP_UPLOAD_DIR, uniqueId);
+      try {
+        fs.mkdirSync(req.uniqueTmpDir, { recursive: true });
+        logWithIP(`[Multer] 요청별 임시 디렉토리 생성: ${req.uniqueTmpDir}`, req);
+      } catch (mkdirError) {
+        errorLogWithIP('[Multer] 임시 디렉토리 생성 오류', mkdirError, req);
+        return cb(mkdirError);
+      }
+    }
+    cb(null, req.uniqueTmpDir);
   },
   filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + Math.random().toString(36).substring(2, 15) + '-' + Buffer.from(file.originalname, 'latin1').toString('utf8'));
+    // 파일명 충돌 방지 (고유 디렉토리 사용으로 단순화 가능하나 일단 유지)
+    const safeOriginalName = Buffer.from(file.originalname, 'latin1').toString('utf8')
+                                   .replace(/[\\/:*?"<>|]/g, '_'); // 혹시 모를 특수문자 제거
+    cb(null, Date.now() + '-' + Math.random().toString(36).substring(2, 9) + '-' + safeOriginalName);
   }
 });
 
 const uploadMiddleware = multer({
-  storage: storage, // diskStorage 사용으로 복구
+  storage: storage,
   limits: {
     fileSize: 10 * 1024 * 1024 * 1024, // 10GB
-    fieldSize: 50 * 1024 * 1024, // 텍스트 필드 크기 제한 50MB로 증가
-    // 대량 파일 처리 안정성을 위해 files, fields 제한은 일단 제거 (필요 시 추가)
+    fieldSize: 50 * 1024 * 1024 // 50MB (이전 설정 유지)
   }
 });
 
@@ -228,7 +242,6 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
   // 2. 처리 변수 초기화 (이전 상태로 복구)
   const processedFiles = [];
   const errors = [];
-  const cleanupFiles = [];
 
   // 파일명 길이 제한 함수 (바이트 기준)
   function truncateFileName(filename) {
@@ -317,8 +330,8 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
     logWithIP(`[Upload Loop] 처리 시작: ${fileInfo.originalName}, 상대 경로: ${fileInfo.relativePath}`, req);
 
     const file = req.files.find(f => {
-       const originalName = Buffer.from(f.originalname, 'latin1').toString('utf8');
-       return originalName === fileInfo.originalName;
+       // 파일명 직접 비교 (인코딩 변환 제거)
+       return f.originalname === fileInfo.originalName;
     });
 
     if (!file || !file.path) {
@@ -327,7 +340,6 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
         continue;
     }
     logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName}, 임시 경로: ${file.path}`, req);
-    cleanupFiles.push(file.path);
 
     try {
       let relativeFilePath = fileInfo.relativePath;
@@ -384,14 +396,23 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
     logWithIP(`[Upload Loop] 처리 완료: ${fileInfo.originalName}`, req);
   } // end for loop
 
-  // 5. 임시 파일 삭제 (이전 상태로 복구)
-  Promise.all(cleanupFiles.map(filePath => {
-    return fs.promises.unlink(filePath).catch(err => {
-      errorLogWithIP(`임시 파일 삭제 오류: ${filePath}`, err, req);
+  // 5. 요청별 임시 폴더 삭제
+  if (req.uniqueTmpDir) {
+    const tempDirToDelete = req.uniqueTmpDir;
+    logWithIP(`[Upload Cleanup] 임시 폴더 삭제 시도: ${tempDirToDelete}`, req);
+    fs.rm(tempDirToDelete, { recursive: true, force: true }, (err) => {
+      if (err) {
+        // ENOENT 오류는 무시 (이미 삭제되었거나 존재하지 않을 수 있음)
+        if (err.code !== 'ENOENT') {
+          errorLogWithIP(`임시 폴더 삭제 중 오류 발생: ${tempDirToDelete}`, err, req);
+        }
+      } else {
+        logWithIP(`[Upload Cleanup] 임시 폴더 삭제 완료: ${tempDirToDelete}`, req);
+      }
     });
-  })).then(() => {
-    logWithIP('임시 업로드 파일 정리 완료', req);
-  });
+  } else {
+    logWithIP(`[Upload Cleanup] 삭제할 임시 폴더 정보 없음`, req);
+  }
 
   // 6. 최종 응답 전송 (이전 상태로 복구)
   if (errors.length > 0) {
