@@ -6,8 +6,27 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const { execSync } = require('child_process');
 const { fork } = require('child_process');
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
 const app = express();
 const PORT = process.env.PORT || 3333;
+
+// --- 전역 오류 처리기 추가 ---
+process.on('uncaughtException', (error) => {
+  errorLog('처리되지 않은 예외 발생:', error);
+  // 여기서는 로깅만 하고, 아래 SIGTERM 핸들러에서 정리 및 종료를 유도
+  // 필요한 경우 추가적인 즉시 정리 작업 수행 가능
+  // process.exit(1); // 즉시 종료 대신 아래 SIGTERM 핸들러에 맡김
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  errorLog('처리되지 않은 Promise 거부 발생:', reason);
+  // 여기서는 로깅만 하고, 아래 SIGTERM 핸들러에서 정리 및 종료를 유도
+  // process.exit(1); // 즉시 종료 대신 아래 SIGTERM 핸들러에 맡김
+});
+
+// --- 활성 워커 프로세스 관리 --- 
+const activeWorkers = new Set(); // 활성 워커의 참조를 저장할 Set
 
 // 로그 디렉토리 확인 및 생성
 const LOGS_DIRECTORY = path.join(__dirname, 'logs');
@@ -143,11 +162,42 @@ const MAX_STORAGE_SIZE = 100 * 1024 * 1024 * 1024; // 100GB in bytes
 const MAX_FILENAME_BYTES = 229;
 const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로 설정
 
-// 디스크 사용량 확인 함수
-function getDiskUsage() {
+async function getDiskUsage() {
+  const forceLogLevel = 'minimal'; // 로그 레벨 무시하고 항상 출력
+  let commandOutput = null; // exec 결과 저장 변수
+
   try {
-    const output = execSync(`du -sb ${ROOT_DIRECTORY}`).toString();
-    const usedBytes = parseInt(output.split('\t')[0]);
+    const command = `du -sb ${ROOT_DIRECTORY}`;
+    log(`[DiskUsage] Executing command: ${command}`, forceLogLevel);
+
+    // *** exec 결과 전체 로깅 ***
+    commandOutput = await exec(command);
+    log(`[DiskUsage] exec result: ${JSON.stringify(commandOutput)}`, forceLogLevel); 
+
+    const { stdout, stderr } = commandOutput;
+    const stdoutTrimmed = stdout ? stdout.trim() : ''; // stdout이 null/undefined일 경우 대비
+
+    log(`[DiskUsage] Raw stdout: [${stdoutTrimmed}]`, forceLogLevel);
+    if (stderr) {
+      errorLog(`[DiskUsage] du command stderr: [${stderr.trim()}]`); 
+    }
+
+    // 파싱 시도
+    const outputString = stdoutTrimmed;
+    const match = outputString.match(/^(\d+)/); 
+    const parsedValue = match ? match[1] : null; // 파싱된 숫자 문자열
+    log(`[DiskUsage] Parsed value string: ${parsedValue}`, forceLogLevel);
+
+    const usedBytes = parsedValue ? parseInt(parsedValue, 10) : NaN;
+    log(`[DiskUsage] Parsed usedBytes (number): ${usedBytes}`, forceLogLevel);
+
+    if (isNaN(usedBytes)) {
+      errorLog('[DiskUsage] 디스크 사용량 파싱 오류: 숫자로 변환 실패', { stdout: outputString });
+      throw new Error('Failed to parse disk usage output.');
+    }
+
+    log(`[DiskUsage] 디스크 사용량 조회 (파싱 성공): ${usedBytes} bytes`, forceLogLevel);
+
     return {
       used: usedBytes,
       total: MAX_STORAGE_SIZE,
@@ -155,7 +205,11 @@ function getDiskUsage() {
       percent: Math.round((usedBytes / MAX_STORAGE_SIZE) * 100)
     };
   } catch (error) {
-    errorLog('디스크 사용량 확인 오류:', error);
+    errorLog('[DiskUsage] 디스크 사용량 확인 오류:', { 
+        message: error.message, 
+        stack: error.stack,
+        execResult: commandOutput // 오류 발생 시 exec 결과도 로깅
+    });
     return {
       used: 0,
       total: MAX_STORAGE_SIZE,
@@ -164,6 +218,7 @@ function getDiskUsage() {
     };
   }
 }
+
 
 // WebDAV 서버 설정
 const server = new webdav.WebDAVServer({
@@ -294,9 +349,9 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-// 파일 업로드 API 수정 (diskStorage 로직으로 복구)
+// 파일 업로드 API 수정 (비동기화)
 app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
-  // *** 전체 핸들러 로직을 감싸는 try 블록 시작 ***
+  // *** 전체 핸들러 로직을 감싸는 try 블록 시작 (기존 유지) ***
   try { 
     // minimal 레벨 로그: 요청 시작/종료는 로깅 미들웨어에서 처리
 
@@ -422,40 +477,34 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
       return { path: truncatedPath, truncated: true };
     }
 
-    // 4. 파일 처리 루프 (이전 상태로 복구)
-    for (const fileInfo of fileInfoArray) {
+    // 4. 파일 처리 루프 (내부 비동기화)
+    // *** 루프를 Promise.all과 map으로 변경하여 병렬 처리 시도 ***
+    const uploadPromises = fileInfoArray.map(async (fileInfo) => {
       logWithIP(`[Upload Loop] 처리 시작: ${fileInfo.originalName}, 상대 경로: ${fileInfo.relativePath}`, req, 'debug');
-
-      // 파일 처리 루프: 인덱스 기반으로 파일 찾기
+      
       const expectedFieldName = `file_${fileInfo.index}`;
       const file = req.files.find(f => f.fieldname === expectedFieldName);
 
-      // 로그 추가: 찾은 파일 정보 확인
-      if (file) {
-        logWithIP(`[File Index Match] Found file for index ${fileInfo.index}: fieldname='${file.fieldname}', originalname='${file.originalname}' (may be corrupted)`, req, 'debug');
-      } else {
-        logWithIP(`[File Index Match] File NOT found for index ${fileInfo.index} (expected fieldname: ${expectedFieldName})`, req, 'debug');
-      }
-
       if (!file || !file.path) {
-          // 오류 메시지에 정규화된 이름도 포함하여 디버깅 용이성 향상 (선택 사항)
-          errorLogWithIP(`[Upload Loop Error] 업로드된 파일 목록에서 정보를 찾을 수 없음: Original='${fileInfo.originalName}', Index=${fileInfo.index}`, null, req);
-          errors.push(`파일 ${fileInfo.originalName} (Index: ${fileInfo.index})의 정보를 찾을 수 없거나 임시 파일이 없습니다.`); // 수정: 로그 레벨 제거
-          continue; // 다음 파일 처리로 넘어감
+        errorLogWithIP(`[Upload Loop Error] 업로드된 파일 목록에서 정보를 찾을 수 없음: Original='${fileInfo.originalName}', Index=${fileInfo.index}`, null, req);
+        // 병렬 처리 중 오류 발생 시, 특정 형태로 반환하여 나중에 필터링
+        return { error: `파일 ${fileInfo.originalName} (Index: ${fileInfo.index})의 정보를 찾을 수 없거나 임시 파일이 없습니다.` }; 
       }
       logWithIP(`[Upload Loop] 파일 객체 찾음: ${fileInfo.originalName} (Index: ${fileInfo.index}), 임시 경로: ${file.path}`, req, 'debug');
 
-      try { // *** 개별 파일 처리 try 블록 (기존 유지) ***
+      // *** 개별 파일 처리 로직 시작 (비동기) ***
+      let temporaryFilePath = file.path; // 임시 파일 경로 저장
+      try {
         let relativeFilePath = fileInfo.relativePath;
         const originalFileName = path.basename(relativeFilePath);
         let finalFileName = originalFileName;
         logWithIP(`[Upload Try] 파일명 처리 시작: Original='${originalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
 
         if (Buffer.byteLength(originalFileName) > MAX_FILENAME_BYTES) {
-            finalFileName = truncateFileName(originalFileName);
-            const dirName = path.dirname(relativeFilePath);
-            relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
-            logWithIP(`[Upload Try] 파일명 길이 제한 적용됨: Final='${finalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
+          finalFileName = truncateFileName(originalFileName);
+          const dirName = path.dirname(relativeFilePath);
+          relativeFilePath = dirName === '.' ? finalFileName : path.join(dirName, finalFileName);
+          logWithIP(`[Upload Try] 파일명 길이 제한 적용됨: Final='${finalFileName}', Relative='${relativeFilePath}'`, req, 'debug');
         }
 
         let destinationPath = path.join(rootUploadDir, relativeFilePath);
@@ -463,27 +512,39 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
 
         const pathResult = checkAndTruncatePath(destinationPath);
         if (pathResult.truncated) {
-            destinationPath = pathResult.path;
-            relativeFilePath = destinationPath.substring(rootUploadDir.length).replace(/^\\+|^\//, '');
-            logWithIP(`[Upload Try] 전체 경로 길이 제한 적용됨: Final Dest='${destinationPath}', Relative='${relativeFilePath}'`, req, 'debug');
+          destinationPath = pathResult.path;
+          relativeFilePath = destinationPath.substring(rootUploadDir.length).replace(/^\\+|^\//, '');
+          logWithIP(`[Upload Try] 전체 경로 길이 제한 적용됨: Final Dest='${destinationPath}', Relative='${relativeFilePath}'`, req, 'debug');
         }
 
         const destinationDir = path.dirname(destinationPath);
         logWithIP(`[Upload Try] 최종 목적지 디렉토리: ${destinationDir}`, req, 'debug');
 
-        if (!fs.existsSync(destinationDir)) {
-            fs.mkdirSync(destinationDir, { recursive: true });
-            fs.chmodSync(destinationDir, 0o777);
+        // *** 디렉토리 존재 확인 및 생성 (비동기) ***
+        try {
+          await fs.promises.access(destinationDir);
+        } catch (accessError) {
+          if (accessError.code === 'ENOENT') {
+            // 디렉토리 없으면 생성
+            await fs.promises.mkdir(destinationDir, { recursive: true });
+            await fs.promises.chmod(destinationDir, 0o777);
             logWithIP(`[Upload Try] 하위 디렉토리 생성됨: ${destinationDir}`, req, 'debug');
+          } else {
+            // 기타 접근 오류
+            throw accessError; 
+          }
         }
 
         logWithIP(`[Upload Try] 최종 저장 경로 확인: ${destinationPath}`, req, 'debug');
 
-        fs.copyFileSync(file.path, destinationPath);
-        fs.chmodSync(destinationPath, 0o666);
+        // *** 파일 복사 및 권한 설정 (비동기) ***
+        await fs.promises.copyFile(temporaryFilePath, destinationPath);
+        await fs.promises.chmod(destinationPath, 0o666);
         logWithIP(`[Upload Try] 파일 저장 완료 (Disk): ${destinationPath}`, req, 'debug');
 
-        processedFiles.push({
+        // 성공 정보 반환
+        return {
+          success: true,
           name: path.basename(destinationPath),
           originalName: fileInfo.originalName,
           relativePath: relativeFilePath,
@@ -491,53 +552,50 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
           path: baseUploadPath,
           mimetype: file.mimetype,
           fullPath: destinationPath
-        });
+        };
 
-      } catch (writeError) { // *** 개별 파일 처리 catch 블록 (기존 유지) ***
-          errorLogWithIP(`[Upload Write Error] 파일 처리 중 오류 발생 (${fileInfo.originalName}):`, writeError, req);
-          // 원본 파일 이름과 오류 메시지를 포함하여 errors 배열에 추가
-          errors.push(`${fileInfo.originalName}: ${writeError.message}`); 
-          // 임시 파일 삭제 시도 (실패해도 계속 진행)
-          if (file && file.path && fs.existsSync(file.path)) {
-            try {
-              fs.unlinkSync(file.path);
-              logWithIP(`[Upload Write Error] 임시 파일 삭제 완료: ${file.path}`, req, 'debug');
-            } catch (unlinkErr) {
-              errorLogWithIP(`[Upload Write Error] 임시 파일 삭제 실패 (${file.path}):`, unlinkErr, req);
-            }
-          }
-      } finally { // *** 개별 파일 처리 finally 블록 (추가) ***
-        // 성공/실패 여부와 관계없이 임시 파일 삭제 (writeError 발생 안했을 경우)
-        if (file && file.path && fs.existsSync(file.path)) {
-          // catch 블록에서 이미 삭제 시도했을 수 있으므로 다시 확인
+      } catch (writeError) {
+        errorLogWithIP(`[Upload Write Error] 파일 처리 중 오류 발생 (${fileInfo.originalName}):`, writeError, req);
+        // 실패 정보 반환
+        return { error: `${fileInfo.originalName}: ${writeError.message}` };
+      } finally {
+        // *** 임시 파일 삭제 (비동기) ***
+        if (temporaryFilePath) { // 임시 파일 경로가 유효한 경우
           try {
-            fs.unlinkSync(file.path);
-            logWithIP(`[Upload Loop Finally] 임시 파일 정리 완료: ${file.path}`, req, 'debug');
+            await fs.promises.unlink(temporaryFilePath);
+            logWithIP(`[Upload Loop Finally] 임시 파일 정리 완료: ${temporaryFilePath}`, req, 'debug');
           } catch (unlinkErr) {
-            // finally 블록에서는 오류를 다시 던지지 않고 로깅만 함
-            errorLogWithIP(`[Upload Loop Finally] 임시 파일 정리 실패 (${file.path}):`, unlinkErr, req);
+            if (unlinkErr.code !== 'ENOENT') { // 파일이 이미 없는 경우는 무시
+              errorLogWithIP(`[Upload Loop Finally] 임시 파일 정리 실패 (${temporaryFilePath}):`, unlinkErr, req);
+            }
           }
         }
       }
-    } // End of for loop
+    }); // End of map function
 
-    // 5. 결과 응답 (이전 상태로 복구)
-    if (errors.length > 0) {
-        logWithIP(`[Upload Finish] ${processedFiles.length}개 파일 성공, ${errors.length}개 파일 실패`, req, 'warn');
-        // 실패한 파일 목록을 포함하여 응답
-        return res.status(207).json({ // Multi-Status 응답
-            message: `일부 파일 업로드 실패 (${errors.length}개).`,
-            processedFiles: processedFiles,
-            errors: errors 
-        });
+    // *** 모든 파일 처리 Promise가 완료될 때까지 기다림 ***
+    const results = await Promise.all(uploadPromises);
+
+    // 5. 결과 집계 및 응답
+    const processedFilesResult = results.filter(r => r && r.success);
+    const errorsResult = results.filter(r => r && r.error).map(r => r.error);
+
+    if (errorsResult.length > 0) {
+      logWithIP(`[Upload Finish] ${processedFilesResult.length}개 파일 성공, ${errorsResult.length}개 파일 실패`, req, 'warn');
+      return res.status(207).json({ 
+        message: `일부 파일 업로드 실패 (${errorsResult.length}개).`,
+        processedFiles: processedFilesResult,
+        errors: errorsResult 
+      });
     } else {
-        logWithIP(`[Upload Finish] 모든 파일(${processedFiles.length}개) 성공적으로 업로드됨`, req, 'info');
-        return res.status(201).json({ 
-            message: '모든 파일이 성공적으로 업로드되었습니다.',
-            processedFiles: processedFiles 
-        });
+      logWithIP(`[Upload Finish] 모든 파일(${processedFilesResult.length}개) 성공적으로 업로드됨`, req, 'info');
+      return res.status(201).json({ 
+        message: '모든 파일이 성공적으로 업로드되었습니다.',
+        processedFiles: processedFilesResult 
+      });
     }
-  // *** 전체 핸들러 로직을 감싸는 catch 블록 시작 ***
+
+  // *** 전체 핸들러 로직을 감싸는 catch 블록 (기존 유지) ***
   } catch (error) {
     // 예상치 못한 모든 오류 로깅
     errorLogWithIP('[/api/upload] 처리 중 예상치 못한 오류 발생:', error, req);
@@ -617,13 +675,15 @@ function formatDate(dateString) {
 app.use('/webdav', webdav.extensions.express('/webdav', server));
 
 // 디스크 사용량 확인 API
-app.get('/api/disk-usage', (req, res) => {
+app.get('/api/disk-usage', async (req, res) => { // *** async 추가 ***
   try {
-    const diskUsage = getDiskUsage();
-    log(`디스크 사용량 조회: ${formatFileSize(diskUsage.used)} / ${formatFileSize(diskUsage.total)} (${diskUsage.percent}%)`, 'info');
-    res.json(diskUsage);
+    // *** await 추가 ***
+    const diskUsage = await getDiskUsage(); 
+    // 로그 메시지에는 formatBytes 적용된 값이 들어가므로 이전 로그는 제거하거나 debug 레벨로 변경 고려
+    // log(`디스크 사용량 조회: ${formatFileSize(diskUsage.used)} / ${formatFileSize(diskUsage.total)} (${diskUsage.percent}%)`, 'info'); // 일단 주석 처리
+    res.json(diskUsage); // 실제 결과 객체 반환
   } catch (error) {
-    errorLog('디스크 사용량 조회 오류:', error);
+    errorLog('디스크 사용량 조회 API 오류:', error); // 오류 로그 메시지 명확화
     res.status(500).json({
       error: '디스크 사용량 조회 중 오류가 발생했습니다.'
     });
@@ -816,26 +876,34 @@ app.post('/api/lock/:path(*)', (req, res) => {
   }
 });
 
-// API 라우트 설정 추가
-// 파일 목록 가져오기
+// 파일 목록 조회 또는 파일 다운로드
 app.get('/api/files/*', async (req, res) => {
   try {
     // URL 디코딩하여 한글 경로 처리
     let requestPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, requestPath);
     
-    logWithIP(`파일 목록 요청: ${fullPath}`, req, 'info');
+    logWithIP(`파일 목록/다운로드 요청: ${fullPath}`, req, 'info');
 
-    // 경로가 존재하는지 확인
-    if (!fs.existsSync(fullPath)) {
-      errorLogWithIP(`경로를 찾을 수 없습니다: ${fullPath}`, null, req);
-      return res.status(404).send('경로를 찾을 수 없습니다.');
+    let stats;
+    try {
+      // *** 비동기 방식으로 경로 존재 및 정보 확인 ***
+      stats = await fs.promises.stat(fullPath);
+    } catch (error) {
+      // 존재하지 않는 경우 404
+      if (error.code === 'ENOENT') {
+        errorLogWithIP(`경로를 찾을 수 없습니다: ${fullPath}`, null, req);
+        return res.status(404).send('경로를 찾을 수 없습니다.');
+      } else {
+        // 기타 stat 오류
+        errorLogWithIP(`파일/디렉토리 정보 확인 오류: ${fullPath}`, error, req);
+        return res.status(500).send('서버 오류가 발생했습니다.');
+      }
     }
 
     // 디렉토리인지 확인
-    const stats = fs.statSync(fullPath);
     if (!stats.isDirectory()) {
-      // 파일인 경우 처리
+      // 파일인 경우 처리 (기존 다운로드 로직 유지)
       logWithIP(`파일 다운로드 요청: ${fullPath}`, req, 'info');
       
       // 파일명 추출
@@ -874,17 +942,12 @@ app.get('/api/files/*', async (req, res) => {
       
       // 직접 볼 수 있는 파일인지 확인
       if (viewableTypes.includes(fileExt)) {
-        // Content-Type 설정
         res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
-        // 인라인 표시 설정 (브라우저에서 직접 열기)
         res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        // 파일 스트림 전송
-        fs.createReadStream(fullPath).pipe(res);
+        fs.createReadStream(fullPath).pipe(res); // 스트림 방식은 비동기
       } else {
-        // 일반 다운로드 파일
-        // Content-Disposition 헤더에 UTF-8로 인코딩된 파일명 설정
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        res.download(fullPath, fileName, (err) => {
+        res.download(fullPath, fileName, (err) => { // res.download도 비동기 처리
           if (err) {
             errorLogWithIP(`파일 다운로드 중 오류: ${fullPath}`, err, req);
           } else {
@@ -895,25 +958,37 @@ app.get('/api/files/*', async (req, res) => {
       return;
     }
 
-    // 디렉토리 내용 읽기
-    const items = fs.readdirSync(fullPath);
-    const fileItems = items.map(item => {
+    // 디렉토리 내용 읽기 (비동기)
+    const items = await fs.promises.readdir(fullPath);
+    
+    // 각 항목의 정보를 비동기적으로 가져오기 (Promise.all 사용)
+    const fileItemsPromises = items.map(async (item) => {
       const itemPath = path.join(fullPath, item);
-      const itemStats = fs.statSync(itemPath);
-      const isDirectory = itemStats.isDirectory();
-
-      return {
-        name: item,
-        isFolder: isDirectory,
-        size: itemStats.size,
-        modifiedTime: itemStats.mtime.toISOString()
-      };
+      try {
+        const itemStats = await fs.promises.stat(itemPath);
+        const isDirectory = itemStats.isDirectory();
+        return {
+          name: item,
+          isFolder: isDirectory,
+          size: itemStats.size,
+          modifiedTime: itemStats.mtime.toISOString()
+        };
+      } catch (itemError) {
+        // 개별 항목 stat 오류 처리 (예: 권한 문제)
+        errorLogWithIP(`항목 정보 확인 오류: ${itemPath}`, itemError, req);
+        return null; // 오류 발생 시 null 반환 또는 다른 방식으로 처리
+      }
     });
+
+    // 모든 Promise가 완료될 때까지 기다린 후, null이 아닌 항목만 필터링
+    const fileItems = (await Promise.all(fileItemsPromises)).filter(item => item !== null);
 
     logWithIP(`파일 목록 반환: ${fileItems.length}개 항목`, req, 'info');
     res.json(fileItems);
+
   } catch (error) {
-    errorLogWithIP('파일 목록 오류:', error, req);
+    // 핸들러 전체의 오류 처리
+    errorLogWithIP('파일 목록 API 오류:', error, req);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
@@ -1074,16 +1149,33 @@ app.delete('/api/files/*', async (req, res) => {
 
       const workerScript = path.join(__dirname, 'backgroundWorker.js');
       const worker = fork(workerScript, ['delete', fullPath], {
-        detached: true, // 부모 프로세스와 분리
-        stdio: 'ignore'  // 워커의 출력을 메인 프로세스에 연결하지 않음
+        stdio: 'pipe'  // 변경: 워커 출력을 pipe로 연결 (필요시 로깅 가능)
+      });
+      activeWorkers.add(worker); // 활성 워커 Set에 추가
+      log(`[Worker Management] 워커 생성됨 (PID: ${worker.pid}, 작업: delete). 활성 워커 수: ${activeWorkers.size}`, 'debug');
+
+      worker.stdout.on('data', (data) => {
+        log(`[Worker Output - delete:${worker.pid}] ${data.toString().trim()}`, 'debug');
+      });
+      worker.stderr.on('data', (data) => {
+        errorLog(`[Worker Error - delete:${worker.pid}] ${data.toString().trim()}`);
       });
 
       worker.on('error', (err) => {
-        errorLogWithIP(`백그라운드 워커 생성 오류: ${fullPath}`, err, req);
+        errorLogWithIP(`백그라운드 워커 실행 오류 (delete): ${fullPath}`, err, req);
+        activeWorkers.delete(worker); // 오류 발생 시 Set에서 제거
+        log(`[Worker Management] 워커 오류로 제거 (PID: ${worker.pid}). 활성 워커 수: ${activeWorkers.size}`, 'debug');
       });
 
-      worker.unref(); // 부모 프로세스가 워커 종료를 기다리지 않도록 함
-
+      worker.on('exit', (code, signal) => {
+        activeWorkers.delete(worker); // 정상/비정상 종료 시 Set에서 제거
+        if (signal) {
+          log(`[Worker Management] 워커가 신호 ${signal}로 종료됨 (PID: ${worker.pid}). 활성 워커 수: ${activeWorkers.size}`, 'info');
+        } else {
+          log(`[Worker Management] 워커 종료됨 (PID: ${worker.pid}, 코드: ${code}). 활성 워커 수: ${activeWorkers.size}`, 'debug');
+        }
+      });
+      
       // --- 즉시 응답 (202 Accepted) ---
       res.status(202).send('삭제 작업이 백그라운드에서 시작되었습니다.');
 
@@ -1100,7 +1192,7 @@ app.delete('/api/files/*', async (req, res) => {
     // --- 기본 검사 종료 ---
 
   } catch (error) {
-    // 핸들러 자체의 예외 처리
+    // 핸들러 자체의 오류 처리
     errorLogWithIP('삭제 API 핸들러 오류:', error, req);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
@@ -1124,14 +1216,32 @@ app.post('/api/folders', express.json(), (req, res) => {
         logWithIP(`백그라운드 폴더 생성 작업 시작 요청: ${fullPath}`, req, 'info');
         const workerScript = path.join(__dirname, 'backgroundWorker.js');
         const worker = fork(workerScript, ['create', fullPath], {
-            detached: true,
-            stdio: 'ignore'
+          stdio: 'pipe'  // 변경
+        });
+        activeWorkers.add(worker);
+        log(`[Worker Management] 워커 생성됨 (PID: ${worker.pid}, 작업: create). 활성 워커 수: ${activeWorkers.size}`, 'debug');
+
+        worker.stdout.on('data', (data) => {
+          log(`[Worker Output - create:${worker.pid}] ${data.toString().trim()}`, 'debug');
+        });
+        worker.stderr.on('data', (data) => {
+          errorLog(`[Worker Error - create:${worker.pid}] ${data.toString().trim()}`);
         });
 
         worker.on('error', (err) => {
             errorLogWithIP(`백그라운드 워커 생성 오류 (폴더 생성): ${fullPath}`, err, req);
+            activeWorkers.delete(worker);
+            log(`[Worker Management] 워커 오류로 제거 (PID: ${worker.pid}). 활성 워커 수: ${activeWorkers.size}`, 'debug');
         });
-        worker.unref();
+
+        worker.on('exit', (code, signal) => {
+          activeWorkers.delete(worker);
+          if (signal) {
+            log(`[Worker Management] 워커가 신호 ${signal}로 종료됨 (PID: ${worker.pid}). 활성 워커 수: ${activeWorkers.size}`, 'info');
+          } else {
+            log(`[Worker Management] 워커 종료됨 (PID: ${worker.pid}, 코드: ${code}). 활성 워커 수: ${activeWorkers.size}`, 'debug');
+          }
+        });
 
         // 즉시 응답 (202 Accepted)
         res.status(202).send('폴더 생성 작업이 백그라운드에서 시작되었습니다.');
@@ -1152,6 +1262,33 @@ app.put('/api/log-level', (req, res) => {
     errorLogWithIP(`Invalid log level requested: ${level}`, null, req);
     res.status(400).json({ success: false, error: 'Invalid log level provided. Use minimal, info, or debug.' });
   }
+});
+
+// --- 서버 종료 처리 (SIGTERM 핸들러) ---
+process.on('SIGTERM', () => {
+  log('SIGTERM 신호 수신. 서버를 종료합니다.', 'minimal');
+
+  // 활성 워커 프로세스들에게 종료 신호 보내기
+  log(`활성 워커 ${activeWorkers.size}개에게 종료 신호를 보냅니다...`, 'info');
+  activeWorkers.forEach(worker => {
+    try {
+      // SIGKILL을 보내 즉시 종료 시도
+      if (!worker.killed) { // 이미 종료되지 않은 경우에만 시도
+        worker.kill('SIGKILL'); 
+        log(`워커 (PID: ${worker.pid})에게 SIGKILL 전송됨.`, 'debug');
+      }
+    } catch (err) {
+      errorLog(`워커 (PID: ${worker.pid})에게 종료 신호 전송 중 오류:`, err);
+    }
+  });
+
+  // 필요한 경우 추가적인 정리 작업 수행 (예: DB 연결 닫기 등)
+
+  // 잠시 대기 후 프로세스 종료 (워커 종료 시간을 약간 확보)
+  setTimeout(() => {
+    log('서버 프로세스 종료.', 'minimal');
+    process.exit(0); // 정상 종료
+  }, 1000); // 1초 대기 (필요에 따라 조정)
 });
 
 // 서버 시작

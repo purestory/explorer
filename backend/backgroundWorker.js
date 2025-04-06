@@ -19,6 +19,14 @@ function errorLog(message, error) {
   // 필요하다면 별도 로그 파일에 기록할 수도 있습니다.
 }
 
+// --- SIGTERM 핸들러 추가 ---
+process.on('SIGTERM', () => {
+  log('SIGTERM 신호 수신. 워커 프로세스를 종료합니다.');
+  // 필요한 경우, 진행 중인 작업을 정리하는 로직을 추가할 수 있지만,
+  // 파일 시스템 작업은 안전하게 중단하기 어려우므로 즉시 종료합니다.
+  process.exit(0); // 정상 종료 코드로 종료 (신호 수신은 정상적인 상황으로 간주)
+});
+
 // 메인 프로세스로부터 인자 받기 (0: node, 1: script path, 2: operation, 3: targetPath)
 const operation = process.argv[2];
 const targetPath = process.argv[3];
