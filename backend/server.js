@@ -5,6 +5,7 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const multer = require('multer');
 const { execSync } = require('child_process');
+const { fork } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3333;
 
@@ -1039,63 +1040,90 @@ app.put('/api/files/*', (req, res) => {
   }
 });
 
-// 파일/폴더 삭제 (비동기 처리로 수정)
+// 파일/폴더 삭제 (백그라운드 처리)
 app.delete('/api/files/*', async (req, res) => {
   try {
     const itemPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, itemPath);
 
-    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청`, req, 'info');
-    logWithIP(`삭제 요청: ${fullPath}`, req, 'info');
+    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청 (백그라운드 처리)`, req, 'info');
 
-    // --- 비동기 처리 시작 ---
+    // --- 기본 검사 (동기 또는 비동기 유지) ---
     try {
-      // 존재하는지 확인 (stat으로 대체, 없으면 에러 발생)
-      const stats = await fs.promises.stat(fullPath); // 비동기 stat 사용
+      // 존재 여부만 확인 (타입은 워커에서 처리)
+      await fs.promises.access(fullPath, fs.constants.F_OK);
 
-      // lockedFolders.json 파일에서 잠긴 폴더 목록 로드 (동기 방식 유지 가능)
-      let lockedFolders = [];
-      const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
-      if (fs.existsSync(lockedFoldersPath)) {
-        try {
-          lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
-        } catch (e) {
-          errorLogWithIP('잠긴 폴더 목록 로드 오류:', e, req);
-          lockedFolders = [];
-        }
-      }
+      // --- 백그라운드 작업 시작 ---
+      logWithIP(`백그라운드 삭제 작업 시작 요청: ${fullPath}`, req, 'info');
 
-      // 현재 경로가 잠긴 폴더 자체인지 확인
-      const isLocked = lockedFolders.some(lockedPath => itemPath === lockedPath);
-      if (isLocked) {
-        errorLogWithIP(`잠긴 폴더 삭제 시도: ${fullPath}`, null, req);
-        // 403 Forbidden 반환
-        return res.status(403).send('잠긴 폴더는 삭제할 수 없습니다.');
-      }
+      const workerScript = path.join(__dirname, 'backgroundWorker.js');
+      const worker = fork(workerScript, ['delete', fullPath], {
+        detached: true, // 부모 프로세스와 분리
+        stdio: 'ignore'  // 워커의 출력을 메인 프로세스에 연결하지 않음
+      });
 
-      // 비동기 삭제 실행 (폴더/파일 구분 없이 rm 사용 가능)
-      await fs.promises.rm(fullPath, { recursive: true, force: true });
-      logWithIP(`삭제 완료: ${fullPath}`, req, 'info');
+      worker.on('error', (err) => {
+        errorLogWithIP(`백그라운드 워커 생성 오류: ${fullPath}`, err, req);
+      });
 
-      res.status(200).send('삭제되었습니다.');
+      worker.unref(); // 부모 프로세스가 워커 종료를 기다리지 않도록 함
+
+      // --- 즉시 응답 (202 Accepted) ---
+      res.status(202).send('삭제 작업이 백그라운드에서 시작되었습니다.');
 
     } catch (error) {
-      // 파일/폴더가 없는 경우 (stat 에러)
+      // 파일/폴더가 없는 경우 등 사전 검사 오류
       if (error.code === 'ENOENT') {
-        errorLogWithIP(`삭제 대상 없음: ${fullPath}`, error, req);
+        errorLogWithIP(`삭제 대상 없음 (사전 검사): ${fullPath}`, error, req);
         return res.status(404).send('파일 또는 폴더를 찾을 수 없습니다.');
       }
-      // 기타 삭제 오류
-      errorLogWithIP(`삭제 오류: ${fullPath}`, error, req);
+      // 기타 사전 검사 오류
+      errorLogWithIP(`삭제 요청 처리 중 오류 (사전 검사): ${fullPath}`, error, req);
       return res.status(500).send(`서버 오류가 발생했습니다: ${error.message}`);
     }
-    // --- 비동기 처리 종료 ---
+    // --- 기본 검사 종료 ---
 
   } catch (error) {
-    // 핸들러 자체의 예외 처리 (예: decodeURIComponent 오류 등)
+    // 핸들러 자체의 예외 처리
     errorLogWithIP('삭제 API 핸들러 오류:', error, req);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
+});
+
+// 폴더 생성 API (백그라운드 처리 예시)
+app.post('/api/folders', express.json(), (req, res) => {
+    try {
+        const { folderPath, folderName } = req.body;
+        // 폴더 이름 유효성 검사 강화 (슬래시 등 경로 문자 방지)
+        if (!folderName || /[\\/:*?"<>|]/.test(folderName) || folderName.trim() !== folderName) {
+            return res.status(400).send('잘못된 폴더 이름입니다.');
+        }
+
+        const relativePath = folderPath ? path.join(folderPath, folderName) : folderName;
+        const fullPath = path.join(ROOT_DIRECTORY, relativePath);
+
+        logWithIP(`[Create Folder Request] '${relativePath}' 생성 요청 (백그라운드 처리)`, req, 'info');
+
+        // 백그라운드 작업 시작
+        logWithIP(`백그라운드 폴더 생성 작업 시작 요청: ${fullPath}`, req, 'info');
+        const workerScript = path.join(__dirname, 'backgroundWorker.js');
+        const worker = fork(workerScript, ['create', fullPath], {
+            detached: true,
+            stdio: 'ignore'
+        });
+
+        worker.on('error', (err) => {
+            errorLogWithIP(`백그라운드 워커 생성 오류 (폴더 생성): ${fullPath}`, err, req);
+        });
+        worker.unref();
+
+        // 즉시 응답 (202 Accepted)
+        res.status(202).send('폴더 생성 작업이 백그라운드에서 시작되었습니다.');
+
+    } catch (error) {
+        errorLogWithIP('폴더 생성 API 핸들러 오류:', error, req);
+        res.status(500).send('서버 오류가 발생했습니다.');
+    }
 });
 
 // 로그 레벨 변경 API
