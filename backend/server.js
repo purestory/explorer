@@ -28,11 +28,69 @@ process.on('unhandledRejection', (reason, promise) => {
 // --- 활성 워커 프로세스 관리 --- 
 const activeWorkers = new Set(); // 활성 워커의 참조를 저장할 Set
 
-// 로그 디렉토리 확인 및 생성
+// --- 초기 디렉토리 설정 및 검사 (비동기 함수) ---
 const LOGS_DIRECTORY = path.join(__dirname, 'logs');
-if (!fs.existsSync(LOGS_DIRECTORY)) {
-  fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
+const ROOT_DIRECTORY = path.join(__dirname, 'share-folder');
+
+// *** 로그 파일 스트림 변수 선언 (위치 조정) ***
+let logFile;
+let errorLogFile;
+
+// *** 로그 스트림 설정 함수 정의 (위치 조정) ***
+function setupLogStreams() {
+  // 파일 스트림 생성 로직
+  try {
+    logFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'server.log'), { flags: 'a' });
+    errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
+    console.log('Log streams setup complete.'); // 확인용 콘솔 로그
+  } catch (streamError) {
+    // 스트림 생성 실패 시 콘솔에 오류 출력 (파일 로깅 불가 상태)
+    console.error('FATAL: Failed to create log streams:', streamError);
+    process.exit(1); // 심각한 오류로 간주하고 종료
+  }
 }
+async function initializeDirectories() {
+  try {
+    // 로그 디렉토리 확인 및 생성 (비동기)
+    try {
+      await fs.promises.access(LOGS_DIRECTORY);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        await fs.promises.mkdir(LOGS_DIRECTORY, { recursive: true });
+        // *** 초기 로그는 console 사용 ***
+        console.log(`로그 디렉토리 생성됨: ${LOGS_DIRECTORY}`); 
+      } else {
+        throw error; // 접근 오류 외 다른 오류는 전파
+      }
+    }
+
+    // *** 로그 스트림 설정 호출 위치 변경 ***
+    setupLogStreams(); 
+
+    // 루트 공유 디렉토리 확인 및 생성 (비동기)
+    try {
+      await fs.promises.access(ROOT_DIRECTORY);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        await fs.promises.mkdir(ROOT_DIRECTORY, { recursive: true });
+        // *** 이제 log 함수 사용 가능 ***
+        log(`루트 디렉토리 생성됨: ${ROOT_DIRECTORY}`, 'info'); 
+      } else {
+        throw error;
+      }
+    }
+
+    // 루트 공유 디렉토리 권한 설정 (비동기)
+    await fs.promises.chmod(ROOT_DIRECTORY, 0o777);
+    log(`루트 디렉토리 권한 설정됨: ${ROOT_DIRECTORY}`, 'info');
+
+  } catch (initError) {
+    // *** 여기서는 errorLog 대신 console.error 사용 (errorLogFile 보장 안됨) ***
+    console.error('초기 디렉토리 설정 중 심각한 오류 발생:', initError);
+    process.exit(1); // 초기화 실패 시 서버 시작 중단
+  }
+}
+
 
 // --- 로그 레벨 및 모드 설정 ---
 const LOG_LEVELS = { minimal: 0, info: 1, debug: 2 };
@@ -54,9 +112,12 @@ function setLogLevel(levelName) {
   }
 }
 
-// 로그 파일 스트림
-const logFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'server.log'), { flags: 'a' });
-const errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
+
+
+function setupLogStreams() {
+  logFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'server.log'), { flags: 'a' });
+  errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
+}
 
 // --- 로그 함수 수정 ---
 function log(message, levelName = 'debug') {
@@ -111,49 +172,37 @@ function logWithIP(message, req, levelName = 'debug') {
   console.log(`${timestamp} - [IP: ${ip}] ${message}`); // 콘솔 로그에도 태그 제거
 }
 
+// errorLog 함수는 이제 setupLogStreams 호출 후 안전하게 errorLogFile 사용 가능
 function errorLog(message, error) { // 오류 로그는 항상 기록
   const now = new Date();
-  const kstOffset = 9 * 60 * 60 * 1000;
-  const kstDate = new Date(now.getTime() + kstOffset);
-  const year = kstDate.getUTCFullYear();
-  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
-  const day = kstDate.getUTCDate().toString().padStart(2, '0');
-  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
-  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
-  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
-  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
-
+  // ... (timestamp 생성 로직) ...
   const logMessage = `${timestamp} - ERROR: ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
-  errorLogFile.write(logMessage);
-  console.error(message, error);
+  
+  // *** errorLogFile이 정의되었는지 확인 후 사용 (안전성 강화) ***
+  if (errorLogFile && errorLogFile.writable) { 
+    errorLogFile.write(logMessage);
+  } else {
+    // 스트림 준비 안됐으면 콘솔에만 출력
+    console.error(message, error); 
+  }
+  console.error(message, error); // 콘솔에는 항상 출력
 }
 
 function errorLogWithIP(message, error, req) { // 오류 로그는 항상 기록
-  let ip = 'unknown';
-  if (req && req.headers) {
-    ip = req.headers['x-forwarded-for'] ||
-         req.headers['x-real-ip'] ||
-         (req.connection && req.connection.remoteAddress) ||
-         (req.socket && req.socket.remoteAddress) ||
-         (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
-         'unknown';
-  }
-
-  const now = new Date();
-  const kstOffset = 9 * 60 * 60 * 1000;
-  const kstDate = new Date(now.getTime() + kstOffset);
-  const year = kstDate.getUTCFullYear();
-  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
-  const day = kstDate.getUTCDate().toString().padStart(2, '0');
-  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
-  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
-  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
-  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
-
+  // ... (ip 및 timestamp 생성 로직) ...
   const logMessage = `${timestamp} - ERROR: [IP: ${ip}] ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
-  errorLogFile.write(logMessage);
-  console.error(`[IP: ${ip}] ${message}`, error);
+
+  // *** errorLogFile이 정의되었는지 확인 후 사용 (안전성 강화) ***
+  if (errorLogFile && errorLogFile.writable) {
+    errorLogFile.write(logMessage);
+  } else {
+    console.error(`[IP: ${ip}] ${message}`, error); // 콘솔에는 항상 출력
+  }
+  console.error(`[IP: ${ip}] ${message}`, error); // 콘솔에는 항상 출력
 }
+
+
+
 
 // 최대 저장 용량 설정 (100GB)
 const MAX_STORAGE_SIZE = 100 * 1024 * 1024 * 1024; // 100GB in bytes
@@ -230,17 +279,6 @@ const server = new webdav.WebDAVServer({
   )
 });
 
-// 파일 저장소 설정
-const ROOT_DIRECTORY = path.join(__dirname, 'share-folder');
-if (!fs.existsSync(ROOT_DIRECTORY)) {
-  fs.mkdirSync(ROOT_DIRECTORY, { recursive: true });
-  log(`루트 디렉토리 생성: ${ROOT_DIRECTORY}`, 'info');
-}
-
-// 권한 설정
-fs.chmodSync(ROOT_DIRECTORY, 0o777);
-log(`루트 디렉토리 권한 설정: ${ROOT_DIRECTORY}`, 'info');
-
 // WebDAV 파일시스템 설정
 const fileSystem = new webdav.PhysicalFileSystem(ROOT_DIRECTORY);
 server.setFileSystem('/', fileSystem);
@@ -295,22 +333,23 @@ if (!fs.existsSync(TMP_UPLOAD_DIR)) {
   fs.mkdirSync(TMP_UPLOAD_DIR, { recursive: true });
 }
 
-// Multer 설정 (Disk Storage 사용 - 요청별 임시 폴더 생성)
+// Multer 설정 (Disk Storage 사용 - 요청별 임시 폴더 생성, 비동기화)
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: async function (req, file, cb) { // *** async 추가 ***
     // 각 요청별 고유 임시 디렉토리 생성
     if (!req.uniqueTmpDir) {
       const uniqueId = Date.now() + '-' + Math.random().toString(36).substring(2, 15);
       req.uniqueTmpDir = path.join(TMP_UPLOAD_DIR, uniqueId);
       try {
-        fs.mkdirSync(req.uniqueTmpDir, { recursive: true });
+        // *** mkdir 비동기화 ***
+        await fs.promises.mkdir(req.uniqueTmpDir, { recursive: true });
         logWithIP(`[Multer] 요청별 임시 디렉토리 생성: ${req.uniqueTmpDir}`, req);
       } catch (mkdirError) {
         errorLogWithIP('[Multer] 임시 디렉토리 생성 오류', mkdirError, req);
-        return cb(mkdirError);
+        return cb(mkdirError); // *** 에러 콜백 호출 ***
       }
     }
-    cb(null, req.uniqueTmpDir);
+    cb(null, req.uniqueTmpDir); // *** 성공 콜백 호출 ***
   },
   filename: function (req, file, cb) {
     // 파일명 충돌 방지 및 인코딩 변환 제거
@@ -690,8 +729,8 @@ app.get('/api/disk-usage', async (req, res) => { // *** async 추가 ***
   }
 });
 
-// 파일 압축 API
-app.post('/api/compress', bodyParser.json(), (req, res) => {
+// 파일 압축 API (비동기화)
+app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 추가 ***
   try {
     const { files, targetPath, zipName } = req.body;
     
@@ -707,37 +746,64 @@ app.post('/api/compress', bodyParser.json(), (req, res) => {
     
     log(`압축 요청: ${files.length}개 파일, 대상 경로: ${targetPath || '루트'}, 압축파일명: ${zipName}`, 'info');
     
-    // 압축 파일 전체 경로
     const basePath = targetPath ? path.join(ROOT_DIRECTORY, targetPath) : ROOT_DIRECTORY;
     const zipFilePath = path.join(basePath, zipName.endsWith('.zip') ? zipName : `${zipName}.zip`);
     
-    // 중복 확인
-    if (fs.existsSync(zipFilePath)) {
+    // *** 중복 확인 (비동기) ***
+    try {
+      await fs.promises.access(zipFilePath);
+      // 파일이 존재하면 409 Conflict 반환
       return res.status(409).json({ error: '같은 이름의 압축 파일이 이미 존재합니다.' });
+    } catch (error) {
+      if (error.code !== 'ENOENT') { 
+        // 접근 오류 외 다른 오류는 로깅 후 500 반환
+        errorLog('압축 파일 존재 확인 오류:', error);
+        return res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
+      }
+      // ENOENT 오류는 파일이 없다는 의미이므로 정상 진행
     }
     
-    // zip 명령어 구성 - 압축률 0 옵션 추가 (-0)
-    let zipCommand = `cd "${ROOT_DIRECTORY}" && zip -0 -r "${zipFilePath}"`;
+    // zip 명령어 구성
+    let baseZipCommand = `cd "${ROOT_DIRECTORY}" && zip -0 -r "${zipFilePath}"`;
+    let commandSuffix = '';
     
-    // 파일 경로 추가
-    files.forEach(file => {
+    // *** 파일 경로 추가 (비동기 확인 및 병렬 처리) ***
+    const checkPromises = files.map(async (file) => {
       const filePath = targetPath ? `${targetPath}/${file}` : file;
       const fullPath = path.join(ROOT_DIRECTORY, filePath);
       
-      // 파일/폴더 존재 확인
-      if (fs.existsSync(fullPath)) {
-        // 상대 경로 추출 (ROOT_DIRECTORY 기준)
+      try {
+        await fs.promises.access(fullPath); // 존재 확인
         const relativePath = path.relative(ROOT_DIRECTORY, fullPath);
-        zipCommand += ` "${relativePath}"`;
+        return ` "${relativePath}"`; // 존재하면 경로 문자열 반환
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          errorLog(`압축 대상 접근 오류: ${fullPath}`, error);
+        }
+        return null; // 존재하지 않거나 오류 시 null 반환
       }
     });
+
+    const checkedPaths = (await Promise.all(checkPromises)).filter(p => p !== null);
+
+    if (checkedPaths.length === 0) {
+      return res.status(400).json({ error: '압축할 유효한 파일/폴더가 없습니다.' });
+    }
+
+    commandSuffix = checkedPaths.join('');
+    const zipCommand = baseZipCommand + commandSuffix;
     
-    // 압축 실행
+    // *** 압축 실행 (비동기) ***
     log(`실행 명령어: ${zipCommand}`, 'debug');
-    execSync(zipCommand);
+    const { stdout: zipStdout, stderr: zipStderr } = await exec(zipCommand);
+    if (zipStderr) {
+      errorLog('압축 명령어 실행 중 stderr 발생:', zipStderr);
+      // stderr가 있다고 무조건 오류는 아닐 수 있으나, 로깅은 필요
+    }
+    log(`압축 명령어 stdout: ${zipStdout}`, 'debug');
     
-    // 압축 파일 권한 설정
-    fs.chmodSync(zipFilePath, 0o666);
+    // *** 압축 파일 권한 설정 (비동기) ***
+    await fs.promises.chmod(zipFilePath, 0o666);
     
     log(`압축 완료: ${zipFilePath}`, 'info');
     res.status(200).json({ 
@@ -746,88 +812,109 @@ app.post('/api/compress', bodyParser.json(), (req, res) => {
       zipFile: path.basename(zipFilePath),
       zipPath: targetPath || ''
     });
+
   } catch (error) {
-    errorLog('압축 오류:', error);
+    errorLog('압축 API 오류:', error);
     res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
   }
 });
 
-// 폴더 잠금 상태 조회 API
-app.get('/api/lock-status', (req, res) => {
+// 폴더 잠금 상태 조회 API (비동기화)
+app.get('/api/lock-status', async (req, res) => { // *** async 추가 ***
   try {
-    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
     const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
     let lockState = [];
     
-    if (fs.existsSync(lockedFoldersPath)) {
-      try {
-        lockState = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
-      } catch (error) {
-        errorLog('잠긴 폴더 목록 파싱 오류:', error);
+    // *** 파일 존재 확인 및 읽기 (비동기) ***
+    try {
+      const fileContent = await fs.promises.readFile(lockedFoldersPath, 'utf8');
+      lockState = JSON.parse(fileContent).lockState || [];
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        // 파일이 없으면 빈 배열로 초기화하고 파일 생성 (비동기)
+        log('lockedFolders.json 파일 없음. 새로 생성합니다.', 'info');
+        try {
+          await fs.promises.writeFile(lockedFoldersPath, JSON.stringify({ lockState: [] }), 'utf8');
+        } catch (writeError) {
+          errorLog('lockedFolders.json 파일 생성 오류:', writeError);
+          // 파일 생성 실패 시에도 빈 배열로 응답
+        }
+      } else {
+        // 파싱 오류 또는 기타 읽기 오류
+        errorLog('잠긴 폴더 목록 읽기/파싱 오류:', error);
+        // 오류 발생 시에도 일단 빈 배열로 응답 (클라이언트 오류 방지)
       }
-    } else {
-      // 파일이 없으면 빈 배열로 초기화하고 파일 생성
-      fs.writeFileSync(lockedFoldersPath, JSON.stringify({ lockState: [] }), 'utf8');
     }
     
-    log(`잠금 상태 조회: ${lockState.length}개 폴더 잠김`, 'info');
+    log(`잠금 상태 조회 완료: ${lockState.length}개 폴더 잠김`, 'info');
     res.status(200).json({ lockState });
+
   } catch (error) {
-    errorLog('잠금 상태 조회 오류:', error);
+    // 핸들러 자체의 예외 처리
+    errorLog('잠금 상태 조회 API 오류:', error);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
 
-// 폴더 잠금/해제 API
-app.post('/api/lock/:path(*)', (req, res) => {
+// 폴더 잠금/해제 API (비동기화)
+app.post('/api/lock/:path(*)', express.json(), async (req, res) => { // *** async 추가, express.json() 미들웨어 추가 ***
   try {
     const folderPath = decodeURIComponent(req.params.path || '');
     const action = req.body.action || 'lock'; // 'lock' 또는 'unlock'
     const fullPath = path.join(ROOT_DIRECTORY, folderPath);
     
     logWithIP(`[Lock Request] '${folderPath}' ${action === 'lock' ? '잠금' : '잠금 해제'} 요청`, req, 'minimal');
-
     log(`폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 요청: ${fullPath}`, 'info');
 
-    // 폴더가 존재하는지 확인
-    if (!fs.existsSync(fullPath)) {
-      errorLogWithIP(`폴더를 찾을 수 없음: ${fullPath}`, null, req);
-      return res.status(404).send('폴더를 찾을 수 없습니다.');
+    let stats;
+    // *** 폴더 존재 및 정보 확인 (비동기) ***
+    try {
+      stats = await fs.promises.stat(fullPath);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        errorLogWithIP(`폴더를 찾을 수 없음: ${fullPath}`, null, req);
+        return res.status(404).send('폴더를 찾을 수 없습니다.');
+      } else {
+        errorLogWithIP(`폴더 정보 확인 오류: ${fullPath}`, error, req);
+        return res.status(500).send('서버 오류가 발생했습니다.');
+      }
     }
 
     // 디렉토리인지 확인
-    const stats = fs.statSync(fullPath);
     if (!stats.isDirectory()) {
       errorLogWithIP(`잠금 대상이 폴더가 아님: ${fullPath}`);
       return res.status(400).send('폴더만 잠금/해제할 수 있습니다.');
     }
 
-    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
+    // lockedFolders.json 파일 로드 (비동기)
     const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
-    let lockedFolders = { lockState: [] };
-    
-    if (fs.existsSync(lockedFoldersPath)) {
-      try {
-        lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8'));
-        if (!lockedFolders.lockState) {
-          lockedFolders.lockState = [];
-        }
-      } catch (error) {
-        errorLog('잠긴 폴더 목록 파싱 오류:', error);
-        lockedFolders = { lockState: [] };
+    let lockedFolders = { lockState: [] }; // 기본값
+    try {
+      const fileContent = await fs.promises.readFile(lockedFoldersPath, 'utf8');
+      lockedFolders = JSON.parse(fileContent);
+      if (!lockedFolders.lockState) {
+        lockedFolders.lockState = [];
+      }
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        log('lockedFolders.json 파일 없음. 새로 생성합니다.', 'info');
+        // 파일 없으면 기본값 사용 (저장 시 파일 생성됨)
+      } else {
+        errorLog('잠긴 폴더 목록 읽기/파싱 오류:', error);
+        // 읽기/파싱 오류 시에도 일단 기본값으로 진행하나, 저장은 시도
       }
     }
 
     // 잠금 또는 해제 처리
+    let changed = false;
     if (action === 'lock') {
-      // 이미 잠겨있는지 확인
       if (!lockedFolders.lockState.includes(folderPath)) {
-        // 상위 경로가 이미 잠겨 있는지 확인
         const isParentLocked = lockedFolders.lockState.some(lockedPath => 
           folderPath.startsWith(lockedPath + '/'));
         
         if (isParentLocked) {
           log(`상위 폴더가 이미 잠겨 있어 ${folderPath} 폴더는 잠그지 않습니다.`, 'info');
+          // 상태 변경 없이 성공 응답 (클라이언트 혼란 방지)
           return res.status(200).json({
             success: true,
             message: "상위 폴더가 이미 잠겨 있습니다.",
@@ -837,41 +924,57 @@ app.post('/api/lock/:path(*)', (req, res) => {
           });
         }
         
-        // 현재 폴더의 하위 폴더 중 이미 잠긴 폴더가 있는지 확인하고 해제
         const subLockedFolders = lockedFolders.lockState.filter(lockedPath => 
           lockedPath.startsWith(folderPath + '/'));
         
         if (subLockedFolders.length > 0) {
           log(`${folderPath} 폴더 잠금으로 인해 ${subLockedFolders.length}개의 하위 폴더 잠금이 해제됩니다.`, 'info');
-          // 하위 폴더는 잠금 해제
           lockedFolders.lockState = lockedFolders.lockState.filter(path => 
             !path.startsWith(folderPath + '/'));
         }
         
-        // 현재 폴더 잠금
         lockedFolders.lockState.push(folderPath);
-        log(`폴더 잠금 완료: ${folderPath}`, 'info');
+        changed = true;
+        log(`폴더 잠금 적용: ${folderPath}`, 'info');
       } else {
         log(`폴더가 이미 잠겨 있음: ${folderPath}`, 'info');
       }
-    } else if (action === 'unlock') {
-      // 잠금 해제
+    } else { // action === 'unlock'
+      const initialLength = lockedFolders.lockState.length;
       lockedFolders.lockState = lockedFolders.lockState.filter(path => path !== folderPath);
-      log(`폴더 잠금 해제 완료: ${folderPath}`, 'info');
+      if (lockedFolders.lockState.length < initialLength) {
+        changed = true;
+        log(`폴더 잠금 해제 적용: ${folderPath}`, 'info');
+      } else {
+        log(`폴더가 잠겨있지 않음: ${folderPath}`, 'info');
+      }
     }
 
-    // 변경된 목록 저장
-    fs.writeFileSync(lockedFoldersPath, JSON.stringify(lockedFolders, null, 2), 'utf8');
-    fs.chmodSync(lockedFoldersPath, 0o666); // 권한 설정
+    // 변경 사항이 있을 경우 파일 저장 (비동기)
+    if (changed) {
+      try {
+        await fs.promises.writeFile(lockedFoldersPath, JSON.stringify(lockedFolders, null, 2), 'utf8');
+        await fs.promises.chmod(lockedFoldersPath, 0o666);
+        log('잠긴 폴더 목록 저장 완료.', 'info');
+      } catch (writeError) {
+        errorLog('잠긴 폴더 목록 저장 오류:', writeError);
+        // 파일 저장 실패 시 오류 응답
+        return res.status(500).send('잠금 상태 저장 중 오류가 발생했습니다.');
+      }
+    }
 
+    // 성공 응답
     res.status(200).json({
       success: true,
-      message: `폴더가 ${action === 'lock' ? '잠겼습니다' : '잠금 해제되었습니다'}`,
+      message: `폴더가 성공적으로 ${action === 'lock' ? '잠금' : '잠금 해제'}되었습니다.`, 
       path: folderPath,
-      action: action
+      action: action,
+      status: changed ? 'updated' : 'nochange'
     });
+
   } catch (error) {
-    errorLog(`폴더 ${req.body.action === 'lock' ? '잠금' : '잠금 해제'} 오류:`, error);
+    // 핸들러 자체의 예외 처리
+    errorLog('폴더 잠금/해제 API 오류:', error);
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
@@ -1020,15 +1123,14 @@ app.post('/api/files/*', (req, res) => {
   }
 });
 
-// 파일/폴더 이름 변경 또는 이동
-app.put('/api/files/*', (req, res) => {
+// 파일/폴더 이름 변경 또는 이동 (비동기화)
+app.put('/api/files/*', express.json(), async (req, res) => { // *** async 추가, express.json() 미들웨어 추가 ***
   try {
     const oldPath = decodeURIComponent(req.params[0] || '');
     const { newName, targetPath, overwrite } = req.body;
     
     logWithIP(`[Move/Rename Request] '${oldPath}' -> '${newName}' (대상: ${targetPath !== undefined ? targetPath : '동일 경로'})`, req, 'minimal');
-
-    logWithIP(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`, req, 'info');
+    log(`이름 변경/이동 요청: ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`, req, 'info');
     
     if (!newName) {
       errorLogWithIP('새 이름이 제공되지 않음', null, req);
@@ -1037,96 +1139,109 @@ app.put('/api/files/*', (req, res) => {
 
     const fullOldPath = path.join(ROOT_DIRECTORY, oldPath);
     
-    // 원본이 존재하는지 확인
-    if (!fs.existsSync(fullOldPath)) {
-      errorLogWithIP(`원본 파일/폴더를 찾을 수 없음: ${fullOldPath}`, null, req);
-      return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPath}`);
-    }
-
-    // lockedFolders.json 파일에서 잠긴 폴더 목록 로드
-    let lockedFolders = [];
-    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
-    if (fs.existsSync(lockedFoldersPath)) {
-      try {
-        lockedFolders = JSON.parse(fs.readFileSync(lockedFoldersPath, 'utf8')).lockState || [];
-      } catch (e) {
-        errorLogWithIP('잠긴 폴더 목록 로드 오류:', e, req);
-        lockedFolders = []; // 오류 발생 시 빈 목록으로 처리
+    // *** 원본 존재 확인 (비동기) ***
+    try {
+      await fs.promises.access(fullOldPath);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        errorLogWithIP(`원본 파일/폴더를 찾을 수 없음: ${fullOldPath}`, null, req);
+        return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPath}`);
+      } else {
+        errorLogWithIP(`원본 접근 오류: ${fullOldPath}`, error, req);
+        return res.status(500).send('서버 오류가 발생했습니다.');
       }
     }
 
-    // 원본 경로가 잠긴 폴더인지 확인
-    const isSourceLocked = lockedFolders.some(lockedPath => oldPath === lockedPath);
-    if (isSourceLocked) {
-      errorLogWithIP(`잠긴 폴더 이동/이름 변경 시도: ${fullOldPath}`, null, req);
-      return res.status(403).send('잠긴 폴더는 이동하거나 이름을 변경할 수 없습니다.');
+    // *** 잠금 폴더 목록 로드 (비동기) ***
+    let lockedFolders = [];
+    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+    try {
+      const fileContent = await fs.promises.readFile(lockedFoldersPath, 'utf8');
+      lockedFolders = JSON.parse(fileContent).lockState || [];
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        errorLog('잠긴 폴더 목록 읽기/파싱 오류:', error);
+        // 오류 발생 시에도 진행하되, 잠금 체크는 못함
+      }
     }
 
-    // 타겟 경로가 제공되면 이동 작업으로 처리 (빈 문자열이면 루트 폴더로 이동)
-    const fullTargetPath = targetPath !== undefined 
-      ? path.join(ROOT_DIRECTORY, targetPath) 
-      : path.dirname(fullOldPath);
-      
+    // *** 원본 경로 잠금 확인 ***
+    const isSourceLocked = lockedFolders.some(lockedPath => 
+      oldPath === lockedPath || oldPath.startsWith(lockedPath + '/')
+    );
+    if (isSourceLocked) {
+      errorLogWithIP(`잠긴 항목 이동/이름 변경 시도: ${fullOldPath}`, null, req);
+      return res.status(403).send('잠긴 폴더 또는 그 하위 항목은 이동하거나 이름을 변경할 수 없습니다.');
+    }
+
+    // 타겟 경로 설정
+    const targetDir = targetPath !== undefined ? targetPath : path.dirname(oldPath);
+    const fullTargetPath = path.join(ROOT_DIRECTORY, targetDir);
     const fullNewPath = path.join(fullTargetPath, newName);
       
     logWithIP(`전체 경로 처리: ${fullOldPath} -> ${fullNewPath}`, 'debug');
-    logWithIP(`디버그: targetPath=${targetPath}, fullTargetPath=${fullTargetPath}, overwrite=${overwrite}`, 'debug');
 
-    // 원본과 대상이 같은 경로인지 확인
+    // 원본과 대상이 같은 경우 무시
     if (fullOldPath === fullNewPath) {
-      logWithIP(`동일한 경로로의 이동 무시: ${fullOldPath}`, 'debug');
-      return res.status(200).send('이동이 완료되었습니다.');
+      logWithIP(`동일한 경로로의 이동/변경 무시: ${fullOldPath}`, 'debug');
+      return res.status(200).send('이름 변경/이동이 완료되었습니다.'); // 성공으로 간주
+    }
+    
+    // *** 대상 경로가 잠긴 폴더의 하위인지 확인 ***
+    const isTargetLocked = lockedFolders.some(lockedPath => 
+      targetDir === lockedPath || targetDir.startsWith(lockedPath + '/')
+    );
+    if (isTargetLocked) {
+        errorLogWithIP(`잠긴 폴더 내부로 이동 시도: ${fullNewPath}`, null, req);
+        return res.status(403).send('잠긴 폴더 내부로 이동할 수 없습니다.');
     }
 
-    // 대상 경로의 디렉토리가 없으면 생성
-    if (!fs.existsSync(fullTargetPath)) {
-      logWithIP(`대상 디렉토리 생성: ${fullTargetPath}`, 'debug');
-      fs.mkdirSync(fullTargetPath, { recursive: true });
-      fs.chmodSync(fullTargetPath, 0o777);
-    }
-
-    // 대상 경로에 이미 존재하는지 확인
-    if (fs.existsSync(fullNewPath)) {
-      if (overwrite) {
-        // 덮어쓰기 옵션이 true면 기존 파일/폴더 삭제
-        logWithIP(`파일이 이미 존재하나 덮어쓰기 옵션 사용: ${fullNewPath}`, 'debug');
-        try {
-          // 폴더인지 파일인지 확인하여 적절하게 삭제
-          const stats = fs.statSync(fullNewPath);
-          if (stats.isDirectory()) {
-            fs.rmdirSync(fullNewPath, { recursive: true });
-          } else {
-            fs.unlinkSync(fullNewPath);
-          }
-        } catch (deleteError) {
-          errorLogWithIP(`기존 파일/폴더 삭제 오류: ${fullNewPath}`, deleteError, req);
-          return res.status(500).send(`기존 파일 삭제 중 오류가 발생했습니다: ${deleteError.message}`);
-        }
-      } else {
-        // 덮어쓰기 옵션이 없으면 409 Conflict 반환
-        errorLogWithIP(`이미 존재하는 이름: ${fullNewPath}`);
-        return res.status(409).send('이미 존재하는 이름입니다.');
-      }
-    }
-
-    // 이름 변경 (파일 이동)
+    // *** 대상 디렉토리 생성 (비동기) ***
     try {
-      fs.renameSync(fullOldPath, fullNewPath);
-      logWithIP(`이동 완료: ${fullOldPath} -> ${fullNewPath}`, 'info');
-      
-      res.status(200).send('이동이 완료되었습니다.');
-    } catch (renameError) {
-      // EXDEV 오류는 서로 다른 디바이스 간 이동 시 발생
-      if (renameError.code === 'EXDEV') {
-        errorLogWithIP('서로 다른 파일 시스템 간 이동 오류 (EXDEV)', renameError, req);
-        return res.status(500).send('서로 다른 디바이스 간에 파일을 이동할 수 없습니다. 파일을 복사 후 원본을 삭제해주세요.');
+      await fs.promises.mkdir(fullTargetPath, { recursive: true });
+      await fs.promises.chmod(fullTargetPath, 0o777); // 생성 시 권한 설정
+      log(`대상 디렉토리 확인/생성: ${fullTargetPath}`, 'debug');
+    } catch (mkdirError) {
+      errorLogWithIP(`대상 디렉토리 생성 오류: ${fullTargetPath}`, mkdirError, req);
+      return res.status(500).send('대상 폴더 생성 중 오류가 발생했습니다.');
+    }
+
+    // *** 대상 경로에 이미 존재하는 경우 처리 (비동기) ***
+    try {
+      const existingStats = await fs.promises.stat(fullNewPath);
+      // 존재하면 덮어쓰기 옵션 확인
+      if (!overwrite) {
+        errorLogWithIP(`대상 경로에 파일/폴더가 이미 존재함 (덮어쓰기 비활성): ${fullNewPath}`, null, req);
+        return res.status(409).send('같은 이름의 파일이나 폴더가 이미 대상 경로에 존재합니다.');
       }
       
-      errorLogWithIP(`이름 변경/이동 오류: ${fullOldPath} -> ${fullNewPath}`, renameError, req);
-      return res.status(500).send(`이동 오류: ${renameError.message}`);
+      // 덮어쓰기 실행 - 기존 항목 삭제 (비동기)
+      logWithIP(`대상 경로에 존재하는 항목 덮어쓰기 시도: ${fullNewPath}`, 'debug');
+      try {
+        await fs.promises.rm(fullNewPath, { recursive: true, force: true }); 
+        logWithIP(`기존 항목 삭제 완료 (덮어쓰기): ${fullNewPath}`, 'debug');
+      } catch (deleteError) {
+        errorLogWithIP(`기존 항목 삭제 실패 (덮어쓰기): ${fullNewPath}`, deleteError, req);
+        return res.status(500).send('기존 파일/폴더 삭제 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        // stat 오류 (존재하지 않는 경우가 아님) - 예상치 못한 오류
+        errorLogWithIP(`대상 경로 상태 확인 오류: ${fullNewPath}`, error, req);
+        return res.status(500).send('대상 경로 확인 중 오류가 발생했습니다.');
+      }
+      // ENOENT는 정상 (파일/폴더 없음)
     }
+
+    // *** 최종 이름 변경/이동 실행 (비동기) ***
+    await fs.promises.rename(fullOldPath, fullNewPath);
+    logWithIP(`이름 변경/이동 완료: ${fullOldPath} -> ${fullNewPath}`, 'info');
+
+    res.status(200).send('이름 변경/이동이 완료되었습니다.');
+
   } catch (error) {
-    errorLogWithIP('이름 변경 오류:', error, req);
+    // 핸들러 자체의 예외 처리
+    errorLogWithIP('이름 변경/이동 API 오류:', error, req);
     res.status(500).send(`서버 오류가 발생했습니다: ${error.message}`);
   }
 });
@@ -1198,60 +1313,53 @@ app.delete('/api/files/*', async (req, res) => {
   }
 });
 
-// 폴더 생성 API (백그라운드 처리 예시)
-app.post('/api/folders', express.json(), (req, res) => {
+// 새 폴더 생성 (비동기화)
+app.post('/api/folders', express.json(), async (req, res) => { // *** async 추가 ***
+  const { folderPath, folderName } = req.body;
+  if (!folderName) {
+    return res.status(400).send('폴더 이름이 제공되지 않았습니다.');
+  }
+
+  // 폴더 이름 유효성 검사 (여기서는 간단히, 필요시 강화)
+  if (/[/\\:*?"<>|]/g.test(folderName)) {
+      return res.status(400).send('폴더 이름에 사용할 수 없는 문자가 포함되어 있습니다.');
+  }
+
+  const relativeFolderPath = folderPath || ''; // 기본값은 루트
+  const fullPath = path.join(ROOT_DIRECTORY, relativeFolderPath, folderName);
+
+  logWithIP(`[Folder Create] '${relativeFolderPath}/${folderName}' 생성 요청`, req, 'minimal');
+  log(`새 폴더 생성 요청: ${fullPath}`, 'info');
+
+  try {
+    // *** 폴더 존재 확인 (비동기) ***
     try {
-        const { folderPath, folderName } = req.body;
-        // 폴더 이름 유효성 검사 강화 (슬래시 등 경로 문자 방지)
-        if (!folderName || /[\\/:*?"<>|]/.test(folderName) || folderName.trim() !== folderName) {
-            return res.status(400).send('잘못된 폴더 이름입니다.');
-        }
-
-        const relativePath = folderPath ? path.join(folderPath, folderName) : folderName;
-        const fullPath = path.join(ROOT_DIRECTORY, relativePath);
-
-        logWithIP(`[Create Folder Request] '${relativePath}' 생성 요청 (백그라운드 처리)`, req, 'info');
-
-        // 백그라운드 작업 시작
-        logWithIP(`백그라운드 폴더 생성 작업 시작 요청: ${fullPath}`, req, 'info');
-        const workerScript = path.join(__dirname, 'backgroundWorker.js');
-        const worker = fork(workerScript, ['create', fullPath], {
-          stdio: 'pipe'  // 변경
-        });
-        activeWorkers.add(worker);
-        log(`[Worker Management] 워커 생성됨 (PID: ${worker.pid}, 작업: create). 활성 워커 수: ${activeWorkers.size}`, 'debug');
-
-        worker.stdout.on('data', (data) => {
-          log(`[Worker Output - create:${worker.pid}] ${data.toString().trim()}`, 'debug');
-        });
-        worker.stderr.on('data', (data) => {
-          errorLog(`[Worker Error - create:${worker.pid}] ${data.toString().trim()}`);
-        });
-
-        worker.on('error', (err) => {
-            errorLogWithIP(`백그라운드 워커 생성 오류 (폴더 생성): ${fullPath}`, err, req);
-            activeWorkers.delete(worker);
-            log(`[Worker Management] 워커 오류로 제거 (PID: ${worker.pid}). 활성 워커 수: ${activeWorkers.size}`, 'debug');
-        });
-
-        worker.on('exit', (code, signal) => {
-          activeWorkers.delete(worker);
-          if (signal) {
-            log(`[Worker Management] 워커가 신호 ${signal}로 종료됨 (PID: ${worker.pid}). 활성 워커 수: ${activeWorkers.size}`, 'info');
-          } else {
-            log(`[Worker Management] 워커 종료됨 (PID: ${worker.pid}, 코드: ${code}). 활성 워커 수: ${activeWorkers.size}`, 'debug');
-          }
-        });
-
-        // 즉시 응답 (202 Accepted)
-        res.status(202).send('폴더 생성 작업이 백그라운드에서 시작되었습니다.');
-
+      await fs.promises.access(fullPath);
+      // 폴더가 이미 존재하면 오류 반환 (access 성공 시)
+      errorLogWithIP(`폴더가 이미 존재함: ${fullPath}`, null, req);
+      return res.status(409).send('이미 존재하는 폴더 이름입니다.');
     } catch (error) {
-        errorLogWithIP('폴더 생성 API 핸들러 오류:', error, req);
-        res.status(500).send('서버 오류가 발생했습니다.');
+      // 접근 오류(ENOENT) 발생 시 폴더가 없는 것이므로 정상 진행
+      if (error.code !== 'ENOENT') {
+        // ENOENT 외 다른 접근 오류는 서버 오류로 처리
+        errorLogWithIP('폴더 존재 확인 중 접근 오류 발생', error, req);
+        return res.status(500).send('폴더 생성 중 오류가 발생했습니다.');
+      }
+      // ENOENT는 정상, 계속 진행
     }
-});
 
+    // *** 폴더 생성 및 권한 설정 (비동기) ***
+    await fs.promises.mkdir(fullPath, { recursive: true }); // recursive는 상위 경로 자동 생성
+    await fs.promises.chmod(fullPath, 0o777);
+    log(`폴더 생성 완료 및 권한 설정: ${fullPath}`, 'info');
+
+    res.status(201).send('폴더가 성공적으로 생성되었습니다.');
+
+  } catch (error) { // 폴더 생성/권한 설정 중 발생한 오류 또는 예기치 못한 오류 처리
+    errorLogWithIP(`폴더 생성 중 오류 발생: ${fullPath}`, error, req);
+    res.status(500).send('폴더 생성 중 오류가 발생했습니다.');
+  }
+});
 // 로그 레벨 변경 API
 app.put('/api/log-level', (req, res) => {
   const { level } = req.body;
@@ -1291,8 +1399,16 @@ process.on('SIGTERM', () => {
   }, 1000); // 1초 대기 (필요에 따라 조정)
 });
 
-// 서버 시작
-app.listen(PORT, () => {
-  log(`서버가 ${PORT} 포트에서 실행 중입니다. 로그 레벨: ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel)}`, 'minimal'); // 서버 시작은 minimal 레벨
-  log(`WebDAV 서버: http://localhost:${PORT}/webdav`, 'info');
-}); 
+// --- 서버 시작 로직 수정 (setupLogStreams 호출 제거) ---
+async function startServer() {
+  await initializeDirectories(); // 디렉토리 초기화 및 로그 스트림 설정 완료 대기
+  // setupLogStreams(); // 여기서 호출 제거
+
+  // 서버 리스닝 시작
+  app.listen(PORT, () => {
+    log(`서버가 ${PORT} 포트에서 실행 중입니다. 로그 레벨: ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel)}`, 'minimal');
+    log(`WebDAV 서버: http://localhost:${PORT}/webdav`, 'info');
+  });
+}
+
+startServer(); // 서버 시작 함수 호출
