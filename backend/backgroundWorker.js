@@ -96,14 +96,36 @@ if (!operation || !targetPath) {
         }
       }
 
-      // Node.js의 fs.promises.rm을 사용하여 삭제 (쉘 명령어 대신)
-      try {
-        await fsPromises.rm(targetPath, { recursive: true, force: true });
-        log(`${itemType} 삭제 작업 완료 (fs.promises.rm 사용): ${targetPath}`);
-      } catch (rmError) {
-        errorLog(`fs.promises.rm 삭제 오류 (${itemType}): ${targetPath}`, rmError);
-        throw rmError; // 상위 catch 블록으로 전파
+      // 특수문자를 완벽하게 이스케이프하는 함수
+      function escapeShellArg(arg) {
+        // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+        // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+        return `'${arg.replace(/'/g, "'\\''")}'`;
       }
+
+      // rm 명령어 실행 (백틱과 같은 특수문자를 올바르게 이스케이프)
+      const escapedPath = escapeShellArg(targetPath);
+      const command = `rm -rf ${escapedPath}`;
+      log(`명령어 실행: ${command}`);
+      
+      await new Promise((resolve, reject) => {
+        exec(command, (error, stdout, stderr) => {
+          if (stdout) {
+            log(`rm stdout: ${stdout.trim()}`);
+          }
+          if (stderr) {
+            log(`rm stderr: ${stderr.trim()}`);
+            // stderr 자체는 오류로 처리하지 않고 로그만 기록
+          }
+          if (error) {
+            errorLog(`rm 명령어 실행 오류 (${itemType}): ${targetPath}`, error);
+            return reject(error);
+          }
+          resolve();
+        });
+      });
+      
+      log(`${itemType} 삭제 작업 완료 (rm 명령어 사용): ${targetPath}`);
 
     } else if (operation === 'create') {
       // recursive: true는 부모 디렉토리가 없어도 생성해줍니다.

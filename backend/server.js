@@ -1441,15 +1441,49 @@ app.put('/api/files/*', express.json(), async (req, res) => {
     // 최종 이름 변경/이동 실행
     logWithIP(`이름 변경/이동 시작: ${fullOldPath} -> ${fullNewPath}`, req, 'debug');
     try {
-      // Node.js의 fs.promises.rename 사용 (쉘 명령어 대신)
-      await fs.promises.rename(fullOldPath, fullNewPath);
+      // 특수문자를 더 견고하게 이스케이프하는 함수
+      function escapeShellArg(arg) {
+        // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+        // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+        return `'${arg.replace(/'/g, "'\\''")}'`;
+      }
+
+      // 최종 이름 변경/이동 실행 (mv)
+      const escapedFullOldPath = escapeShellArg(fullOldPath);
+      const escapedFullNewPath = escapeShellArg(fullNewPath);
+      const mvCommand = `mv ${escapedFullOldPath} ${escapedFullNewPath}`;
+      logWithIP(`이름 변경/이동 명령어 실행: ${mvCommand}`, req, 'debug');
       
-      logWithIP(`이름 변경/이동 완료 (fs.promises.rename 사용): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
-      res.status(200).send('이름 변경/이동이 완료되었습니다.');
-      
-      // 디스크 사용량 갱신 (비동기)
-      getDiskUsage().catch(err => errorLogWithIP('이동/변경 후 디스크 사용량 갱신 오류', err, req));
-      
+      try {
+        const { stdout: mvStdout, stderr: mvStderr } = await exec(mvCommand);
+        
+        // stderr가 유효한 문자열이고 내용이 있는지 확인 후 처리
+        if (typeof mvStderr === 'string' && mvStderr.trim().length > 0) {
+          const lowerStderr = mvStderr.toLowerCase();
+          if (lowerStderr.includes('no such file or directory') || 
+              lowerStderr.includes('permission denied')) {
+            errorLogWithIP(`mv 명령어 오류 (치명적): ${mvStderr.trim()}`, { command: mvCommand }, req);
+            return res.status(500).send('파일/폴더 이동 중 오류가 발생했습니다.');
+          } else {
+            // 단순 경고는 로그만 남김
+            logWithIP(`mv stderr (정보/경고): ${mvStderr.trim()}`, req, 'info');
+          }
+        }
+        
+        // stderr가 없거나 비어있으면 성공으로 간주
+        logWithIP(`이름 변경/이동 완료 (mv 사용): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
+        res.status(200).send('이름 변경/이동이 완료되었습니다.');
+        
+        // 디스크 사용량 갱신 (비동기)
+        getDiskUsage().catch(err => errorLogWithIP('이동/변경 후 디스크 사용량 갱신 오류', err, req));
+        
+      } catch (mvError) {
+        errorLogWithIP(`이름 변경/이동 명령어 오류: ${mvCommand}`, mvError, req);
+        if (mvError.stderr) {
+          errorLogWithIP(`mv stderr: ${mvError.stderr}`, null, req);
+        }
+        res.status(500).send('파일/폴더 이동 또는 이름 변경 중 오류가 발생했습니다.');
+      }
     } catch (renameError) {
       // 일반적인 오류 처리
       errorLogWithIP(`이름 변경/이동 오류: ${fullOldPath} -> ${fullNewPath}`, renameError, req);
@@ -1468,46 +1502,51 @@ app.put('/api/files/*', express.json(), async (req, res) => {
           const oldStat = await fs.promises.stat(fullOldPath);
           const isDirectory = oldStat.isDirectory();
           
+          // 특수문자를 완벽하게 이스케이프하는 함수는 위에서 정의됨
+          const escapedOldPath = escapeShellArg(fullOldPath);
+          const escapedNewPath = escapeShellArg(fullNewPath);
+          
+          // 시스템 명령어로 복사 및 삭제 (디렉토리 또는 파일)
+          let cpCommand;
           if (isDirectory) {
-            // 디렉토리 복사 함수 (재귀)
-            async function copyDir(src, dest) {
-              // 대상 디렉토리 생성
-              await fs.promises.mkdir(dest, { recursive: true });
-              
-              // 소스 디렉토리 내용 읽기
-              const entries = await fs.promises.readdir(src, { withFileTypes: true });
-              
-              // 각 항목에 대해 처리
-              for (const entry of entries) {
-                const srcPath = path.join(src, entry.name);
-                const destPath = path.join(dest, entry.name);
-                if (entry.isDirectory()) {
-                  // 하위 디렉토리 재귀 복사
-                  await copyDir(srcPath, destPath);
-                } else {
-                  // 파일 복사
-                  await fs.promises.copyFile(srcPath, destPath);
-                }
-              }
+            // -r: 디렉토리 재귀 복사, -p: 권한 유지, -f: 덮어쓰기 강제
+            cpCommand = `cp -rpf ${escapedOldPath}/. ${escapedNewPath}`;
+            // 대상 디렉토리가 없으면 먼저 생성
+            try {
+              await fs.promises.mkdir(fullNewPath, { recursive: true });
+            } catch (mkdirErr) {
+              errorLogWithIP(`대상 디렉토리 생성 실패: ${fullNewPath}`, mkdirErr, req);
+              throw mkdirErr;
             }
-            
-            // 디렉토리 복사 실행
-            await copyDir(fullOldPath, fullNewPath);
           } else {
             // 파일 복사
-            await fs.promises.copyFile(fullOldPath, fullNewPath);
+            cpCommand = `cp -f ${escapedOldPath} ${escapedNewPath}`;
           }
           
-          // 원본 삭제 (recursive: true는 디렉토리일 경우 내용까지 삭제)
-          await fs.promises.rm(fullOldPath, { recursive: true, force: true });
+          logWithIP(`복사 명령어 실행: ${cpCommand}`, req, 'debug');
           
-          logWithIP(`이름 변경/이동 완료 (복사+삭제): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
+          // 복사 실행
+          const { stdout: cpStdout, stderr: cpStderr } = await exec(cpCommand);
+          if (cpStderr) {
+            logWithIP(`cp stderr: ${cpStderr}`, req, 'info');
+          }
+          
+          // 복사 성공했으므로 원본 삭제
+          const rmCommand = `rm -rf ${escapedOldPath}`;
+          logWithIP(`삭제 명령어 실행: ${rmCommand}`, req, 'debug');
+          
+          const { stdout: rmStdout, stderr: rmStderr } = await exec(rmCommand);
+          if (rmStderr) {
+            logWithIP(`rm stderr: ${rmStderr}`, req, 'info');
+          }
+          
+          logWithIP(`이름 변경/이동 완료 (복사+삭제 명령어): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
           res.status(200).send('이름 변경/이동이 완료되었습니다.');
           
           // 디스크 사용량 갱신 (비동기)
           getDiskUsage().catch(err => errorLogWithIP('이동/변경 후 디스크 사용량 갱신 오류', err, req));
-        } catch (copyError) {
-          errorLogWithIP(`복사+삭제 방식 이동 실패: ${fullOldPath} -> ${fullNewPath}`, copyError, req);
+        } catch (execError) {
+          errorLogWithIP(`복사+삭제 명령어 실행 실패: ${fullOldPath} -> ${fullNewPath}`, execError, req);
           res.status(500).send('파일 또는 폴더 이동 중 오류가 발생했습니다.');
         }
       } else {
@@ -1772,6 +1811,13 @@ app.post('/api/items/delete', async (req, res) => {
 // --- 폴더 잠금 관련 전역 변수 및 함수 --- 
 let lockedFolders = []; // 잠긴 폴더 경로 목록 (메모리 저장)
 const LOCK_FILE_PATH = path.join(__dirname, 'lockedFolders.json'); // !!!! 파일 이름 수정 !!!!
+
+// 특수문자를 완벽하게 이스케이프하는 함수 (전역)
+function escapeShellArg(arg) {
+  // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+  // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
 
 // 잠금 파일 로드 함수
 async function loadLockedFolders() {
