@@ -233,6 +233,7 @@ const MAX_STORAGE_SIZE = 100 * 1024 * 1024 * 1024; // 100GB in bytes
 // 최대 파일명/경로 길이 제한 설정 (전역으로 이동)
 const MAX_FILENAME_BYTES = 229;
 const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로 설정
+const TRUNCATE_MARKER = '...'; // *** 누락된 상수 정의 추가 ***
 
 async function getDiskUsage() {
   const forceLogLevel = 'minimal'; // 로그 레벨 무시하고 항상 출력
@@ -353,7 +354,45 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // 임시 업로드 디렉토리 설정 (제거)
 // const TMP_UPLOAD_DIR = path.join(__dirname, 'tmp');
 
-// Multer 설정 (Disk Storage 사용 - 요청별 임시 폴더 생성, 비동기화)
+// --- UTF-8 문자열 바이트 단위 자르기 헬퍼 함수 ---
+function truncateBytes(str, maxBytes) {
+    const buffer = Buffer.from(str, 'utf8');
+    if (buffer.length <= maxBytes) {
+        return str;
+    }
+    
+    // maxBytes까지 자르되, 마지막 문자가 깨지지 않도록 조정
+    let truncatedBytes = 0;
+    let lastValidEnd = 0;
+    for (let i = 0; i < buffer.length; ) {
+        // 현재 문자의 바이트 길이 확인 (UTF-8)
+        let charBytes = 1;
+        if ((buffer[i] & 0xE0) === 0xC0) charBytes = 2;
+        else if ((buffer[i] & 0xF0) === 0xE0) charBytes = 3;
+        else if ((buffer[i] & 0xF8) === 0xF0) charBytes = 4;
+        
+        // 다음 문자를 포함해도 maxBytes를 넘지 않으면 진행
+        if (truncatedBytes + charBytes <= maxBytes) {
+            truncatedBytes += charBytes;
+            lastValidEnd = i + charBytes;
+            i += charBytes;
+        } else {
+            // 넘으면 현재 위치에서 중단
+            break;
+        }
+    }
+    // 마지막 유효 문자까지만 잘라서 반환
+    return buffer.slice(0, lastValidEnd).toString('utf8');
+}
+
+// --- 쉘 인자 이스케이프 함수 정의 ---
+function escapeShellArg(arg) {
+    // 윈도우 환경에서는 다른 방식이 필요할 수 있으나, 현재 리눅스 환경 기준으로 작성
+    // 작은따옴표(')로 감싸고, 내부의 작은따옴표는 '\'' 로 변경
+    return "'" + arg.replace(/'/g, "'\\''") + "'";
+}
+
+// Multer 설정 (Disk Storage 사용 - 파일명 자동 자르기 추가)
 const storage = multer.diskStorage({
   destination: async function (req, file, cb) { // *** async 추가 ***
     // 각 요청별 고유 임시 디렉토리 생성
@@ -372,14 +411,50 @@ const storage = multer.diskStorage({
     cb(null, req.uniqueTmpDir); // *** 성공 콜백 호출 ***
   },
   filename: function (req, file, cb) {
-    // 파일명 충돌 방지 및 인코딩 변환 제거
-    // file.originalname을 직접 사용하고 필요한 특수문자만 제거
-    const safeOriginalName = file.originalname.replace(/[/\\:*?\"<>|]/g, '_');
-    // 로그 추가: 변환 전후 이름 확인
-    if (safeOriginalName !== file.originalname) {
-        logWithIP(`[Multer Filename] 특수문자 제거됨: '${file.originalname}' -> '${safeOriginalName}'`, req);
+    // 원본 파일명에서 확장자 분리
+    const originalName = file.originalname;
+    const parsedPath = path.parse(originalName);
+    const originalExt = parsedPath.ext; // 예: '.txt'
+    const originalNameWithoutExt = parsedPath.name; // 확장자 제외 이름
+    
+    // 1. 특수문자 제거 (기존 로직 유지)
+    let safeNameWithoutExt = originalNameWithoutExt.replace(/[/\\:*?\"<>|]/g, '_');
+
+    // 2. 파일명 길이 자르기 (바이트 기준)
+    const markerBytes = Buffer.byteLength(TRUNCATE_MARKER, 'utf8');
+    const extBytes = Buffer.byteLength(originalExt, 'utf8');
+    // 이름 부분에 허용되는 최대 바이트 (마커와 확장자 길이 고려)
+    // 마커를 추가해야 하는 경우에만 마커 길이를 뺌
+    let maxNameBytes = MAX_FILENAME_BYTES - extBytes;
+    if (Buffer.byteLength(safeNameWithoutExt, 'utf8') > maxNameBytes) {
+         maxNameBytes -= markerBytes; 
     }
-    cb(null, Date.now() + '-' + Math.random().toString(36).substring(2, 9) + '-' + safeOriginalName);
+    
+    let finalNameWithoutExt = safeNameWithoutExt;
+    if (Buffer.byteLength(safeNameWithoutExt, 'utf8') > maxNameBytes && maxNameBytes > 0) {
+        finalNameWithoutExt = truncateBytes(safeNameWithoutExt, maxNameBytes);
+        // 잘렸으면 마커 추가
+        if (finalNameWithoutExt !== safeNameWithoutExt) {
+            finalNameWithoutExt += TRUNCATE_MARKER;
+            logWithIP(`[Multer Filename] 이름 잘림(바이트): '${safeNameWithoutExt}' -> '${finalNameWithoutExt}'`, req, 'warning');
+        }
+    } else if (maxNameBytes <= 0) {
+        // 확장자(+마커) 길이만으로도 최대 길이를 초과하면 이름 부분을 비움
+        finalNameWithoutExt = TRUNCATE_MARKER; // 최소한 마커는 표시
+        logWithIP(`[Multer Filename] 확장자가 너무 길어 이름 비움: '${safeNameWithoutExt}' -> '${finalNameWithoutExt}'`, req, 'warning');
+    }
+    
+    // 최종 파일명 조합 (고유 Prefix + 잘린 이름 + 확장자)
+    const finalFilename = Date.now() + '-' + Math.random().toString(36).substring(2, 9) + '-' + finalNameWithoutExt + originalExt;
+    
+    // 안전 확인: 최종 생성된 파일명의 바이트 길이도 확인 (매우 드문 경우)
+    if (Buffer.byteLength(finalFilename, 'utf8') > 255) { // 리눅스 파일명 최대 바이트(보수적)
+         logWithIP(`[Multer Filename] 최종 조합된 이름도 너무 김: ${finalFilename}`, req, 'error');
+         // 매우 긴 확장자 등의 극단적인 경우, 여기서 오류를 발생시키거나 더 짧게 만들어야 함
+         // 여기서는 일단 로그만 남기고 진행 (실제 저장 시 오류 발생 가능성 있음)
+    }
+
+    cb(null, finalFilename);
   }
 });
 
