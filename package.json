@@ -16,6 +16,7 @@
   ],
   "author": "purestory",
   "license": "MIT",
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "archiver": "^7.0.1"
+  }
 }

@@ -11,6 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3333;
 const archiver = require('archiver');
 const { promisify } = require('util');
+const fs_stream = require('fs');
 
 // --- 전역 오류 처리기 추가 ---
 process.on('uncaughtException', (error) => {
@@ -861,59 +862,77 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
       // ENOENT 오류는 파일이 없다는 의미이므로 정상 진행
     }
     
-    // zip 명령어 구성
-    let baseZipCommand = `cd "${ROOT_DIRECTORY}" && zip -0 -r "${zipFilePath}"`;
-    let commandSuffix = '';
+    // archiver를 사용한 압축 구현
+    // 압축 파일 스트림 생성
+    const output = fs_stream.createWriteStream(zipFilePath);
+    const archive = archiver('zip', {
+      zlib: { level: 0 } // 압축률 (0: 저장만 하기, 9: 최대 압축)
+    });
     
-    // *** 파일 경로 추가 (비동기 확인 및 병렬 처리) ***
-    const checkPromises = files.map(async (file) => {
+    // 압축 스트림 이벤트 설정
+    output.on('close', async () => {
+      try {
+        // 압축 파일 권한 설정
+        await fs.promises.chmod(zipFilePath, 0o666);
+        
+        log(`압축 완료: ${zipFilePath} (크기: ${archive.pointer()} bytes)`, 'info');
+        res.status(200).json({ 
+          success: true, 
+          message: '압축이 완료되었습니다.',
+          zipFile: path.basename(zipFilePath),
+          zipPath: targetPath || ''
+        });
+      } catch (error) {
+        errorLog('압축 완료 후 처리 오류:', error);
+        // 이미 스트림이 닫힌 후이므로 응답은 보낼 수 없음
+      }
+    });
+    
+    archive.on('error', (error) => {
+      errorLog('압축 중 오류 발생:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
+      }
+    });
+    
+    // 압축 스트림을 출력 스트림에 연결
+    archive.pipe(output);
+    
+    // 파일 추가
+    let validFilesCount = 0;
+    for (const file of files) {
       const filePath = targetPath ? `${targetPath}/${file}` : file;
       const fullPath = path.join(ROOT_DIRECTORY, filePath);
       
       try {
-        await fs.promises.access(fullPath); // 존재 확인
-        const relativePath = path.relative(ROOT_DIRECTORY, fullPath);
-        return ` "${relativePath}"`; // 존재하면 경로 문자열 반환
-      } catch (error) {
-        if (error.code !== 'ENOENT') {
-          errorLog(`압축 대상 접근 오류: ${fullPath}`, error);
+        const stats = await fs.promises.stat(fullPath);
+        if (stats.isDirectory()) {
+          // 폴더인 경우 하위 모든 파일 포함
+          archive.directory(fullPath, file);
+        } else {
+          // 파일인 경우 직접 추가
+          archive.file(fullPath, { name: file });
         }
-        return null; // 존재하지 않거나 오류 시 null 반환
+        validFilesCount++;
+      } catch (error) {
+        log(`압축 대상 접근 오류 (무시됨): ${fullPath}`, 'debug');
+        // 개별 파일 오류는 전체 압축을 중단하지 않고 무시
       }
-    });
-
-    const checkedPaths = (await Promise.all(checkPromises)).filter(p => p !== null);
-
-    if (checkedPaths.length === 0) {
+    }
+    
+    if (validFilesCount === 0) {
+      archive.abort(); // 스트림 중단
       return res.status(400).json({ error: '압축할 유효한 파일/폴더가 없습니다.' });
     }
-
-    commandSuffix = checkedPaths.join('');
-    const zipCommand = baseZipCommand + commandSuffix;
     
-    // *** 압축 실행 (비동기) ***
-    log(`실행 명령어: ${zipCommand}`, 'debug');
-    const { stdout: zipStdout, stderr: zipStderr } = await exec(zipCommand);
-    if (zipStderr) {
-      errorLog('압축 명령어 실행 중 stderr 발생:', zipStderr);
-      // stderr가 있다고 무조건 오류는 아닐 수 있으나, 로깅은 필요
-    }
-    log(`압축 명령어 stdout: ${zipStdout}`, 'debug');
+    // 압축 시작
+    await archive.finalize();
     
-    // *** 압축 파일 권한 설정 (비동기) ***
-    await fs.promises.chmod(zipFilePath, 0o666);
-    
-    log(`압축 완료: ${zipFilePath}`, 'info');
-    res.status(200).json({ 
-      success: true, 
-      message: '압축이 완료되었습니다.',
-      zipFile: path.basename(zipFilePath),
-      zipPath: targetPath || ''
-    });
-
   } catch (error) {
     errorLog('압축 API 오류:', error);
-    res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
+    }
   }
 });
 
