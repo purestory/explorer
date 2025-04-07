@@ -3284,11 +3284,11 @@ function traverseFileTree(entry, path, filesWithPaths) {
                         } else {
                             // 정상 경로
                             filesWithPaths.push({ file: file, relativePath: relativePath });
-                            console.log(`파일 추가: ${relativePath}`);
+                            // console.log(`파일 추가: ${relativePath}`);
                         }
                     }
                 } else {
-                    console.log(`숨김 파일 제외: ${currentPath}`);
+                    // console.log(`숨김 파일 제외: ${currentPath}`);
                 }
                 resolve();
             }, err => {
@@ -3298,7 +3298,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
         } else if (entry.isDirectory) {
             // 숨김 폴더 (.으로 시작)는 제외
             if (entry.name.startsWith('.')) {
-                console.log(`숨김 폴더 제외: ${currentPath}`);
+                // console.log(`숨김 폴더 제외: ${currentPath}`);
                 resolve(); // 숨김 폴더는 처리하지 않고 resolve
         return;
     }
@@ -3359,7 +3359,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
              return;
         }
         
-        console.log(`폴더 탐색: ${currentPath}`);
+        // console.log(`폴더 탐색: ${currentPath}`);
         const dirReader = entry.createReader();
         let allEntries = [];
 
