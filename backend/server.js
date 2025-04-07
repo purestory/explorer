@@ -87,7 +87,9 @@ async function initializeDirectories() {
 // --- 로그 레벨 및 모드 설정 ---
 const LOG_LEVELS = { minimal: 0, info: 1, debug: 2 };
 const isDevelopment = process.env.NODE_ENV === 'development';
-let currentLogLevel = isDevelopment ? LOG_LEVELS.info : LOG_LEVELS.minimal;
+// !!!! 로그 레벨을 debug로 직접 설정 !!!!
+let currentLogLevel = LOG_LEVELS.debug; 
+// let currentLogLevel = isDevelopment ? LOG_LEVELS.info : LOG_LEVELS.minimal;
 const requestLogLevel = isDevelopment ? 'info' : 'minimal'; // 요청 로그 레벨
 
 // 로그 레벨 설정 함수
@@ -490,11 +492,18 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
       return res.status(400).json({ error: '파일 정보가 누락되었습니다.' });
     }
 
+    // !!!! 추가: 프론트엔드에서 받은 경로 및 파일 정보 로깅 !!!!
     const baseUploadPath = req.body.path || '';
+    logWithIP(`[Frontend Data] Received base path: '${baseUploadPath}'`, req, 'debug');
+    logWithIP(`[Frontend Data] Received fileInfo (raw): ${req.body.fileInfo}`, req, 'debug');
+
     const rootUploadDir = path.join(ROOT_DIRECTORY, baseUploadPath);
     let fileInfoArray;
     try {
       fileInfoArray = JSON.parse(req.body.fileInfo);
+      // !!!! 추가: 파싱된 파일 정보 로깅 !!!!
+      logWithIP(`[Frontend Data] Parsed fileInfo: ${JSON.stringify(fileInfoArray, null, 2)}`, req, 'debug');
+
       // --- 추가: minimal 레벨 작업 상세 로그 (파일명 포함) ---
       const fileCount = fileInfoArray.length;
       let fileSummary = '';
@@ -522,13 +531,16 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
 
     // 파일명 길이 제한 함수 (바이트 기준)
     function truncateFileName(filename) {
-      const originalBytes = Buffer.byteLength(filename);
-      log(`[Filename Check] 파일명 길이 확인 시작: ${filename} (${originalBytes} bytes)`, 'debug');
+      // !!!! 수정: 백슬래시도 경로 구분 문자로 처리 !!!!
+      const sanitizedFilename = filename.replace(/[\\/]/g, '_'); // <- 정규식 수정 (백슬래시 이스케이프)
+
+      const originalBytes = Buffer.byteLength(sanitizedFilename);
+      log(`[Filename Check] 파일명 길이 확인 시작: ${sanitizedFilename} (${originalBytes} bytes)`, 'debug');
       if (originalBytes <= MAX_FILENAME_BYTES) {
-        return filename;
+        return sanitizedFilename;
       }
-      const extension = filename.lastIndexOf('.') > 0 ? filename.substring(filename.lastIndexOf('.')) : '';
-      const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') > 0 ? filename.lastIndexOf('.') : filename.length);
+      const extension = sanitizedFilename.lastIndexOf('.') > 0 ? sanitizedFilename.substring(sanitizedFilename.lastIndexOf('.')) : '';
+      const nameWithoutExt = sanitizedFilename.substring(0, sanitizedFilename.lastIndexOf('.') > 0 ? sanitizedFilename.lastIndexOf('.') : sanitizedFilename.length);
       let truncatedName = nameWithoutExt;
       while (Buffer.byteLength(truncatedName + '...' + extension) > MAX_FILENAME_BYTES) {
         truncatedName = truncatedName.slice(0, -1);
@@ -628,11 +640,26 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
         logWithIP(`[Upload Loop] 파일 발견: ${uploadedFile.filename} (원본: ${fileInfo.originalName})`, req, 'debug');
 
         // 대상 경로 및 파일명 결정
-        const targetDirPath = path.join(rootUploadDir, fileInfo.relativePath || '');
+        // 문제 수정: relativePath에서 파일명과 디렉토리 경로 분리
+        let relativeDirPath = '';
+        if (fileInfo.relativePath) {
+          // relativePath에 파일명이 포함된 경우 분리
+          if (fileInfo.relativePath.includes(fileInfo.originalName)) {
+            relativeDirPath = fileInfo.relativePath.replace(fileInfo.originalName, '');
+            // 끝에 슬래시가 있으면 제거
+            relativeDirPath = relativeDirPath.replace(/[\/\\]$/, '');
+            logWithIP(`[Upload Loop] relativePath에서 파일명 분리: 경로=${relativeDirPath}, 파일명=${fileInfo.originalName}`, req, 'debug');
+          } else {
+            // 파일명이 포함되지 않은 경우 그대로 사용
+            relativeDirPath = fileInfo.relativePath;
+          }
+        }
+
+        const targetDirPath = path.join(rootUploadDir, relativeDirPath);
         const finalFileName = truncateFileName(fileInfo.originalName); // 파일명 길이 제한 적용
         let targetFilePath = path.join(targetDirPath, finalFileName);
 
-        logWithIP(`[Upload Loop] 대상 경로 계산: ${targetFilePath}`, req, 'debug');
+        logWithIP(`[Upload Loop] 대상 경로 계산 (변경 전): ${targetFilePath}`, req, 'debug'); // !!!! 로깅 추가 !!!!
         
         // 경로 길이 확인 및 제한
         const pathCheckResult = checkAndTruncatePath(targetFilePath);
@@ -643,6 +670,7 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
                 logWithIP(`[Upload Loop] 경로 길이 비상 축소 적용됨: ${targetFilePath}`, req, 'warning');
             }
         }
+        logWithIP(`[Upload Loop] 대상 경로 계산 (변경 후): ${targetFilePath}`, req, 'debug'); // !!!! 로깅 추가 !!!!
         
         try {
           // 최종 대상 디렉토리 (파일명 제외)
@@ -1564,7 +1592,7 @@ app.post('/api/folders', express.json(), async (req, res) => { // *** async 추�
   }
 });
 // 로그 레벨 변경 API
-app.put('/api/log-level', (req, res) => {
+app.put('/api/log-level', express.json(), (req, res) => { // !!!! express.json() 미들웨어 추가 !!!!
   const { level } = req.body;
   if (level && LOG_LEVELS.hasOwnProperty(level)) {
     setLogLevel(level);
@@ -1697,21 +1725,32 @@ app.post('/api/items/delete', async (req, res) => {
 
 // --- 폴더 잠금 관련 전역 변수 및 함수 --- 
 let lockedFolders = []; // 잠긴 폴더 경로 목록 (메모리 저장)
-const LOCK_FILE_PATH = path.join(__dirname, '.folder_locks'); // 잠금 목록 저장 파일
+const LOCK_FILE_PATH = path.join(__dirname, 'lockedFolders.json'); // !!!! 파일 이름 수정 !!!!
 
 // 잠금 파일 로드 함수
 async function loadLockedFolders() {
     try {
         await fs.promises.access(LOCK_FILE_PATH);
         const data = await fs.promises.readFile(LOCK_FILE_PATH, 'utf8');
-        lockedFolders = data.split('\n').filter(Boolean); // 빈 줄 제거
+        // !!!! JSON 파싱 로직 추가 !!!!
+        const parsedData = JSON.parse(data);
+        lockedFolders = parsedData.lockState || []; // lockState 배열 사용
         log(`잠긴 폴더 목록 로드 완료: ${lockedFolders.length}개`, 'info');
     } catch (error) {
         if (error.code === 'ENOENT') {
-            log('잠금 파일(.folder_locks)이 존재하지 않아 새로 시작합니다.', 'info');
+            // !!!! 로그 메시지 수정 !!!!
+            log('잠금 파일(lockedFolders.json)이 존재하지 않아 새로 시작합니다.', 'info');
             lockedFolders = [];
+            // !!!! 파일 없을 때 빈 파일 생성 로직 추가 !!!!
+            try {
+                await fs.promises.writeFile(LOCK_FILE_PATH, JSON.stringify({ lockState: [] }), 'utf8');
+                log('새 잠금 파일(lockedFolders.json) 생성됨.', 'info');
+            } catch (writeError) {
+                errorLog('새 잠금 파일 생성 오류:', writeError);
+            }
         } else {
-            errorLog('잠금 파일 로드 중 오류 발생', error);
+            // !!!! JSON 파싱 오류 처리 추가 !!!!
+            errorLog('잠금 파일 로드 또는 파싱 중 오류 발생', error);
             lockedFolders = []; // 오류 시 빈 목록으로 초기화
         }
     }
@@ -1720,7 +1759,8 @@ async function loadLockedFolders() {
 // 잠금 파일 저장 함수
 async function saveLockedFolders() {
     try {
-        await fs.promises.writeFile(LOCK_FILE_PATH, lockedFolders.join('\n'), 'utf8');
+        // !!!! JSON 형식으로 저장 !!!!
+        await fs.promises.writeFile(LOCK_FILE_PATH, JSON.stringify({ lockState: lockedFolders }, null, 2), 'utf8'); 
         log('잠긴 폴더 목록 저장 완료', 'debug');
     } catch (error) {
         errorLog('잠금 파일 저장 중 오류 발생', error);
@@ -1744,3 +1784,33 @@ function isPathAccessRestricted(targetPath) {
     });
 }
 // *** 함수 정의 끝 ***
+
+// ===== 테스트용 파일 업로드 라우트 시작 =====
+const testUploadStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const testUploadDir = path.join(ROOT_DIRECTORY, 'test-uploads');
+    // 테스트 디렉토리 생성 (없으면)
+    fs.promises.mkdir(testUploadDir, { recursive: true })
+      .then(() => cb(null, testUploadDir))
+      .catch(err => cb(err));
+  },
+  filename: function (req, file, cb) {
+    // 원본 파일명 사용 (테스트 목적)
+    cb(null, file.originalname);
+  }
+});
+
+const testUploadMiddleware = multer({ storage: testUploadStorage });
+
+app.post('/api/upload/test', testUploadMiddleware.single('testFile'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).send('테스트 파일이 업로드되지 않았습니다.');
+  }
+  logWithIP(`[Test Upload] 파일 '${req.file.originalname}'이(가) test-uploads 폴더에 저장되었습니다.`, req, 'info');
+  res.status(200).json({ 
+    message: '테스트 파일 업로드 성공', 
+    filename: req.file.originalname,
+    path: req.file.path 
+  });
+});
+// ===== 테스트용 파일 업로드 라우트 끝 =====
