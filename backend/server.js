@@ -433,15 +433,15 @@ const storage = multer.diskStorage({
     }
     
     // 최종 파일명 조합 (고유 Prefix + 잘린 이름 + 확장자)
-    const finalFilename = Date.now() + '-' + Math.random().toString(36).substring(2, 9) + '-' + finalNameWithoutExt + originalExt;
+    // 임시 폴더 내에서는 유니크한 파일명만 사용
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 9);
+    const finalFilename = `tmp_${timestamp}_${randomString}${originalExt}`;
     
-    // 안전 확인: 최종 생성된 파일명의 바이트 길이도 확인 (매우 드문 경우)
-    if (Buffer.byteLength(finalFilename, 'utf8') > 255) { // 리눅스 파일명 최대 바이트(보수적)
-         logWithIP(`[Multer Filename] 최종 조합된 이름도 너무 김: ${finalFilename}`, req, 'error');
-         // 매우 긴 확장자 등의 극단적인 경우, 여기서 오류를 발생시키거나 더 짧게 만들어야 함
-         // 여기서는 일단 로그만 남기고 진행 (실제 저장 시 오류 발생 가능성 있음)
-    }
-
+    // 원본 파일명은 req.files에서 나중에 접근할 수 있도록 설정
+    file.originalFilename = originalName;
+    
+    logWithIP(`[Multer Filename] 임시 파일명 생성: ${finalFilename}`, req, 'debug');
     cb(null, finalFilename);
   }
 });
@@ -644,13 +644,22 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
             }
         }
         
-        // 최종 대상 디렉토리 (파일명 제외)
-        const finalTargetDir = path.dirname(targetFilePath);
-
         try {
-          // 대상 디렉토리 생성 (비동기)
-          await fs.promises.mkdir(finalTargetDir, { recursive: true });
-          logWithIP(`[Upload Loop] 대상 디렉토리 생성/확인: ${finalTargetDir}`, req, 'debug');
+          // 최종 대상 디렉토리 (파일명 제외)
+          const finalTargetDir = path.dirname(targetFilePath);
+
+          // 대상 디렉토리 존재 확인, 없으면 생성
+          try {
+            await fs.promises.stat(finalTargetDir);
+          } catch (dirError) {
+            if (dirError.code === 'ENOENT') {
+              // 디렉토리가 없으면 생성
+              await fs.promises.mkdir(finalTargetDir, { recursive: true });
+              logWithIP(`[Upload Loop] 대상 디렉토리 생성 완료: ${finalTargetDir}`, req, 'debug');
+            } else {
+              throw dirError; // 다른 오류는 전파
+            }
+          }
 
           // *** 파일 이동 시도 (rename 우선, EXDEV 시 copy+unlink) ***
           try {
