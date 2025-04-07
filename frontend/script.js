@@ -5402,15 +5402,7 @@ function pasteItems() {
             statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
             hideLoading();
         })
-        .catch(error => {
-            alert(`오류 발생: ${error.message}`);
-            hideLoading();
-            loadFiles(currentPath);
-        });
-}
-            statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
-            hideLoading();
-        })
+
         .catch(error => {
             alert(`오류 발생: ${error.message}`);
             hideLoading();
