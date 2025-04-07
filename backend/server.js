@@ -1438,36 +1438,82 @@ app.put('/api/files/*', express.json(), async (req, res) => {
       logWithIP(`대상 경로에 파일 없음. 덮어쓰기 불필요: ${fullNewPath}`, req, 'debug');
     }
 
-    // 최종 이름 변경/이동 실행 (mv)
-    const mvCommand = `mv ${escapedFullOldPath} ${escapedFullNewPath}`;
-    logWithIP(`이름 변경/이동 명령어 실행: ${mvCommand}`, req, 'debug');
+    // 최종 이름 변경/이동 실행
+    logWithIP(`이름 변경/이동 시작: ${fullOldPath} -> ${fullNewPath}`, req, 'debug');
     try {
-      const { stdout: mvStdout, stderr: mvStderr } = await exec(mvCommand);
+      // Node.js의 fs.promises.rename 사용 (쉘 명령어 대신)
+      await fs.promises.rename(fullOldPath, fullNewPath);
       
-      // stderr가 유효한 문자열이고 내용이 있는지 확인 후 처리
-      if (typeof mvStderr === 'string' && mvStderr.trim().length > 0) {
-        const lowerStderr = mvStderr.toLowerCase(); // 이제 mvStderr는 유효한 문자열
-        if (lowerStderr.includes('no such file or directory') || lowerStderr.includes('permission denied')) {
-          errorLogWithIP(`mv 명령어 오류 (치명적): ${mvStderr.trim()}`, { command: mvCommand }, req);
-          return res.status(500).send('파일/폴더 이동 중 오류가 발생했습니다.');
-        } else {
-          logWithIP(`mv stderr (정보/경고): ${mvStderr.trim()}`, req, 'info'); // 단순 정보/경고는 로그만 남김
-        }
-      }
-      
-      // stderr가 없거나 비어있으면 성공으로 간주
-      logWithIP(`이름 변경/이동 완료 (mv 사용): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
+      logWithIP(`이름 변경/이동 완료 (fs.promises.rename 사용): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
       res.status(200).send('이름 변경/이동이 완료되었습니다.');
+      
       // 디스크 사용량 갱신 (비동기)
       getDiskUsage().catch(err => errorLogWithIP('이동/변경 후 디스크 사용량 갱신 오류', err, req));
       
-    } catch (mvError) {
-      errorLogWithIP(`이름 변경/이동 명령어 오류: ${mvCommand}`, mvError, req);
-      if (mvError.stderr) {
-        // Optional chaining 추가 (오류 객체 내의 stderr)
-        errorLogWithIP(`mv stderr: ${mvError?.stderr}`, null, req);
+    } catch (renameError) {
+      // 일반적인 오류 처리
+      errorLogWithIP(`이름 변경/이동 오류: ${fullOldPath} -> ${fullNewPath}`, renameError, req);
+      
+      // 특정 오류 코드에 따른 상세 메시지
+      if (renameError.code === 'ENOENT') {
+        return res.status(404).send('이동할 파일 또는 폴더를 찾을 수 없습니다.');
+      } else if (renameError.code === 'EACCES' || renameError.code === 'EPERM') {
+        return res.status(403).send('파일 또는 폴더 이동 권한이 없습니다.');
+      } else if (renameError.code === 'EXDEV') {
+        // 다른 파일시스템으로 이동 시 EXDEV 오류 발생 - 복사 후 삭제로 처리
+        try {
+          logWithIP(`다른 파일시스템 간 이동 감지(EXDEV). 복사+삭제로 대체: ${fullOldPath} -> ${fullNewPath}`, req, 'info');
+          
+          // 대상이 디렉토리인지 확인
+          const oldStat = await fs.promises.stat(fullOldPath);
+          const isDirectory = oldStat.isDirectory();
+          
+          if (isDirectory) {
+            // 디렉토리 복사 함수 (재귀)
+            async function copyDir(src, dest) {
+              // 대상 디렉토리 생성
+              await fs.promises.mkdir(dest, { recursive: true });
+              
+              // 소스 디렉토리 내용 읽기
+              const entries = await fs.promises.readdir(src, { withFileTypes: true });
+              
+              // 각 항목에 대해 처리
+              for (const entry of entries) {
+                const srcPath = path.join(src, entry.name);
+                const destPath = path.join(dest, entry.name);
+                if (entry.isDirectory()) {
+                  // 하위 디렉토리 재귀 복사
+                  await copyDir(srcPath, destPath);
+                } else {
+                  // 파일 복사
+                  await fs.promises.copyFile(srcPath, destPath);
+                }
+              }
+            }
+            
+            // 디렉토리 복사 실행
+            await copyDir(fullOldPath, fullNewPath);
+          } else {
+            // 파일 복사
+            await fs.promises.copyFile(fullOldPath, fullNewPath);
+          }
+          
+          // 원본 삭제 (recursive: true는 디렉토리일 경우 내용까지 삭제)
+          await fs.promises.rm(fullOldPath, { recursive: true, force: true });
+          
+          logWithIP(`이름 변경/이동 완료 (복사+삭제): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
+          res.status(200).send('이름 변경/이동이 완료되었습니다.');
+          
+          // 디스크 사용량 갱신 (비동기)
+          getDiskUsage().catch(err => errorLogWithIP('이동/변경 후 디스크 사용량 갱신 오류', err, req));
+        } catch (copyError) {
+          errorLogWithIP(`복사+삭제 방식 이동 실패: ${fullOldPath} -> ${fullNewPath}`, copyError, req);
+          res.status(500).send('파일 또는 폴더 이동 중 오류가 발생했습니다.');
+        }
+      } else {
+        // 그 외 기타 오류
+        res.status(500).send('파일 또는 폴더 이동 중 오류가 발생했습니다.');
       }
-      res.status(500).send('파일/폴더 이동 또는 이름 변경 중 오류가 발생했습니다.');
     }
 
   } catch (error) {

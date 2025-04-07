@@ -80,48 +80,30 @@ if (!operation || !targetPath) {
 
     if (operation === 'delete') {
       let itemType = '항목'; // 기본값 설정
+      // 타입 확인: 파일인지 폴더인지 (통계 목적)
       try {
-        const stats = await fsPromises.stat(targetPath);
-        if (stats.isDirectory()) {
-          itemType = '폴더';
-        } else if (stats.isFile()) {
-          itemType = '파일';
-        }
+        const stat = await fsPromises.stat(targetPath);
+        itemType = stat.isDirectory() ? '폴더' : '파일';
         log(`삭제 대상 타입 확인: ${itemType}`);
       } catch (statError) {
         if (statError.code === 'ENOENT') {
-          log('삭제 대상이 이미 존재하지 않습니다.');
-          // 대상이 없으면 성공으로 간주하고 종료할 수 있음
+          log(`삭제 대상이 이미 존재하지 않음: ${targetPath}`);
           if (timeoutId) clearTimeout(timeoutId);
-          process.exit(0); // 성공 종료
-          return; // 이후 삭제 로직 실행 방지
+          process.exit(0); // 이미 없으면 성공으로 간주
         } else {
-          // 다른 stat 오류 (예: 권한 문제)
           errorLog(`대상 타입 확인 오류: ${targetPath}`, statError);
           // 오류 발생 시에도 삭제 시도
         }
       }
 
-      // rm 명령어 실행
-      await new Promise((resolve, reject) => {
-        const command = `rm -rf "${targetPath.replace(/"/g, '\\"')}"`;
-        log(`명령어 실행: ${command}`);
-        exec(command, (error, stdout, stderr) => {
-          if (stdout) {
-            log(`rm stdout: ${stdout.trim()}`);
-          }
-          if (stderr) {
-            log(`rm stderr: ${stderr.trim()}`);
-          }
-          if (error) {
-            errorLog(`rm 명령어 실행 오류 (${itemType}): ${targetPath}`, error);
-            return reject(error);
-          }
-          resolve(); 
-        });
-      });
-      // 로그 메시지에 타입 포함
-      log(`${itemType} 삭제 작업 완료 (rm 명령어 사용): ${targetPath}`);
+      // Node.js의 fs.promises.rm을 사용하여 삭제 (쉘 명령어 대신)
+      try {
+        await fsPromises.rm(targetPath, { recursive: true, force: true });
+        log(`${itemType} 삭제 작업 완료 (fs.promises.rm 사용): ${targetPath}`);
+      } catch (rmError) {
+        errorLog(`fs.promises.rm 삭제 오류 (${itemType}): ${targetPath}`, rmError);
+        throw rmError; // 상위 catch 블록으로 전파
+      }
 
     } else if (operation === 'create') {
       // recursive: true는 부모 디렉토리가 없어도 생성해줍니다.
