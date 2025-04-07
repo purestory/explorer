@@ -681,7 +681,8 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
             relativePath: fileInfo.relativePath,
             newPath: targetFilePath, // 길이 제한 적용된 전체 경로
             status: 'success',
-            truncated: pathCheckResult.truncated
+            truncated: pathCheckResult.truncated,
+            isFolder: false  // 업로드된 파일은 항상 폴더가 아닙니다
           };
         } catch (writeError) {
           const errorMessage = `[Upload Loop] 파일 처리 오류 (${fileInfo.originalName}): ${writeError.message}`;
