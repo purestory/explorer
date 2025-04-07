@@ -2344,8 +2344,8 @@ function updateBreadcrumb(path) {
             currentPath = span.getAttribute('data-path');
             // 히스토리 상태 업데이트 추가
             updateHistoryState(currentPath);
-            loadFiles(currentPath);
-            
+    loadFiles(currentPath);
+    
             // 선택 초기화
             clearSelection();
         });
@@ -2518,7 +2518,7 @@ function showRenameDialog() {
 // 선택 항목 삭제 (백그라운드 처리 UX 개선)
 async function deleteSelectedItems() { // async 키워드 추가
     if (selectedItems.size === 0) return;
-
+    
     const itemList = Array.from(selectedItems);
     const itemCount = itemList.length;
 

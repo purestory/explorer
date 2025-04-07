@@ -70,14 +70,6 @@
                     <p>파일을 여기에 끌어다 놓으세요</p>
                     <p class="drop-zone-info">최대 파일 크기: 10GB</p>
                 </div>
-                
-                <div id="progressContainer" class="progress-container">
-                    <div class="upload-file-info">현재 <span id="currentFileUpload">파일을 선택해주세요</span> 업로드 중...</div>
-                    <div class="progress">
-                        <div id="progressBar" class="progress-bar"></div>
-                    </div>
-                    <div id="uploadStatus" class="upload-status">파일을 선택해주세요</div>
-                </div>
             </div>
             
             <div class="statusbar" id="statusbar">
@@ -142,5 +134,20 @@
     </div>
     
     <script src="script.js?v=20250405"></script>
+    <script src="upload.js?v=20250405_upload"></script>
+
+    <!-- 업로드 진행률 모달 -->
+    <div id="upload-progress-modal" class="modal">
+        <div class="modal-content">
+            <h4>파일 업로드 중...</h4>
+            <div id="overall-progress-bar-container">
+                <div id="overall-progress-bar"></div>
+            </div>
+            <p id="overall-progress-text"></p>
+            <p id="current-file-info"></p>
+            <button id="cancel-upload-btn">취소</button> <!-- 취소 기능은 추후 구현 -->
+        </div>
+    </div>
+
 </body>
 </html>
