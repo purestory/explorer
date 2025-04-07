@@ -1631,13 +1631,23 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     let targetPath = currentPath;
     let targetName = '현재 폴더';
     
-    if (targetFolderItem) {
+    // targetFolderItem이 유효한 폴더 요소인지 확인 (null 아니고, getAttribute 함수 가지고 있는지)
+    if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
         // 타겟 폴더가 주어진 경우 (파일 항목에 드롭된 경우)
         const folderName = targetFolderItem.getAttribute('data-name');
-        targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-        targetName = folderName;
+        if (folderName) { // 폴더 이름이 있는지 한번 더 확인
+             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+             targetName = folderName;
+        } else {
+             console.warn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
+             // 폴더 이름을 가져올 수 없으면 기본 경로 사용
+        }
+    } else if (targetFolderItem) {
+         // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
+         console.log('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
+         // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
     }
-    
+
     console.log(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
     
     // 드래그된 데이터가 유효한지 확인
@@ -2004,13 +2014,23 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     let targetPath = currentPath;
     let targetName = '현재 폴더';
     
-    if (targetFolderItem) {
+    // targetFolderItem이 유효한 폴더 요소인지 확인 (null 아니고, getAttribute 함수 가지고 있는지)
+    if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
         // 타겟 폴더가 주어진 경우 (파일 항목에 드롭된 경우)
         const folderName = targetFolderItem.getAttribute('data-name');
-        targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-        targetName = folderName;
+        if (folderName) { // 폴더 이름이 있는지 한번 더 확인
+             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+             targetName = folderName;
+        } else {
+             console.warn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
+             // 폴더 이름을 가져올 수 없으면 기본 경로 사용
+        }
+    } else if (targetFolderItem) {
+         // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
+         console.log('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
+         // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
     }
-    
+
     console.log(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
     
     // 드래그된 데이터가 유효한지 확인
@@ -2911,13 +2931,23 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     let targetPath = currentPath;
     let targetName = '현재 폴더';
     
-    if (targetFolderItem) {
+    // targetFolderItem이 유효한 폴더 요소인지 확인 (null 아니고, getAttribute 함수 가지고 있는지)
+    if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
         // 타겟 폴더가 주어진 경우 (파일 항목에 드롭된 경우)
         const folderName = targetFolderItem.getAttribute('data-name');
-        targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-        targetName = folderName;
+        if (folderName) { // 폴더 이름이 있는지 한번 더 확인
+             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+             targetName = folderName;
+        } else {
+             console.warn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
+             // 폴더 이름을 가져올 수 없으면 기본 경로 사용
+        }
+    } else if (targetFolderItem) {
+         // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
+         console.log('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
+         // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
     }
-    
+
     console.log(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
     
     // 드래그된 데이터가 유효한지 확인
@@ -5222,5 +5252,17 @@ function handleFileDrop(e, targetFolderItem = null) {
     else {
         console.log('처리할 수 없는 드롭 형식 또는 데이터 없음');
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
+        
     }
+    
+    // 전체 영역 드롭존 이벤트 리스너 등록
+    window.removeEventListener('dragenter', handleDropZoneDragEnter);
+    window.removeEventListener('dragover', handleDropZoneDragOver);
+    window.removeEventListener('dragleave', handleDropZoneDragLeave);
+    dropZone.removeEventListener('drop', handleDropZoneDrop);
+    
+    console.log('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
+    
+    // 개발 모드에서 폴더 항목 CSS 선택자 유효성 확인
+    console.log('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
 }
