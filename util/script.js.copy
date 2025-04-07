@@ -1799,90 +1799,107 @@ function initDragAndDrop() {
         dropZone.classList.remove('active');
     }
     
+// 모든 drag-over 클래스를 제거하는 함수
+function clearAllDragOverClasses() {
+    document.querySelectorAll('.file-item.drag-over').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+}
+
 function handleFileDragEnter(e) {
-        const fileItem = e.target.closest('.file-item');
-        if (!fileItem) return;
-        
-        // 상위 폴더인 경우 드래그 오버 스타일 적용하지 않음
-        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+    const fileItem = e.target.closest('.file-item');
+    if (!fileItem) {
+        // 파일 항목이 없으면 모든 강조 제거
+        clearAllDragOverClasses();
+        return;
+    }
+    
+    // 상위 폴더인 경우 드래그 오버 스타일 적용하지 않음
+    if (fileItem.getAttribute('data-parent-dir') === 'true') {
+        clearAllDragOverClasses();
+        return;
+    }
+    
+    // 폴더인 경우에만 처리하고 시각적 표시
+    if (fileItem.getAttribute('data-is-folder') === 'true') {
+        // 선택된 폴더에 대한 드래그는 무시
+        if (fileItem.classList.contains('selected')) {
+            console.log('자기 자신이나 하위 폴더에 드래그 불가: ', fileItem.getAttribute('data-name'));
+            clearAllDragOverClasses();
             return;
         }
         
-        // 폴더인 경우에만 처리하고 시각적 표시
-        if (fileItem.getAttribute('data-is-folder') === 'true') {
-            // 선택된 폴더에 대한 드래그는 무시
-            if (fileItem.classList.contains('selected')) {
-                console.log('자기 자신이나 하위 폴더에 드래그 불가: ', fileItem.getAttribute('data-name'));
-                return;
-            }
-            
-            // 모든 폴더에서 drag-over 클래스 제거
-            document.querySelectorAll('.file-item[data-is-folder="true"].drag-over').forEach(item => {
-                if (item !== fileItem) {
-                    item.classList.remove('drag-over');
-                }
-            });
-            
-            console.log('드래그 진입:', fileItem.getAttribute('data-name'));
-            fileItem.classList.add('drag-over');
-        }
+        // 다른 폴더들의 강조 제거
+        clearAllDragOverClasses();
+        
+        console.log('드래그 진입:', fileItem.getAttribute('data-name'));
+        // 현재 폴더에만 드래그 오버 스타일 적용
+        fileItem.classList.add('drag-over');
+    } else {
+        // 파일인 경우 모든 강조 제거
+        clearAllDragOverClasses();
     }
+}
     
 function handleFileDragOver(e) {
-        e.preventDefault(); // 드롭 허용
-        e.stopPropagation(); // 이벤트 버블링 방지
-        
-        const fileItem = e.target.closest('.file-item');
-        
-        // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
-        if (!fileItem || e.target === fileList || e.target === fileView) {
-            return;
-        }
-        
-        // 상위 폴더인 경우 드래그 오버 처리하지 않음
-        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+    e.preventDefault(); // 드롭 허용
+    e.stopPropagation(); // 이벤트 버블링 방지
+    
+    const fileItem = e.target.closest('.file-item');
+    
+    // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
+    if (!fileItem || e.target === fileList || e.target === fileView) {
+        clearAllDragOverClasses();
+        return;
+    }
+    
+    // 상위 폴더인 경우 드래그 오버 처리하지 않음
+    if (fileItem.getAttribute('data-parent-dir') === 'true') {
+        e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+        clearAllDragOverClasses();
+        return;
+    }
+    
+    // 폴더인 경우에만 처리
+    if (fileItem.getAttribute('data-is-folder') === 'true') {
+        // 선택된 폴더에 대한 드래그는 무시
+        if (fileItem.classList.contains('selected')) {
             e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+            clearAllDragOverClasses();
             return;
         }
         
-        // 폴더인 경우에만 처리
-        if (fileItem.getAttribute('data-is-folder') === 'true') {
-            // 선택된 폴더에 대한 드래그는 무시
-            if (fileItem.classList.contains('selected')) {
-                e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
-                return;
-            }
-            
-            // 드롭존 비활성화 - 폴더에 드래그할 때는 전체 드롭존이 아닌 폴더 자체에 표시
+        // 드롭존 비활성화 - 폴더에 드래그할 때는 전체 드롭존이 아닌 폴더 자체에 표시
+        if (dropZone) {
             dropZone.classList.remove('active');
-            
-            // 폴더에 드래그 오버 스타일 적용
-            fileItem.classList.add('drag-over');
-            
-            // 기본 드롭 효과 설정 (드롭 후 판단)
-            const hasExternalFiles = e.dataTransfer.files && e.dataTransfer.files.length > 0;
-            e.dataTransfer.dropEffect = hasExternalFiles ? 'copy' : 'move';
         }
-    }
-    
-    function handleFileDragLeave(e) {
-        const fileItem = e.target.closest('.file-item');
-        if (!fileItem) return;
         
-        // e.relatedTarget은 마우스가 이동해 들어간 요소를 가리킵니다.
-        // 마우스가 fileItem 요소 또는 그 자식 요소가 아닌 곳으로 이동했을 때만 클래스를 제거합니다.
-        if (!e.relatedTarget || !fileItem.contains(e.relatedTarget)) {
-        fileItem.classList.remove('drag-over');
-        }
+        // 다른 요소의 강조 모두 제거하고 현재 폴더만 강조
+        clearAllDragOverClasses();
+        fileItem.classList.add('drag-over');
+        
+        // 기본 드롭 효과 설정 (드롭 후 판단)
+        const hasExternalFiles = e.dataTransfer.files && e.dataTransfer.files.length > 0;
+        e.dataTransfer.dropEffect = hasExternalFiles ? 'copy' : 'move';
+    } else {
+        // 파일 항목인 경우 모든 강조 제거
+        clearAllDragOverClasses();
+        e.dataTransfer.dropEffect = 'none'; // 파일에는 드롭 불가
     }
+}
     
+function handleFileDragLeave(e) {
+    // 이 함수는 필요 없음 - dragover 이벤트에서 모든 처리를 수행
+    // 빈 함수로 남겨둠
+}
 
-    fileList.addEventListener('dragenter', handleFileDragEnter);
-    fileList.addEventListener('dragover', handleFileDragOver);
-    fileList.addEventListener('dragleave', handleFileDragLeave);
-    fileList.addEventListener('drop', handleFileDrop);
-    
-    // 전체 영역 드롭존 이벤트 함수들
+// 이벤트 리스너 등록
+fileList.addEventListener('dragenter', handleFileDragEnter);
+fileList.addEventListener('dragover', handleFileDragOver);
+fileList.addEventListener('dragleave', handleFileDragLeave);
+fileList.addEventListener('drop', handleFileDrop);
+
+// 전체 영역 드롭존 이벤트 함수들
 function handleDropZoneDragEnter(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -5403,8 +5420,84 @@ function handleDragStart(e, fileItem) {
         }
     }
     
+    // clearAllDragOverClasses 함수가 앞에서 정의되어 있지 않으면 정의
+    if (typeof clearAllDragOverClasses !== 'function') {
+        function clearAllDragOverClasses() {
+            document.querySelectorAll('.file-item.drag-over').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
+    }
 
-    fileList.addEventListener('dragenter', handleFileDragEnter);
+    // 이미 handleFileDragEnter 함수가 정의되어 있지 않으면 정의
+    if (typeof handleFileDragEnter !== 'function') {
+        function handleFileDragEnter(e) {
+            const fileItem = e.target.closest('.file-item');
+            if (!fileItem) {
+                clearAllDragOverClasses();
+                return;
+            }
+            
+            if (fileItem.getAttribute('data-is-folder') === 'true' && !fileItem.classList.contains('selected')) {
+                clearAllDragOverClasses();
+                fileItem.classList.add('drag-over');
+            } else {
+                clearAllDragOverClasses();
+            }
+        }
+    }
+    
+    // handleFileDragOver 함수가 정의되어 있지 않으면 정의
+    if (typeof handleFileDragOver !== 'function') {
+        function handleFileDragOver(e) {
+            e.preventDefault(); // 드롭 허용
+            e.stopPropagation(); // 이벤트 버블링 방지
+            
+            // 모든 drag-over 클래스 먼저 제거
+            if (typeof clearAllDragOverClasses === 'function') {
+                clearAllDragOverClasses();
+            } else {
+                document.querySelectorAll('.file-item.drag-over').forEach(item => {
+                    item.classList.remove('drag-over');
+                });
+            }
+            
+            const fileItem = e.target.closest('.file-item');
+            
+            // 파일 항목이 없으면 종료
+            if (!fileItem) return;
+            
+            // 폴더이고 선택되지 않은 경우에만 처리
+            if (fileItem.getAttribute('data-is-folder') === 'true' && !fileItem.classList.contains('selected')) {
+                // 폴더에 드래그 오버 스타일 적용
+                fileItem.classList.add('drag-over');
+                
+                // 기본 드롭 효과 설정
+                e.dataTransfer.dropEffect = 'move';
+            }
+        }
+    }
+    
+    // handleFileDragLeave 함수가 정의되어 있지 않으면 정의
+    if (typeof handleFileDragLeave !== 'function') {
+        function handleFileDragLeave(e) {
+            // 빈 함수로 유지
+        }
+    }
+
+    // handleFileDrop 함수가 정의되어 있지 않으면 정의
+    if (typeof handleFileDrop !== 'function') {
+        function handleFileDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // drag-over 클래스 초기화
+            if (typeof clearAllDragOverClasses === 'function') {
+                clearAllDragOverClasses();
+            }
+        }
+    }
+
     fileList.addEventListener('dragover', handleFileDragOver);
     fileList.addEventListener('dragleave', handleFileDragLeave);
     fileList.addEventListener('drop', handleFileDrop);

@@ -1,0 +1,1268 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f5f5f5;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: #2c3e50;
+    color: white;
+}
+
+h1 {
+    font-size: 2rem;
+}
+
+.file-explorer {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 150px);
+}
+
+.navigation-bar {
+    background-color: #f0f0f0;
+    padding: 10px 15px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+}
+
+.breadcrumb {
+    flex-grow: 1;
+    font-size: 0.9rem;
+}
+
+.breadcrumb span {
+    cursor: pointer;
+    color: #007bff;
+}
+
+.breadcrumb span:hover {
+    text-decoration: underline;
+}
+
+.file-actions {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 15px;
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0069d9;
+    border-color: #0062cc;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
+
+.btn-info {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
+.btn-info:hover {
+    background-color: #138496;
+    border-color: #117a8b;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+.search-box {
+    display: flex;
+}
+
+.search-box input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px 0 0 4px;
+    width: 200px;
+}
+
+.search-box button {
+    border-radius: 0 4px 4px 0;
+}
+
+.file-container {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.file-list {
+    overflow-y: auto;
+    flex: 1;
+    padding: 0;
+    position: relative;
+    width: 100%;
+}
+
+.file-view {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    position: relative;
+    width: 100%;
+}
+
+/* 그리드 뷰 (아이콘 모드) */
+.file-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+    gap: 10px;
+    padding: 10px;
+}
+
+.file-view:not(.list-view) {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.file-view:not(.list-view) .file-item {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    margin: 8px;
+    width: 120px;
+    height: 120px;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+}
+
+.file-view:not(.list-view) .file-details {
+    display: none;
+}
+
+.file-item {
+    position: relative;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease-in-out;
+    overflow: hidden;
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+}
+
+/* 그리드뷰 스타일 */
+.file-view:not(.list-view) .file-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    margin: 8px;
+    width: 100px;
+    height: 100px;
+}
+
+.file-view:not(.list-view) .file-details {
+    display: none;
+}
+
+/* 리스트뷰 스타일 */
+.file-view.list-view {
+    display: block;
+    width: 100%;
+}
+
+.file-view.list-view .file-list-header,
+.file-view.list-view .file-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 36px;
+}
+
+.file-view.list-view .file-list-header {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    color: #495057;
+    cursor: pointer;
+    border-top: 1px solid #dee2e6;
+    border-bottom: 2px solid #dee2e6;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.file-view.list-view .file-list-header:hover {
+    background-color: #e9ecef;
+}
+
+.file-view.list-view .file-item:hover {
+    background-color: #f1f3f5;
+}
+
+/* 아이콘 열 (공통) */
+.file-view.list-view .file-icon,
+.file-view.list-view .header-icon {
+    width: 30px;
+    flex: 0 0 30px;
+    text-align: center;
+    margin-right: 10px;
+    font-size: 18px;
+}
+
+/* === 내용 행 스타일 (5:1:1) === */
+.file-view.list-view .file-item .file-name {
+    flex-grow: 5; 
+    flex-shrink: 1;
+    flex-basis: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 15px;
+    text-align: left; /* 내용: 이름 왼쪽 정렬 유지 */
+}
+
+.file-view.list-view .file-item .file-size {
+    flex-grow: 1; 
+    flex-shrink: 0;
+    flex-basis: 0;
+    min-width: 80px;
+    text-align: left; /* 내용: 크기 왼쪽 정렬로 변경 */
+    padding-right: 15px; /* 왼쪽 정렬 시 우측 여백 추가 */
+    padding-left: 0; /* 왼쪽 여백 제거 */
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+.file-view.list-view .file-item .file-date {
+    flex-grow: 1; 
+    flex-shrink: 0;
+    flex-basis: 0;
+    min-width: 120px;
+    text-align: left; /* 내용: 날짜 왼쪽 정렬로 변경 */
+    padding-right: 10px; /* 왼쪽 정렬 시 우측 여백 추가 */
+    padding-left: 0; /* 왼쪽 여백 제거 */
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+/* === 제목 행 스타일 (3:1:1) === */
+.file-view.list-view .file-list-header .header-name {
+    flex-grow: 3; /* 제목: 이름 비율 3으로 변경 */
+    flex-shrink: 1;
+    flex-basis: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center; /* 제목: 이름 가운데 정렬 유지 */
+    padding-left: 0;
+}
+
+.file-view.list-view .file-list-header .header-size {
+    flex-grow: 1; /* 제목: 크기 비율 1 유지 */
+    flex-shrink: 0;
+    flex-basis: 0;
+    min-width: 80px;
+    text-align: center; /* 제목: 크기 가운데 정렬 유지 */
+    padding-left: 0; 
+    color: #495057; 
+    font-size: inherit; 
+}
+
+.file-view.list-view .file-list-header .header-date {
+    flex-grow: 1; /* 제목: 날짜 비율 1 유지 */
+    flex-shrink: 0;
+    flex-basis: 0;
+    min-width: 120px;
+    text-align: center; /* 제목: 날짜 가운데 정렬 유지 */
+    padding-left: 0; 
+    color: #495057; 
+    font-size: inherit; 
+}
+
+/* 크기 및 날짜 포함하는 details 영역 (숨김 처리 - 공통) */
+.file-view.list-view .file-details {
+    display: contents;
+}
+
+.file-item:hover {
+    background-color: #f0f0f0;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.file-item.selected {
+    background-color: #e3f2fd;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.file-item.cut {
+    opacity: 0.5;
+}
+
+.file-item.dragging {
+    opacity: 0.6;
+    transform: scale(0.95);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    cursor: grabbing;
+    outline: 1px dashed #007bff;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.file-item.drag-over {
+    /* background-color: rgba(0, 123, 255, 0.3); */
+    border: 2px dashed #0056b3 !important;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    transform: scale(1.03);
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+.file-icon {
+    margin-bottom: 5px;
+    font-size: 26px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #007bff;
+}
+
+.file-icon i.fas.fa-folder {
+    color: #ffc107;
+}
+
+.file-name {
+    font-size: 0.75rem;
+    text-align: center;
+    word-break: break-word;
+    max-width: 100%;
+    max-height: 38px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-item.renaming .file-name {
+    display: none;
+}
+
+.rename-input {
+    width: 90px;
+    font-size: 0.85rem;
+    text-align: center;
+    display: none;
+}
+
+.file-item.renaming .rename-input {
+    display: block;
+}
+
+#selectionBox {
+    position: fixed;
+    border: 1px dashed #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.upload-form {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+.upload-form input[type=file] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.progress-container {
+    display: none;
+    background-color: rgba(255, 255, 255, 0.95);
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    padding: 15px;
+    margin: 10px 15px;
+    z-index: 10;
+}
+
+.upload-file-info {
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+    color: #333;
+    display: block;
+}
+
+.upload-file-info span {
+    font-weight: bold;
+    word-break: break-all;
+    display: inline-block;
+}
+
+.progress {
+    height: 20px;
+    background-color: #f5f5f5;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 10px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0;
+    background-color: #28a745;
+    transition: width 0.3s ease;
+    position: relative;
+    border-radius: 10px;
+}
+
+.upload-status {
+    color: #666;
+    font-size: 0.9rem;
+    margin-top: 5px;
+    display: block;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    width: 400px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.modal-close {
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: #aaa;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255,255,255,0.8);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.drop-zone {
+    display: none; /* 항상 숨김 처리 */
+    opacity: 0;
+    pointer-events: none;
+}
+
+.drop-zone.active {
+    display: none; /* 활성화 상태에서도 숨김 처리 */
+    opacity: 0;
+    pointer-events: none;
+}
+
+.drop-zone i {
+    font-size: 4rem;
+    color: #2196F3;
+    margin-bottom: 1rem;
+}
+
+.drop-zone p {
+    font-size: 1.5rem;
+    color: #333;
+    margin: 0.5rem 0;
+}
+
+.drop-zone-info {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-top: 5px;
+}
+
+.file-item:hover {
+    background-color: #f0f0f0;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.file-item.selected {
+    background-color: #e3f2fd;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.file-item.cut {
+    opacity: 0.5;
+}
+
+.file-item.dragging {
+    opacity: 0.6;
+    transform: scale(0.95);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    cursor: grabbing;
+    outline: 1px dashed #007bff;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.file-item.drag-over {
+    /* background-color: rgba(0, 123, 255, 0.3); */
+    border: 2px dashed #0056b3 !important;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    transform: scale(1.03);
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+/* 폴더에 드래그 오버 시 강조 효과 강화 */
+.file-item[data-is-folder="true"].drag-over {
+    /* background-color: rgba(33, 150, 243, 0.3); */ /* 배경색 제거 */
+    border: 3px dashed #0056b3 !important;
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.6);
+    /* transform: scale(1.08); */ /* 스케일 제거: 좌우 스크롤 방지 */
+    transition: all 0.2s ease;
+    z-index: 20;
+    animation: folderPulse 1.2s infinite;
+    position: relative;
+}
+
+/* 외부 파일을 폴더에 드래그할 때 특별한 효과 강화 */
+.file-item[data-is-folder="true"].drag-over::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(33, 150, 243, 0.2);
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+/* 외부 파일을 폴더에 드래그할 때 아이콘 색상 변경 및 효과 강화 */
+.file-item[data-is-folder="true"].drag-over .file-icon {
+    color: #0056b3;
+    transform: scale(1.2); /* 1.4에서 1.2로 축소 */
+    transition: all 0.2s ease;
+    text-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+}
+
+/* 폴더 아이콘 색상 강화 */
+.file-item[data-is-folder="true"].drag-over .file-icon i.fas.fa-folder {
+    color: #2196F3;
+    animation: iconPulse 1.2s infinite;
+}
+
+@keyframes iconPulse {
+    0% {
+        color: #ffc107;
+    }
+    50% {
+        color: #2196F3;
+    }
+    100% {
+        color: #ffc107;
+    }
+}
+
+@keyframes folderPulse {
+    0% {
+        border-color: #0056b3;
+        /* background-color: rgba(33, 150, 243, 0.2); */ /* 배경색 제거 */
+        box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    }
+    50% {
+        border-color: #2196F3;
+        /* background-color: rgba(33, 150, 243, 0.4); */ /* 배경색 제거 */
+        box-shadow: 0 0 25px rgba(0, 123, 255, 0.8);
+    }
+    100% {
+        border-color: #0056b3;
+        /* background-color: rgba(33, 150, 243, 0.2); */ /* 배경색 제거 */
+        box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    }
+}
+
+/* 리스트 뷰에서 폴더 드래그 오버 스타일 보완 */
+.list-view .file-item[data-is-folder="true"].drag-over {
+    /* background-color: rgba(0, 123, 255, 0.2); */ /* 배경색 제거 */
+    border-left: 4px solid #0056b3 !important;
+    border-top: 1px solid #e0e0e0 !important;
+    border-right: 1px solid #e0e0e0 !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+    transform: translateX(5px);
+    padding-left: 15px;
+}
+
+.context-menu {
+    position: absolute;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 5px 0;
+    min-width: 150px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 1000;
+    display: none;
+}
+
+.context-menu-item {
+    padding: 8px 15px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.context-menu-item:hover {
+    background-color: #f0f0f0;
+}
+
+.context-menu-item i {
+    margin-right: 8px;
+    width: 16px;
+    text-align: center;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background-color: #ddd;
+    margin: 5px 0;
+}
+
+.statusbar {
+    padding: 6px 15px;
+    background-color: #f0f0f0;
+    border-top: 1px solid #ddd;
+    font-size: 0.85rem;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.disk-usage-info {
+    display: flex;
+    flex-direction: column;
+    margin-left: 15px;
+    min-width: 200px;
+}
+
+.disk-usage-text {
+    margin-bottom: 3px;
+    font-size: 0.8rem;
+    text-align: right;
+}
+
+.disk-usage-bar {
+    width: 100%;
+    height: 4px;
+    background-color: #e0e0e0;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.disk-usage-fill {
+    height: 100%;
+    background-color: #007bff;
+    border-radius: 2px;
+}
+
+.list-view .file-view {
+    display: block;
+}
+
+.list-view .file-item {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 34px;
+    margin: 0;
+    padding: 0 15px;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+}
+
+.list-view .file-item.drag-over {
+    /* background-color: rgba(0, 123, 255, 0.15); */ /* 배경색 제거 */
+    border: 1px dashed #007bff;
+}
+
+.list-view .file-icon {
+    margin-right: 10px;
+    margin-bottom: 0;
+    font-size: 20px;
+    width: 24px;
+    height: 24px;
+}
+
+.list-view .file-name {
+    flex-grow: 1;
+    width: auto;
+    margin: 0;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 150px;
+    padding: 0 10px;
+}
+
+.file-details {
+    font-size: 0.8rem;
+    color: #666;
+    display: none;
+    margin-left: auto;
+    text-align: right;
+}
+
+.list-view .file-details {
+    display: block;
+}
+
+.view-options {
+    display: flex;
+    margin-left: 10px;
+}
+
+.view-option {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    margin-left: 5px;
+}
+
+.view-option.active {
+    background-color: #e3f2fd;
+    border-color: #007bff;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .file-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .search-box {
+        width: 100%;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+    
+    .modal-content {
+        width: 90%;
+    }
+}
+
+/* 저장소 정보 스타일 */
+.storage-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#refreshStorageBtn {
+    background-color: #34495e;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#refreshStorageBtn:hover {
+    background-color: #4a6278;
+}
+
+#storageInfoText {
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.storage-bar-container {
+    width: 150px;
+    height: 8px;
+    background-color: #ecf0f1;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.storage-bar {
+    height: 100%;
+    background-color: #2ecc71;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.storage-bar.warning {
+    background-color: #f39c12;
+}
+
+.storage-bar.danger {
+    background-color: #e74c3c;
+}
+
+.drop-zone-info {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-top: 5px;
+}
+
+/* 파일 리스트 헤더 스타일 추가 */
+.file-list-header {
+    display: flex;
+    padding: 8px 12px;
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+    font-size: 0.9rem;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.header-icon {
+    width: 30px;
+}
+
+.header-name {
+    flex: 2;
+    cursor: pointer;
+    padding: 0 10px;
+    font-size: 0.9rem;
+}
+
+.header-size {
+    flex: 1;
+    text-align: right;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.header-date {
+    flex: 1.5;
+    text-align: right;
+    cursor: pointer;
+    margin-left: 10px;
+    font-size: 0.9rem;
+}
+
+/* 일반 모드에서 숨김 처리 */
+.file-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    width: 100%;
+    color: #666;
+    margin-top: 5px;
+    opacity: 0.8;
+}
+
+/* 아이콘 뷰에서는 파일 세부 정보 표시 조정 */
+.file-item:not(.list-view .file-item) .file-details {
+    display: none; /* 아이콘 뷰에서 숨김 */
+}
+
+/* 정렬 아이콘 스타일 */
+.header-item i.fas {
+    margin-left: 5px;
+    font-size: 12px;
+}
+
+.file-item.parent-dir {
+    background-color: rgba(240, 240, 240, 0.5);
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.file-item.parent-dir:hover {
+    background-color: rgba(230, 230, 230, 0.8);
+}
+
+.file-item.parent-dir .file-icon {
+    color: #555;
+}
+
+/* 상위 폴더는 선택 스타일 적용되지 않도록 */
+.file-item.parent-dir.selected,
+.file-item.parent-dir:hover.selected,
+.file-item[data-parent-dir="true"].selected,
+.file-item[data-parent-dir="true"]:active {
+    background-color: rgba(230, 230, 230, 0.8) !important;
+    box-shadow: none !important;
+    border-color: #e0e0e0 !important;
+    pointer-events: auto;
+}
+
+/* 상위 폴더는 드래그 표시 적용되지 않도록 */
+.file-item.parent-dir.dragging,
+.file-item[data-parent-dir="true"].dragging {
+    opacity: 1 !important;
+    transform: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background-color: rgba(230, 230, 230, 0.8) !important;
+    border: 1px solid #e0e0e0 !important;
+}
+
+/* 드래그 중인 폴더 강조 */
+.file-item[data-is-folder="true"].drag-over {
+    /* background-color: rgba(0, 123, 255, 0.3); */
+    border: 2px dashed #0056b3;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+}
+
+/* 잠긴 폴더 스타일 */
+.locked-folder {
+    background-color: rgba(255, 165, 0, 0.1);
+    position: relative;
+}
+
+.locked-folder .file-icon i {
+    color: #ff9800;
+}
+
+.lock-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #ff9800;
+    font-size: 14px;
+}
+
+/* 접근 제한된 폴더 스타일 (상위 폴더가 잠긴 경우) */
+.restricted-folder {
+    background-color: rgba(158, 158, 158, 0.1);
+    position: relative;
+}
+
+.restricted-folder .file-icon i {
+    color: #9e9e9e;
+}
+
+.restricted-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9e9e9e;
+    font-size: 14px;
+}
+
+/* 목록 보기에서 잠긴 폴더 스타일 */
+.view-list .locked-folder .lock-icon {
+    right: 30px;
+}
+
+.file-size {
+    flex: 1;
+    text-align: right;
+    color: #666;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.file-date {
+    flex: 1.5;
+    text-align: right;
+    color: #666;
+    font-size: 0.8rem;
+    margin-left: 10px;
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.files-container {
+    width: 100%;
+    padding: 15px 20px;
+}
+
+/* 부모 컨테이너 추가 설정 */
+#fileList {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+/* 토스트 메시지 컨테이너 */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    pointer-events: none;
+}
+
+/* 토스트 메시지 스타일 */
+.toast {
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    color: white;
+    font-size: 14px;
+    opacity: 0;
+    transform: translateX(50px);
+    transition: all 0.3s ease;
+    max-width: 350px;
+    pointer-events: auto;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* 토스트 타입별 스타일 */
+.toast-info {
+    background-color: #3498db;
+}
+
+.toast-success {
+    background-color: #2ecc71;
+}
+
+.toast-warning {
+    background-color: #f39c12;
+}
+
+.toast-error {
+    background-color: #e74c3c;
+}
+
+/* 파일 정보 모달 스타일 */
+.file-info-content {
+    padding: 10px 0;
+}
+
+.file-info-item {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+    display: flex;
+}
+
+.file-info-item:last-child {
+    border-bottom: none;
+}
+
+.file-info-item strong {
+    min-width: 80px;
+    display: inline-block;
+    color: #555;
+}
+
+.file-info-item span {
+    flex: 1;
+    word-break: break-all;
+}
+
+/* 복사 버튼 스타일 */
+.copy-path-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    margin-left: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.copy-path-btn:hover {
+    background-color: #e9ecef;
+}
+
+.list-view .header-size,
+.list-view .file-size {
+    width: 100px; /* 크기 열 너비 */
+    text-align: right;
+    padding-right: 15px; /* 오른쪽 정렬 시 약간의 여백 */
+}
+
+.list-view .header-date,
+.list-view .file-date {
+    width: 150px; /* 수정일 열 너비 */
+    text-align: right;
+    padding-right: 15px; /* 오른쪽 정렬 시 약간의 여백 */
+}
+
+
