@@ -296,41 +296,6 @@ const server = new webdav.WebDAVServer({
   )
 });
 
-// 퍼블리케이션 후크 설정 (WebDAV PUT 요청 처리 후)
-server.afterRequest((ctx, next) => {
-  // PUT 메서드만 처리 (파일 업로드)
-  if (ctx.request.method === 'PUT') {
-    const filePath = ctx.requested.path || '';
-    const fullPath = path.join(ROOT_DIRECTORY, filePath);
-    
-    // 파일정보 확인
-    fs.stat(fullPath, (err, stats) => {
-      if (!err && stats.isFile()) {
-        // 디렉토리인지 확인하여 혹시 폴더로 잘못 생성되었다면 처리
-        const dirPath = fullPath + '/';
-        fs.stat(dirPath, (dirErr, dirStats) => {
-          if (!dirErr && dirStats.isDirectory()) {
-            // 폴더가 있다면, 파일 내용을 가져와서
-            fs.readFile(fullPath, (readErr, data) => {
-              if (!readErr) {
-                // 폴더와 동일한 이름의 파일로 내용 복사
-                const properFilePath = path.join(dirPath, path.basename(fullPath));
-                fs.writeFile(properFilePath, data, (writeErr) => {
-                  if (!writeErr) {
-                    console.log(`Fixed file inside folder: ${properFilePath}`);
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
-    });
-  }
-  
-  next();
-});
-
 // WebDAV 파일시스템 설정
 const fileSystem = new webdav.PhysicalFileSystem(ROOT_DIRECTORY);
 server.setFileSystem('/', fileSystem);
@@ -685,37 +650,13 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
 
           // 대상 디렉토리 존재 확인, 없으면 생성
           try {
-            await fs.promises.stat(finalTargetDir);
-          } catch (dirError) {
-            if (dirError.code === 'ENOENT') {
-              // 디렉토리가 없으면 생성
-              await fs.promises.mkdir(finalTargetDir, { recursive: true });
-              logWithIP(`[Upload Loop] 대상 디렉토리 생성 완료: ${finalTargetDir}`, req, 'debug');
-            } else {
-              throw dirError; // 다른 오류는 전파
-            }
-          }
-
-          // 파일 이미 존재하는지 확인
-          try {
-            const fileStats = await fs.promises.stat(targetFilePath);
-            if (fileStats.isDirectory()) {
-              // 만약 같은 이름의 폴더가 있는 경우, 파일명 변경 처리
-              const fileExt = path.extname(finalFileName);
-              const fileNameWithoutExt = finalFileName.slice(0, -fileExt.length);
-              const uniqueSuffix = Date.now() + '-' + Math.random().toString(36).substring(2, 10);
-              const newFileName = `${fileNameWithoutExt}_${uniqueSuffix}${fileExt}`;
-              targetFilePath = path.join(finalTargetDir, newFileName);
-              logWithIP(`[Upload Loop] 파일명 중복(폴더와): ${finalFileName} -> ${newFileName}`, req, 'warning');
-            } else {
-              // 파일이 이미 존재하면 덮어쓰기 (또는 필요에 따라 이름 변경 정책 사용)
-              logWithIP(`[Upload Loop] 기존 파일 덮어쓰기: ${targetFilePath}`, req, 'warning');
-            }
-          } catch (statError) {
-            // ENOENT는 파일이 없다는 것이므로 정상 진행
-            if (statError.code !== 'ENOENT') {
-              throw statError; // 다른 오류는 전파
-            }
+            // fs.promises.stat으로 확인하는 대신, 그냥 mkdir 시도 (recursive: true는 오류 없이 처리)
+            await fs.promises.mkdir(finalTargetDir, { recursive: true });
+            logWithIP(`[Upload Loop] 대상 디렉토리 생성/확인 완료: ${finalTargetDir}`, req, 'debug');
+          } catch (mkdirError) {
+            // recursive: true 옵션에도 불구하고 mkdir 실패 시 오류 로깅 및 전파
+            errorLogWithIP(`[Upload Loop] 대상 디렉토리 생성 실패: ${finalTargetDir}`, mkdirError, req);
+            throw mkdirError; 
           }
 
           // *** 파일 이동 시도 (rename 우선, EXDEV 시 copy+unlink) ***

@@ -1697,9 +1697,9 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         console.log('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
         showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
         clearSelection();
-        return;
-    }
-
+            return;
+        }
+        
     // --- 유효성 검사 끝 ---
     
     // 이동 시작
@@ -1751,7 +1751,7 @@ async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키
             console.log('드롭된 항목이 없습니다.');
             return;
         }
-
+        
         // 업로드 소스 설정 및 카운터 초기화
         uploadSource = 'dragdrop';
         dragDropCounter = 0;
@@ -1796,9 +1796,9 @@ async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키
         if (filesWithPaths.length === 0) {
             statusInfo.textContent = '업로드할 파일을 찾을 수 없습니다.';
             console.log('업로드할 파일이 없습니다.');
-            return;
-        }
-
+                return;
+            }
+            
         console.log(`총 ${filesWithPaths.length}개의 파일 수집 완료.`);
         // uploadFiles 함수 호출 시 targetPath 전달
         uploadFiles(filesWithPaths, targetPath); // 수정: targetPath 전달
@@ -1972,7 +1972,7 @@ function handleFileDrop(e, targetFolderItem = null) {
         
         // 드래그 오버 스타일 제거
         targetFolderItem.classList.remove("drag-over");
-    } else {
+                        } else {
         console.log("빈 영역에 파일 드롭됨 - 현재 경로에 처리");
     }
 
@@ -1990,7 +1990,7 @@ function handleFileDrop(e, targetFolderItem = null) {
         if (!targetFolderItem || targetFolderItem.getAttribute("data-is-folder") !== "true") {
             console.log("현재 디렉토리에 외부 파일 업로드");
             handleExternalFileDrop(e); // 현재 경로에 업로드
-        } else {
+            } else {
             // 폴더 항목에 드롭된 경우 해당 폴더를 타겟으로 지정
             console.log(`"${targetFolderItem.getAttribute("data-name")}" 폴더에 외부 파일 업로드`);
             handleExternalFileDrop(e, targetFolderItem);
@@ -2004,7 +2004,7 @@ function handleFileDrop(e, targetFolderItem = null) {
         if (!targetFolderItem || targetFolderItem.getAttribute("data-is-folder") !== "true") {
             console.log(`현재 경로 "${currentPath}"로 파일 이동`);
             handleInternalFileDrop(draggedPaths);
-        } else {
+                    } else {
             // 폴더 항목에 드롭된 경우 해당 폴더로 이동
             console.log(`"${targetFolderItem.getAttribute("data-name")}" 폴더로 파일 이동`);
             handleInternalFileDrop(draggedPaths, targetFolderItem);
