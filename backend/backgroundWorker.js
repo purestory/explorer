@@ -96,13 +96,6 @@ if (!operation || !targetPath) {
         }
       }
 
-      // 특수문자를 완벽하게 이스케이프하는 함수
-      function escapeShellArg(arg) {
-        // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-        // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-        return `'${arg.replace(/'/g, "'\\''")}'`;
-      }
-
       // rm 명령어 실행 (백틱과 같은 특수문자를 올바르게 이스케이프)
       const escapedPath = escapeShellArg(targetPath);
       const command = `rm -rf ${escapedPath}`;
@@ -128,10 +121,36 @@ if (!operation || !targetPath) {
       log(`${itemType} 삭제 작업 완료 (rm 명령어 사용): ${targetPath}`);
 
     } else if (operation === 'create') {
-      // recursive: true는 부모 디렉토리가 없어도 생성해줍니다.
-      // mode: 0o777은 권한 설정입니다 (필요에 따라 조정).
-      await fsPromises.mkdir(targetPath, { recursive: true, mode: 0o777 });
-      log(`생성 작업 완료: ${targetPath}`);
+      // 특수문자를 완벽하게 이스케이프하는 함수는 위에서 정의됨
+      function escapeShellArg(arg) {
+        // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+        // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+        return `'${arg.replace(/'/g, "'\\''")}'`;
+      }
+
+      // mkdir 명령어 실행 (-p: 상위 디렉토리 자동 생성, -m 777: 권한 설정)
+      const escapedPath = escapeShellArg(targetPath);
+      const command = `mkdir -p -m 777 ${escapedPath}`;
+      log(`명령어 실행: ${command}`);
+      
+      await new Promise((resolve, reject) => {
+        exec(command, (error, stdout, stderr) => {
+          if (stdout) {
+            log(`mkdir stdout: ${stdout.trim()}`);
+          }
+          if (stderr) {
+            log(`mkdir stderr: ${stderr.trim()}`);
+            // stderr 자체는 오류로 처리하지 않고 로그만 기록
+          }
+          if (error) {
+            errorLog(`mkdir 명령어 실행 오류: ${targetPath}`, error);
+            return reject(error);
+          }
+          resolve();
+        });
+      });
+      
+      log(`폴더 생성 작업 완료 (mkdir 명령어 사용): ${targetPath}`);
     } else {
       if (timeoutId) clearTimeout(timeoutId); // *** 지원되지 않는 작업 시 타임아웃 취소 ***
       errorLog('지원되지 않는 작업입니다.', { operation });

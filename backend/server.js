@@ -679,12 +679,37 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
           // 대상 디렉토리 존재 확인, 없으면 생성
           try {
             // fs.promises.stat으로 확인하는 대신, 그냥 mkdir 시도 (recursive: true는 오류 없이 처리)
-            await fs.promises.mkdir(finalTargetDir, { recursive: true });
+            // await fs.promises.mkdir(finalTargetDir, { recursive: true });
+            // logWithIP(`[Upload Loop] 대상 디렉토리 생성/확인 완료: ${finalTargetDir}`, req, 'debug');
+            
+            // 특수문자를 완벽하게 이스케이프하는 함수
+            function escapeShellArg(arg) {
+              // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+              // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+              return `'${arg.replace(/'/g, "'\\''")}'`;
+            }
+            
+            // mkdir 명령어 실행 (-p: 상위 디렉토리 자동 생성, -m 777: 권한 설정)
+            const escapedTargetDir = escapeShellArg(finalTargetDir);
+            const mkdirCommand = `mkdir -p -m 777 ${escapedTargetDir}`;
+            logWithIP(`[Upload Loop] mkdir 명령어 실행: ${mkdirCommand}`, req, 'debug');
+            
+            // util.promisify로 exec를 프로미스로 변환
+            const { promisify } = require('util');
+            const execPromise = promisify(require('child_process').exec);
+            
+            const { stdout, stderr } = await execPromise(mkdirCommand);
+            if (stderr) {
+              logWithIP(`[Upload Loop] mkdir stderr (정보): ${stderr.trim()}`, req, 'debug');
+            }
             logWithIP(`[Upload Loop] 대상 디렉토리 생성/확인 완료: ${finalTargetDir}`, req, 'debug');
           } catch (mkdirError) {
-            // recursive: true 옵션에도 불구하고 mkdir 실패 시 오류 로깅 및 전파
-            errorLogWithIP(`[Upload Loop] 대상 디렉토리 생성 실패: ${finalTargetDir}`, mkdirError, req);
-            throw mkdirError; 
+            // mkdir 명령어 실행 실패 시 오류 로깅 및 전파
+            errorLogWithIP(`[Upload Loop] 대상 디렉토리 생성 명령어 오류: ${finalTargetDir}`, mkdirError, req);
+            if (mkdirError.stderr) {
+              errorLogWithIP(`[Upload Loop] mkdir stderr: ${mkdirError.stderr}`, null, req);
+            }
+            throw mkdirError;
           }
 
           // *** 파일 이동 시도 (rename 우선, EXDEV 시 copy+unlink) ***
@@ -1301,11 +1326,31 @@ app.post('/api/files/:folderPath(*)', async (req, res) => {
 
   // 직접 폴더 생성 시도
   try {
-    await fs.promises.mkdir(targetFullPath, { recursive: true, mode: 0o777 });
-    logWithIP(`폴더 생성 성공: ${targetFullPath}`, req, 'info');
-    res.status(201).json({ success: true, message: '폴더 생성 성공' });
-    // 디스크 사용량 갱신 (백그라운드에서 실행, 결과 기다리지 않음)
-    getDiskUsage().catch(err => errorLogWithIP('폴더 생성 후 디스크 사용량 갱신 오류', err, req));
+    // 디렉토리 생성
+    // await fs.promises.mkdir(targetFullPath, { recursive: true, mode: 0o777 });
+    
+    // 특수문자를 완벽하게 이스케이프하는 함수
+    function escapeShellArg(arg) {
+      // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+      // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+      return `'${arg.replace(/'/g, "'\\''")}'`;
+    }
+    
+    const escapedPath = escapeShellArg(targetFullPath);
+    const mkdirCommand = `mkdir -p -m 777 ${escapedPath}`;
+    logWithIP(`새 폴더 생성 명령어 실행: ${mkdirCommand}`, req, 'debug');
+    
+    // util.promisify로 exec를 프로미스로 변환 (함수 외부에서 선언된 경우 재사용)
+    const { promisify } = require('util');
+    const execPromise = promisify(require('child_process').exec);
+    
+    const { stdout, stderr } = await execPromise(mkdirCommand);
+    if (stderr) {
+      logWithIP(`mkdir stderr (정보): ${stderr.trim()}`, req, 'debug');
+    }
+    
+    logWithIP(`폴더 생성 완료: ${targetFullPath}`, req, 'minimal');
+    return res.status(201).json({ success: true, message: '폴더가 생성되었습니다.' });
   } catch (error) {
     errorLogWithIP(`폴더 생성 실패: ${targetFullPath}`, error, req);
     if (error.code === 'EACCES') {
@@ -1665,8 +1710,29 @@ app.post('/api/folders', express.json(), async (req, res) => { // *** async 추�
     }
 
     // *** 폴더 생성 및 권한 설정 (비동기) ***
-    await fs.promises.mkdir(fullPath, { recursive: true }); // recursive는 상위 경로 자동 생성
-    await fs.promises.chmod(fullPath, 0o777);
+    // await fs.promises.mkdir(fullPath, { recursive: true }); // recursive는 상위 경로 자동 생성
+    // await fs.promises.chmod(fullPath, 0o777);
+    // log(`폴더 생성 완료 및 권한 설정: ${fullPath}`, 'info');
+
+    // 특수문자를 완벽하게 이스케이프하는 함수
+    function escapeShellArg(arg) {
+      // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+      // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+      return `'${arg.replace(/'/g, "'\\''")}'`;
+    }
+    
+    const escapedPath = escapeShellArg(fullPath);
+    const mkdirCommand = `mkdir -p -m 777 ${escapedPath}`;
+    log(`폴더 생성 명령어 실행: ${mkdirCommand}`, 'debug');
+    
+    // util.promisify로 exec를 프로미스로 변환
+    const { promisify } = require('util');
+    const execPromise = promisify(require('child_process').exec);
+    
+    const { stdout, stderr } = await execPromise(mkdirCommand);
+    if (stderr) {
+      log(`mkdir stderr (정보): ${stderr.trim()}`, 'debug');
+    }
     log(`폴더 생성 완료 및 권한 설정: ${fullPath}`, 'info');
 
     res.status(201).send('폴더가 성공적으로 생성되었습니다.');
