@@ -1,23 +1,51 @@
-const fs = require('fs/promises');
+const fsPromises = require('fs/promises');
+const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 
-// 로그 함수 (server.js의 것을 단순화하여 사용)
+// 로그 파일 경로 정의 (server.js와 동일하게)
+const LOGS_DIRECTORY = path.join(__dirname, 'logs');
+const SERVER_LOG_PATH = path.join(LOGS_DIRECTORY, 'server.log');
+const ERROR_LOG_PATH = path.join(LOGS_DIRECTORY, 'error.log');
+
+// 로그 함수 수정: 파일에만 기록
 function log(message) {
   const now = new Date();
   const kstOffset = 9 * 60 * 60 * 1000;
   const kstDate = new Date(now.getTime() + kstOffset);
   const timestamp = kstDate.toISOString().replace('T', ' ').substring(0, 19) + ' KST';
-  console.log(`${timestamp} - [WORKER] ${message}`);
+  const logMessage = `${timestamp} - [WORKER] ${message}\n`;
+  
+  // console.log(`${timestamp} - [WORKER] ${message}`); // 콘솔 출력 제거
+  try {
+    if (!fs.existsSync(LOGS_DIRECTORY)) {
+      fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
+    }
+    fs.appendFileSync(SERVER_LOG_PATH, logMessage); 
+  } catch (err) {
+    // 파일 쓰기 실패 시 콘솔 에러는 유지 (중요 오류 알림 목적)
+    console.error('[WORKER] 로그 파일 쓰기 오류:', err);
+  }
 }
 
+// 에러 로그 함수 수정: 파일에만 기록
 function errorLog(message, error) {
   const now = new Date();
   const kstOffset = 9 * 60 * 60 * 1000;
   const kstDate = new Date(now.getTime() + kstOffset);
   const timestamp = kstDate.toISOString().replace('T', ' ').substring(0, 19) + ' KST';
-  console.error(`${timestamp} - [WORKER] ERROR: ${message}`, error);
-  // 필요하다면 별도 로그 파일에 기록할 수도 있습니다.
+  const errorMessage = `${timestamp} - [WORKER] ERROR: ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
+  
+  // console.error(`${timestamp} - [WORKER] ERROR: ${message}`, error); // 콘솔 출력 제거
+  try {
+    if (!fs.existsSync(LOGS_DIRECTORY)) {
+      fs.mkdirSync(LOGS_DIRECTORY, { recursive: true });
+    }
+    fs.appendFileSync(ERROR_LOG_PATH, errorMessage); 
+  } catch (err) {
+    // 파일 쓰기 실패 시 콘솔 에러는 유지
+    console.error('[WORKER] 에러 로그 파일 쓰기 오류:', err);
+  }
 }
 
 // --- SIGTERM 핸들러 추가 ---
@@ -51,32 +79,54 @@ if (!operation || !targetPath) {
     log(`작업 시작: ${operation}, 대상: ${targetPath}`);
 
     if (operation === 'delete') {
-      // await fs.rm(targetPath, { recursive: true, force: true }); // 기존 fs.rm 주석 처리
-      // rm 명령어 실행 (-r: 재귀적으로, -f: 강제로)
+      let itemType = '항목'; // 기본값 설정
+      try {
+        const stats = await fsPromises.stat(targetPath);
+        if (stats.isDirectory()) {
+          itemType = '폴더';
+        } else if (stats.isFile()) {
+          itemType = '파일';
+        }
+        log(`삭제 대상 타입 확인: ${itemType}`);
+      } catch (statError) {
+        if (statError.code === 'ENOENT') {
+          log('삭제 대상이 이미 존재하지 않습니다.');
+          // 대상이 없으면 성공으로 간주하고 종료할 수 있음
+          if (timeoutId) clearTimeout(timeoutId);
+          process.exit(0); // 성공 종료
+          return; // 이후 삭제 로직 실행 방지
+        } else {
+          // 다른 stat 오류 (예: 권한 문제)
+          errorLog(`대상 타입 확인 오류: ${targetPath}`, statError);
+          // 오류 발생 시에도 삭제 시도
+        }
+      }
+
+      // rm 명령어 실행
       await new Promise((resolve, reject) => {
-        const command = `rm -rf "${targetPath.replace(/"/g, '\"')}"`; // 경로에 따옴표가 있을 경우 이스케이프
+        const command = `rm -rf "${targetPath.replace(/"/g, '\\"')}"`;
         log(`명령어 실행: ${command}`);
         exec(command, (error, stdout, stderr) => {
           if (stdout) {
             log(`rm stdout: ${stdout.trim()}`);
           }
           if (stderr) {
-            // stderr에 내용이 있어도 에러가 아닐 수 있음 (예: 진행 상황 메시지)
-            // 하지만 rm 명령어는 보통 성공 시 출력이 없으므로, stderr 내용이 있다면 일단 경고로 기록
             log(`rm stderr: ${stderr.trim()}`);
           }
           if (error) {
-            errorLog(`rm 명령어 실행 오류: ${targetPath}`, error);
-            return reject(error); // Promise를 reject하여 오류 처리
+            errorLog(`rm 명령어 실행 오류 (${itemType}): ${targetPath}`, error);
+            return reject(error);
           }
-          resolve(); // 성공 시 Promise를 resolve
+          resolve(); 
         });
       });
-      log(`삭제 작업 완료 (rm 명령어 사용): ${targetPath}`);
+      // 로그 메시지에 타입 포함
+      log(`${itemType} 삭제 작업 완료 (rm 명령어 사용): ${targetPath}`);
+
     } else if (operation === 'create') {
       // recursive: true는 부모 디렉토리가 없어도 생성해줍니다.
       // mode: 0o777은 권한 설정입니다 (필요에 따라 조정).
-      await fs.mkdir(targetPath, { recursive: true, mode: 0o777 });
+      await fsPromises.mkdir(targetPath, { recursive: true, mode: 0o777 });
       log(`생성 작업 완료: ${targetPath}`);
     } else {
       if (timeoutId) clearTimeout(timeoutId); // *** 지원되지 않는 작업 시 타임아웃 취소 ***

@@ -15,15 +15,10 @@ const { promisify } = require('util');
 // --- 전역 오류 처리기 추가 ---
 process.on('uncaughtException', (error) => {
   errorLog('처리되지 않은 예외 발생:', error);
-  // 여기서는 로깅만 하고, 아래 SIGTERM 핸들러에서 정리 및 종료를 유도
-  // 필요한 경우 추가적인 즉시 정리 작업 수행 가능
-  // process.exit(1); // 즉시 종료 대신 아래 SIGTERM 핸들러에 맡김
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   errorLog('처리되지 않은 Promise 거부 발생:', reason);
-  // 여기서는 로깅만 하고, 아래 SIGTERM 핸들러에서 정리 및 종료를 유도
-  // process.exit(1); // 즉시 종료 대신 아래 SIGTERM 핸들러에 맡김
 });
 
 // --- 활성 워커 프로세스 관리 --- 
@@ -40,53 +35,43 @@ let errorLogFile;
 
 // *** 로그 스트림 설정 함수 정의 (위치 조정) ***
 function setupLogStreams() {
-  // 파일 스트림 생성 로직
   try {
     logFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'server.log'), { flags: 'a' });
     errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
-    console.log('Log streams setup complete.'); // 확인용 콘솔 로그
   } catch (streamError) {
-    // 스트림 생성 실패 시 콘솔에 오류 출력 (파일 로깅 불가 상태)
     console.error('FATAL: Failed to create log streams:', streamError);
-    process.exit(1); // 심각한 오류로 간주하고 종료
+    process.exit(1);
   }
 }
 async function initializeDirectories() {
   try {
-    // 로그 디렉토리 확인 및 생성 (비동기)
     try {
       await fs.promises.access(LOGS_DIRECTORY);
     } catch (error) {
       if (error.code === 'ENOENT') {
         await fs.promises.mkdir(LOGS_DIRECTORY, { recursive: true });
-        // *** 초기 로그는 console 사용 ***
-        console.log(`로그 디렉토리 생성됨: ${LOGS_DIRECTORY}`); 
+        try { fs.appendFileSync(path.join(__dirname, 'logs', 'server.log'), `${new Date().toISOString()} - 로그 디렉토리 생성됨: ${LOGS_DIRECTORY}\n`); } catch {}
       } else {
-        throw error; // 접근 오류 외 다른 오류는 전파
+        throw error;
       }
     }
 
-    // *** 로그 스트림 설정 호출 위치 변경 ***
     setupLogStreams(); 
 
-    // 루트 공유 디렉토리 확인 및 생성 (비동기)
     try {
       await fs.promises.access(ROOT_DIRECTORY);
     } catch (error) {
       if (error.code === 'ENOENT') {
         await fs.promises.mkdir(ROOT_DIRECTORY, { recursive: true });
-        // *** 이제 log 함수 사용 가능 ***
         log(`루트 디렉토리 생성됨: ${ROOT_DIRECTORY}`, 'info'); 
       } else {
         throw error;
       }
     }
 
-    // 루트 공유 디렉토리 권한 설정 (비동기)
     await fs.promises.chmod(ROOT_DIRECTORY, 0o777);
     log(`루트 디렉토리 권한 설정됨: ${ROOT_DIRECTORY}`, 'info');
 
-    // *** 임시 업로드 디렉토리 확인 및 생성 (비동기) ***
     try {
       await fs.promises.access(TMP_UPLOAD_DIR);
     } catch (error) {
@@ -98,10 +83,11 @@ async function initializeDirectories() {
       }
     }
 
+    await loadLockedFolders(); // 서버 시작 시 잠금 목록 로드
+
   } catch (initError) {
-    // *** 여기서는 errorLog 대신 console.error 사용 (errorLogFile 보장 안됨) ***
     console.error('초기 디렉토리 설정 중 심각한 오류 발생:', initError);
-    process.exit(1); // 초기화 실패 시 서버 시작 중단
+    process.exit(1);
   }
 }
 
@@ -111,10 +97,6 @@ const LOG_LEVELS = { minimal: 0, info: 1, debug: 2 };
 const isDevelopment = process.env.NODE_ENV === 'development';
 let currentLogLevel = isDevelopment ? LOG_LEVELS.info : LOG_LEVELS.minimal;
 const requestLogLevel = isDevelopment ? 'info' : 'minimal'; // 요청 로그 레벨
-
-console.log(`Server running in ${isDevelopment ? 'development' : 'production'} mode.`);
-console.log(`Initial log level set to: ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel)} (${currentLogLevel})`);
-console.log(`Request log level set to: ${requestLogLevel}`);
 
 // 로그 레벨 설정 함수
 function setLogLevel(levelName) {
@@ -152,7 +134,6 @@ function log(message, levelName = 'debug') {
   // 로그 레벨 태그 제거
   const logMessage = `${timestamp} - ${message}\n`;
   logFile.write(logMessage);
-  console.log(`${timestamp} - ${message}`); // 콘솔 로그에도 태그 제거
 }
 
 function logWithIP(message, req, levelName = 'debug') {
@@ -183,36 +164,64 @@ function logWithIP(message, req, levelName = 'debug') {
   // 로그 레벨 태그 제거, IP 정보는 유지
   const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
   logFile.write(logMessage);
-  console.log(`${timestamp} - [IP: ${ip}] ${message}`); // 콘솔 로그에도 태그 제거
 }
 
 // errorLog 함수는 이제 setupLogStreams 호출 후 안전하게 errorLogFile 사용 가능
 function errorLog(message, error) { // 오류 로그는 항상 기록
   const now = new Date();
-  // ... (timestamp 생성 로직) ...
+  // *** 누락된 timestamp 생성 로직 추가 ***
+  const kstOffset = 9 * 60 * 60 * 1000;
+  const kstDate = new Date(now.getTime() + kstOffset);
+  const year = kstDate.getUTCFullYear();
+  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = kstDate.getUTCDate().toString().padStart(2, '0');
+  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
+  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
+  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
+  // *** 로직 추가 끝 ***
+  
   const logMessage = `${timestamp} - ERROR: ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
   
-  // *** errorLogFile이 정의되었는지 확인 후 사용 (안전성 강화) ***
   if (errorLogFile && errorLogFile.writable) { 
     errorLogFile.write(logMessage);
   } else {
-    // 스트림 준비 안됐으면 콘솔에만 출력
-    console.error(message, error); 
+    console.error(message, error);
   }
-  console.error(message, error); // 콘솔에는 항상 출력
 }
 
 function errorLogWithIP(message, error, req) { // 오류 로그는 항상 기록
-  // ... (ip 및 timestamp 생성 로직) ...
+  // ... (ip 생성 로직) ...
+  let ip = 'unknown';
+  if (req && req.headers) {
+      ip = req.headers['x-forwarded-for'] ||
+           req.headers['x-real-ip'] ||
+           (req.connection && req.connection.remoteAddress) ||
+           (req.socket && req.socket.remoteAddress) ||
+           (req.connection && req.connection.socket && req.connection.socket.remoteAddress) ||
+           'unknown';
+  }
+
+  const now = new Date();
+  // *** 누락된 timestamp 생성 로직 추가 ***
+  const kstOffset = 9 * 60 * 60 * 1000;
+  const kstDate = new Date(now.getTime() + kstOffset);
+  const year = kstDate.getUTCFullYear();
+  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = kstDate.getUTCDate().toString().padStart(2, '0');
+  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
+  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
+  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
+  // *** 로직 추가 끝 ***
+
   const logMessage = `${timestamp} - ERROR: [IP: ${ip}] ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
 
-  // *** errorLogFile이 정의되었는지 확인 후 사용 (안전성 강화) ***
   if (errorLogFile && errorLogFile.writable) {
     errorLogFile.write(logMessage);
   } else {
-    console.error(`[IP: ${ip}] ${message}`, error); // 콘솔에는 항상 출력
+    console.error(`[IP: ${ip}] ${message}`, error);
   }
-  console.error(`[IP: ${ip}] ${message}`, error); // 콘솔에는 항상 출력
 }
 
 
@@ -1123,37 +1132,75 @@ app.get('/api/files/*', async (req, res) => {
   }
 });
 
-// 새 폴더 생성 (시스템 명령어로 변경)
-app.post('/api/files/*', (req, res) => {
+// 새 폴더 생성 라우터 (직접 생성 방식)
+app.post('/api/files/:folderPath(*)', async (req, res) => {
+  const folderPathRaw = req.params.folderPath;
+  logWithIP(`새 폴더 생성 요청 수신 - Raw Path: ${folderPathRaw}`, req, 'info');
+
+  if (!folderPathRaw) {
+    errorLogWithIP('새 폴더 생성 오류: 경로가 비어있음', null, req);
+    return res.status(400).json({ success: false, message: '폴더 경로가 필요합니다.' });
+  }
+
+  let decodedPath;
   try {
-    const folderPath = decodeURIComponent(req.params[0] || '');
-    const fullPath = path.join(ROOT_DIRECTORY, folderPath);
-    const escapedFullPath = escapeShellArg(fullPath); // 경로 이스케이프
+    // 경로 디코딩
+    decodedPath = decodeURIComponent(folderPathRaw);
+    logWithIP(`Decoded Path: ${decodedPath}`, req);
+  } catch (e) {
+    errorLogWithIP('새 폴더 생성 오류: 경로 디코딩 실패', e, req);
+    return res.status(400).json({ success: false, message: '잘못된 경로 형식입니다.' });
+  }
 
-    logWithIP(`폴더 생성 요청 (명령어 사용): ${fullPath}`, req, 'info');
+  // 경로 정제 및 최종 경로 생성
+  const sanitizedPath = decodedPath.replace(/^\/+/, '').replace(/\/+$/, '');
+  const targetFullPath = path.join(ROOT_DIRECTORY, sanitizedPath);
+  logWithIP(`Target Full Path: ${targetFullPath}`, req);
 
-    // 이미 존재하는지 확인 (fs.existsSync는 유지)
-    if (fs.existsSync(fullPath)) {
-      errorLogWithIP(`이미 존재하는 폴더: ${fullPath}`, null, req);
-      return res.status(409).send('이미 존재하는 이름입니다.');
-    }
+  // 보안 검사 (루트 경로 탈출 방지)
+  if (!targetFullPath.startsWith(ROOT_DIRECTORY + path.sep) && targetFullPath !== ROOT_DIRECTORY) {
+    errorLogWithIP('새 폴더 생성 오류: 허용되지 않은 경로 접근 시도', { requestedPath: sanitizedPath, resolvedPath: targetFullPath }, req);
+    return res.status(403).json({ success: false, message: '허용되지 않은 경로입니다.' });
+  }
 
-    // 폴더 생성 명령어 실행 (mkdir -p && chmod 777)
-    const command = `mkdir -p ${escapedFullPath} && chmod 777 ${escapedFullPath}`;
-    logWithIP(`폴더 생성 명령어 실행: ${command}`, req, 'debug');
-    try {
-      execSync(command); // 동기 실행
-      logWithIP(`폴더 생성 완료: ${fullPath}`, req, 'info');
-      res.status(201).send('폴더가 생성되었습니다.');
-    } catch (execError) {
-      errorLogWithIP(`폴더 생성 명령어 오류: ${command}`, execError, req);
-      res.status(500).send('폴더 생성 중 오류가 발생했습니다.');
-    }
+  // 폴더명 유효성 검사
+  const folderName = path.basename(sanitizedPath);
+  if (/[\\/:*?"<>|]/.test(folderName)) {
+      errorLogWithIP('새 폴더 생성 오류: 유효하지 않은 폴더 이름', { folderName: folderName }, req);
+      return res.status(400).json({ success: false, message: '폴더 이름에 사용할 수 없는 문자가 포함되어 있습니다.' });
+  }
 
+  // 경로 길이 검사
+  if (Buffer.byteLength(targetFullPath, 'utf8') > MAX_PATH_BYTES) {
+    errorLogWithIP('새 폴더 생성 오류: 경로가 너무 김', { path: targetFullPath }, req);
+    return res.status(400).json({ success: false, message: `경로가 너무 깁니다. (최대 ${MAX_PATH_BYTES} 바이트)` });
+  }
+
+  // 잠금 상태 확인
+  if (isPathAccessRestricted(sanitizedPath)) {
+      errorLogWithIP('새 폴더 생성 오류: 대상 폴더 또는 상위 폴더 잠김', { path: sanitizedPath }, req);
+      return res.status(403).json({ success: false, message: '대상 폴더 또는 상위 폴더가 잠겨 있어 생성할 수 없습니다.' });
+  }
+
+  // 직접 폴더 생성 시도
+  try {
+    await fs.promises.mkdir(targetFullPath, { recursive: true, mode: 0o777 });
+    logWithIP(`폴더 생성 성공: ${targetFullPath}`, req, 'info');
+    res.status(201).json({ success: true, message: '폴더 생성 성공' });
+    // 디스크 사용량 갱신 (백그라운드에서 실행, 결과 기다리지 않음)
+    getDiskUsage().catch(err => errorLogWithIP('폴더 생성 후 디스크 사용량 갱신 오류', err, req));
   } catch (error) {
-    // 핸들러 자체 오류 (예: decodeURIComponent 오류)
-    errorLogWithIP('폴더 생성 API 핸들러 오류:', error, req);
-    res.status(500).send('서버 오류가 발생했습니다.');
+    errorLogWithIP(`폴더 생성 실패: ${targetFullPath}`, error, req);
+    if (error.code === 'EACCES') {
+         res.status(403).json({ success: false, message: '폴더 생성 권한이 없습니다.' });
+    } else if (error.code === 'EEXIST') {
+         // recursive: true 옵션으로 인해 이 코드는 일반적으로 발생하지 않지만, 만약을 위해 처리
+         logWithIP(`폴더 생성 시도 중 이미 존재: ${targetFullPath}`, req, 'info'); // 이미 존재하는 경우 성공으로 간주할 수도 있음
+         res.status(409).json({ success: false, message: '이미 존재하는 이름입니다.' }); // 또는 성공 처리
+    }
+     else {
+         res.status(500).json({ success: false, message: '폴더 생성 중 오류가 발생했습니다.' });
+    }
   }
 });
 
@@ -1458,3 +1505,132 @@ async function startServer() {
 }
 
 startServer(); // 서버 시작 함수 호출
+
+// --- 쉘 인자 이스케이프 함수 정의 추가 ---
+function escapeShellArg(arg) {
+    // 윈도우 환경에서는 다른 방식이 필요할 수 있으나, 현재 리눅스 환경 기준으로 작성
+    // 작은따옴표(')로 감싸고, 내부의 작은따옴표는 '\'' 로 변경
+    return "'" + arg.replace(/'/g, "'\\''") + "'";
+}
+
+// 새 폴더 생성 라우터
+app.post('/api/files/:folderPath(*)', async (req, res) => {
+  const folderPathRaw = req.params.folderPath;
+  logWithIP(`새 폴더 생성 요청 수신 - Raw Path: ${folderPathRaw}`, req, 'info');
+
+  if (!folderPathRaw) {
+    errorLogWithIP('새 폴더 생성 오류: 경로가 비어있음', null, req);
+    return res.status(400).json({ success: false, message: '폴더 경로가 필요합니다.' });
+  }
+
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(folderPathRaw);
+    logWithIP(`Decoded Path: ${decodedPath}`, req);
+  } catch (e) {
+    errorLogWithIP('새 폴더 생성 오류: 경로 디코딩 실패', e, req);
+    return res.status(400).json({ success: false, message: '잘못된 경로 형식입니다.' });
+  }
+
+  const sanitizedPath = decodedPath.replace(/^\/+/, '').replace(/\/+$/, '');
+  const targetFullPath = path.join(ROOT_DIRECTORY, sanitizedPath);
+  logWithIP(`Target Full Path: ${targetFullPath}`, req);
+
+  // 보안 검사
+  if (!targetFullPath.startsWith(ROOT_DIRECTORY + path.sep) && targetFullPath !== ROOT_DIRECTORY) {
+    errorLogWithIP('새 폴더 생성 오류: 허용되지 않은 경로 접근 시도', { requestedPath: sanitizedPath, resolvedPath: targetFullPath }, req);
+    return res.status(403).json({ success: false, message: '허용되지 않은 경로입니다.' });
+  }
+  const folderName = path.basename(sanitizedPath);
+  if (/[\\/:*?"<>|]/.test(folderName)) {
+      errorLogWithIP('새 폴더 생성 오류: 유효하지 않은 폴더 이름', { folderName: folderName }, req);
+      return res.status(400).json({ success: false, message: '폴더 이름에 사용할 수 없는 문자가 포함되어 있습니다.' });
+  }
+  if (Buffer.byteLength(targetFullPath, 'utf8') > MAX_PATH_BYTES) {
+    errorLogWithIP('새 폴더 생성 오류: 경로가 너무 김', { path: targetFullPath }, req);
+    return res.status(400).json({ success: false, message: `경로가 너무 깁니다. (최대 ${MAX_PATH_BYTES} 바이트)` });
+  }
+  if (isPathAccessRestricted(sanitizedPath)) {
+      errorLogWithIP('새 폴더 생성 오류: 대상 폴더 또는 상위 폴더 잠김', { path: sanitizedPath }, req);
+      return res.status(403).json({ success: false, message: '대상 폴더 또는 상위 폴더가 잠겨 있어 생성할 수 없습니다.' });
+  }
+
+  // *** 직접 폴더 생성 로직 ***
+  try {
+    // recursive: true 옵션은 부모 디렉토리가 없으면 생성하고, 이미 폴더가 존재해도 오류를 발생시키지 않음 (Node.js v10.12.0+)
+    // 하지만 명시적으로 존재 여부를 확인하고 싶다면 fs.promises.access 사용 가능
+    // 여기서는 recursive: true를 사용하여 단순화
+    await fs.promises.mkdir(targetFullPath, { recursive: true, mode: 0o777 });
+    logWithIP(`폴더 생성 성공: ${targetFullPath}`, req, 'info');
+    res.status(201).json({ success: true, message: '폴더 생성 성공' });
+    // 디스크 사용량 갱신 (비동기)
+    getDiskUsage().catch(err => errorLogWithIP('폴더 생성 후 디스크 사용량 갱신 오류', err, req));
+  } catch (error) {
+      // mkdir 자체에서 발생하는 오류 처리 (예: 권한 문제 EACCES, 디스크 공간 부족 ENOSPC 등)
+      errorLogWithIP(`폴더 생성 실패: ${targetFullPath}`, error, req);
+      // 이미 존재하는 경우는 recursive: true 로 인해 오류 발생 안 함
+      if (error.code === 'EACCES') {
+           res.status(403).json({ success: false, message: '폴더 생성 권한이 없습니다.' });
+      } else {
+           res.status(500).json({ success: false, message: '폴더 생성 중 오류가 발생했습니다.' });
+      }
+  }
+  // *** 직접 생성 로직 끝 ***
+
+  // --- 기존 워커 호출 로직 제거됨 --- 
+});
+
+// 파일 및 폴더 삭제 라우터 (기존 - 워커 사용)
+app.post('/api/items/delete', async (req, res) => {
+  // ... 기존 삭제 로직 (워커 사용) ...
+});
+
+// --- 폴더 잠금 관련 전역 변수 및 함수 --- 
+let lockedFolders = []; // 잠긴 폴더 경로 목록 (메모리 저장)
+const LOCK_FILE_PATH = path.join(__dirname, '.folder_locks'); // 잠금 목록 저장 파일
+
+// 잠금 파일 로드 함수
+async function loadLockedFolders() {
+    try {
+        await fs.promises.access(LOCK_FILE_PATH);
+        const data = await fs.promises.readFile(LOCK_FILE_PATH, 'utf8');
+        lockedFolders = data.split('\n').filter(Boolean); // 빈 줄 제거
+        log(`잠긴 폴더 목록 로드 완료: ${lockedFolders.length}개`, 'info');
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            log('잠금 파일(.folder_locks)이 존재하지 않아 새로 시작합니다.', 'info');
+            lockedFolders = [];
+        } else {
+            errorLog('잠금 파일 로드 중 오류 발생', error);
+            lockedFolders = []; // 오류 시 빈 목록으로 초기화
+        }
+    }
+}
+
+// 잠금 파일 저장 함수
+async function saveLockedFolders() {
+    try {
+        await fs.promises.writeFile(LOCK_FILE_PATH, lockedFolders.join('\n'), 'utf8');
+        log('잠긴 폴더 목록 저장 완료', 'debug');
+    } catch (error) {
+        errorLog('잠금 파일 저장 중 오류 발생', error);
+    }
+}
+
+// *** isPathAccessRestricted 함수 정의 추가 ***
+// 주어진 경로 또는 그 상위 경로가 잠겨 있는지 확인하는 함수
+function isPathAccessRestricted(targetPath) {
+    if (!targetPath) return false; // 빈 경로는 잠기지 않음
+    const normalizedTargetPath = targetPath.replace(/^\/+/, '').replace(/\/+$/, ''); // 정규화
+    
+    // 자기 자신 또는 상위 경로 중 하나라도 잠겨 있으면 접근 제한
+    return lockedFolders.some(lockedPath => {
+        const normalizedLockedPath = lockedPath.replace(/^\/+/, '').replace(/\/+$/, '');
+        // 대상 경로가 잠긴 경로 자체이거나, 잠긴 경로로 시작하는 경우 (하위 경로 포함)
+        return normalizedTargetPath === normalizedLockedPath || 
+               normalizedTargetPath.startsWith(normalizedLockedPath + '/') ||
+               // 대상 경로의 상위 경로 중 하나가 잠긴 경로인 경우
+               normalizedLockedPath.startsWith(normalizedTargetPath + '/');
+    });
+}
+// *** 함수 정의 끝 ***

@@ -248,54 +248,120 @@ h1 {
     width: 100%;
 }
 
+.file-view.list-view .file-list-header,
 .file-view.list-view .file-item {
     display: flex;
-    flex-direction: row;
     align-items: center;
-    padding: 8px 12px;
-    margin: 0;
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
     width: 100%;
-    height: auto;
-    border-bottom: 1px solid #f0f0f0;
     box-sizing: border-box;
     min-height: 36px;
 }
 
+.file-view.list-view .file-list-header {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    color: #495057;
+    cursor: pointer;
+    border-top: 1px solid #dee2e6;
+    border-bottom: 2px solid #dee2e6;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.file-view.list-view .file-list-header:hover {
+    background-color: #e9ecef;
+}
+
+.file-view.list-view .file-item:hover {
+    background-color: #f1f3f5;
+}
+
+/* 아이콘 열 (공통) */
 .file-view.list-view .file-icon,
-.file-view.list-view .file-name,
-.file-view.list-view .file-details,
-.file-view.list-view .file-size,
-.file-view.list-view .file-date {
-    pointer-events: auto;
+.file-view.list-view .header-icon {
+    width: 30px;
+    flex: 0 0 30px;
+    text-align: center;
+    margin-right: 10px;
+    font-size: 18px;
 }
 
-.file-view.list-view .file-icon {
-    margin-right: 10px;
-    margin-bottom: 0;
-    font-size: 20px;
-    width: 20px;
-    height: 20px;
+/* === 내용 행 스타일 (5:1:1) === */
+.file-view.list-view .file-item .file-name {
+    flex-grow: 5; 
+    flex-shrink: 1;
+    flex-basis: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 15px;
+    text-align: left; /* 내용: 이름 왼쪽 정렬 유지 */
 }
 
-.file-view.list-view .file-name {
-    flex: 2;
-    text-align: left;
-    margin-right: 10px;
+.file-view.list-view .file-item .file-size {
+    flex-grow: 1; 
+    flex-shrink: 0;
+    flex-basis: 0;
+    min-width: 80px;
+    text-align: left; /* 내용: 크기 왼쪽 정렬로 변경 */
+    padding-right: 15px; /* 왼쪽 정렬 시 우측 여백 추가 */
+    padding-left: 0; /* 왼쪽 여백 제거 */
+    color: #6c757d;
     font-size: 0.85rem;
 }
 
-.file-view.list-view .file-details {
-    display: flex;
-    justify-content: space-between;
-    flex: 2.5;
-    align-items: center;
-    height: 100%;
+.file-view.list-view .file-item .file-date {
+    flex-grow: 1; 
+    flex-shrink: 0;
+    flex-basis: 0;
+    min-width: 120px;
+    text-align: left; /* 내용: 날짜 왼쪽 정렬로 변경 */
+    padding-right: 10px; /* 왼쪽 정렬 시 우측 여백 추가 */
+    padding-left: 0; /* 왼쪽 여백 제거 */
+    color: #6c757d;
+    font-size: 0.85rem;
 }
 
-.file-size, .file-date {
-    display: flex;
-    align-items: center;
-    height: 100%;
+/* === 제목 행 스타일 (3:1:1) === */
+.file-view.list-view .file-list-header .header-name {
+    flex-grow: 3; /* 제목: 이름 비율 3으로 변경 */
+    flex-shrink: 1;
+    flex-basis: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center; /* 제목: 이름 가운데 정렬 유지 */
+    padding-left: 0;
+}
+
+.file-view.list-view .file-list-header .header-size {
+    flex-grow: 1; /* 제목: 크기 비율 1 유지 */
+    flex-shrink: 0;
+    flex-basis: 0;
+    min-width: 80px;
+    text-align: center; /* 제목: 크기 가운데 정렬 유지 */
+    padding-left: 0; 
+    color: #495057; 
+    font-size: inherit; 
+}
+
+.file-view.list-view .file-list-header .header-date {
+    flex-grow: 1; /* 제목: 날짜 비율 1 유지 */
+    flex-shrink: 0;
+    flex-basis: 0;
+    min-width: 120px;
+    text-align: center; /* 제목: 날짜 가운데 정렬 유지 */
+    padding-left: 0; 
+    color: #495057; 
+    font-size: inherit; 
+}
+
+/* 크기 및 날짜 포함하는 details 영역 (숨김 처리 - 공통) */
+.file-view.list-view .file-details {
+    display: contents;
 }
 
 .file-item:hover {
@@ -1184,3 +1250,19 @@ h1 {
 .copy-path-btn:hover {
     background-color: #e9ecef;
 }
+
+.list-view .header-size,
+.list-view .file-size {
+    width: 100px; /* 크기 열 너비 */
+    text-align: right;
+    padding-right: 15px; /* 오른쪽 정렬 시 약간의 여백 */
+}
+
+.list-view .header-date,
+.list-view .file-date {
+    width: 150px; /* 수정일 열 너비 */
+    text-align: right;
+    padding-right: 15px; /* 오른쪽 정렬 시 약간의 여백 */
+}
+
+
