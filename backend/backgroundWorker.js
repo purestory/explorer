@@ -3,6 +3,13 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 
+// 특수문자를 완벽하게 이스케이프하는 함수 (전역 정의)
+function escapeShellArg(arg) {
+  // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+  // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
 // 로그 파일 경로 정의 (server.js와 동일하게)
 const LOGS_DIRECTORY = path.join(__dirname, 'logs');
 const SERVER_LOG_PATH = path.join(LOGS_DIRECTORY, 'server.log');
@@ -121,13 +128,6 @@ if (!operation || !targetPath) {
       log(`${itemType} 삭제 작업 완료 (rm 명령어 사용): ${targetPath}`);
 
     } else if (operation === 'create') {
-      // 특수문자를 완벽하게 이스케이프하는 함수는 위에서 정의됨
-      function escapeShellArg(arg) {
-        // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-        // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-        return `'${arg.replace(/'/g, "'\\''")}'`;
-      }
-
       // mkdir 명령어 실행 (-p: 상위 디렉토리 자동 생성, -m 777: 권한 설정)
       const escapedPath = escapeShellArg(targetPath);
       const command = `mkdir -p -m 777 ${escapedPath}`;

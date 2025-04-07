@@ -13,6 +13,14 @@ const archiver = require('archiver');
 const { promisify } = require('util');
 const fs_stream = require('fs');
 
+// 특수문자를 완벽하게 이스케이프하는 전역 함수 정의
+// 이 함수는 코드 전체에서 재사용됩니다
+function escapeShellArg(arg) {
+  // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+  // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
 // --- 전역 오류 처리기 추가 ---
 process.on('uncaughtException', (error) => {
   errorLog('처리되지 않은 예외 발생:', error);
@@ -381,6 +389,11 @@ function truncateBytes(str, maxBytes) {
 }
 
 // --- 쉘 인자 이스케이프 함수 정의 ---
+function escapeShellArg(arg) {
+    // 윈도우 환경에서는 다른 방식이 필요할 수 있으나, 현재 리눅스 환경 기준으로 작성
+    // 작은따옴표(')로 감싸고, 내부의 작은따옴표는 '\'' 로 변경
+    return `'${arg.replace(/'/g, "'\\''")}'`;
+}
 
 // Multer 설정 (Disk Storage 사용 - 파일명 자동 자르기 추가)
 const storage = multer.diskStorage({
@@ -682,12 +695,7 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
             // await fs.promises.mkdir(finalTargetDir, { recursive: true });
             // logWithIP(`[Upload Loop] 대상 디렉토리 생성/확인 완료: ${finalTargetDir}`, req, 'debug');
             
-            // 특수문자를 완벽하게 이스케이프하는 함수
-            function escapeShellArg(arg) {
-              // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-              // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-              return `'${arg.replace(/'/g, "'\\''")}'`;
-            }
+            // 전역 함수 escapeShellArg 사용 (중복 정의 제거)
             
             // mkdir 명령어 실행 (-p: 상위 디렉토리 자동 생성, -m 777: 권한 설정)
             const escapedTargetDir = escapeShellArg(finalTargetDir);
@@ -1487,11 +1495,11 @@ app.put('/api/files/*', express.json(), async (req, res) => {
     logWithIP(`이름 변경/이동 시작: ${fullOldPath} -> ${fullNewPath}`, req, 'debug');
     try {
       // 특수문자를 더 견고하게 이스케이프하는 함수
-      function escapeShellArg(arg) {
-        // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-        // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-        return `'${arg.replace(/'/g, "'\\''")}'`;
-      }
+      // function escapeShellArg(arg) {
+      //   // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+      //   // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+      //   return `'${arg.replace(/'/g, "'\\''")}'`;
+      // }
 
       // 최종 이름 변경/이동 실행 (mv)
       const escapedFullOldPath = escapeShellArg(fullOldPath);
@@ -1814,6 +1822,7 @@ app.post('/api/files/:folderPath(*)', async (req, res) => {
 
   let decodedPath;
   try {
+    // 경로 디코딩
     decodedPath = decodeURIComponent(folderPathRaw);
     logWithIP(`Decoded Path: ${decodedPath}`, req);
   } catch (e) {
@@ -1879,11 +1888,11 @@ let lockedFolders = []; // 잠긴 폴더 경로 목록 (메모리 저장)
 const LOCK_FILE_PATH = path.join(__dirname, 'lockedFolders.json'); // !!!! 파일 이름 수정 !!!!
 
 // 특수문자를 완벽하게 이스케이프하는 함수 (전역)
-function escapeShellArg(arg) {
-  // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-  // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
+// function escapeShellArg(arg) {
+//   // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
+//   // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
+//   return `'${arg.replace(/'/g, "'\\''")}'`;
+// }
 
 // 잠금 파일 로드 함수
 async function loadLockedFolders() {
