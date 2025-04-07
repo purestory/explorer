@@ -3377,9 +3377,9 @@ function uploadFiles(filesWithPaths, targetUploadPath = currentPath) {
     });
     formData.append('fileInfo', JSON.stringify(fileInfoArray)); // 파일 정보 배열 추가 (상대 경로 포함)
 
-    console.log('FormData 생성 완료. 업로드 시작...');
-    console.log('업로드 대상 경로:', targetUploadPath);
-    console.log('파일 정보:', fileInfoArray);
+    // console.log('FormData 생성 완료. 업로드 시작...');
+    // console.log('업로드 대상 경로:', targetUploadPath);
+    // console.log('파일 정보:', fileInfoArray);
 
 
     // AJAX 요청으로 파일 전송
