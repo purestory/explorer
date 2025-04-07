@@ -15,11 +15,6 @@ const fs_stream = require('fs');
 
 // 특수문자를 완벽하게 이스케이프하는 전역 함수 정의
 // 이 함수는 코드 전체에서 재사용됩니다
-function escapeShellArg(arg) {
-  // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-  // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
 
 // --- 전역 오류 처리기 추가 ---
 process.on('uncaughtException', (error) => {
@@ -389,11 +384,6 @@ function truncateBytes(str, maxBytes) {
 }
 
 // --- 쉘 인자 이스케이프 함수 정의 ---
-function escapeShellArg(arg) {
-    // 윈도우 환경에서는 다른 방식이 필요할 수 있으나, 현재 리눅스 환경 기준으로 작성
-    // 작은따옴표(')로 감싸고, 내부의 작은따옴표는 '\'' 로 변경
-    return `'${arg.replace(/'/g, "'\\''")}'`;
-}
 
 // Multer 설정 (Disk Storage 사용 - 파일명 자동 자르기 추가)
 const storage = multer.diskStorage({
@@ -1338,11 +1328,6 @@ app.post('/api/files/:folderPath(*)', async (req, res) => {
     // await fs.promises.mkdir(targetFullPath, { recursive: true, mode: 0o777 });
     
     // 특수문자를 완벽하게 이스케이프하는 함수
-    function escapeShellArg(arg) {
-      // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-      // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-      return `'${arg.replace(/'/g, "'\\''")}'`;
-    }
     
     const escapedPath = escapeShellArg(targetFullPath);
     const mkdirCommand = `mkdir -p -m 777 ${escapedPath}`;
@@ -1723,11 +1708,6 @@ app.post('/api/folders', express.json(), async (req, res) => { // *** async 추�
     // log(`폴더 생성 완료 및 권한 설정: ${fullPath}`, 'info');
 
     // 특수문자를 완벽하게 이스케이프하는 함수
-    function escapeShellArg(arg) {
-      // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-      // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-      return `'${arg.replace(/'/g, "'\\''")}'`;
-    }
     
     const escapedPath = escapeShellArg(fullPath);
     const mkdirCommand = `mkdir -p -m 777 ${escapedPath}`;
