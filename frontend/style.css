@@ -12,6 +12,7 @@ body {
     margin: 0;
     padding: 0;
     user-select: none;
+    overflow-x: hidden;
 }
 
 .container {
@@ -37,7 +38,8 @@ h1 {
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
     height: calc(100vh - 150px);
@@ -158,7 +160,8 @@ h1 {
 
 .file-container {
     flex: 1;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -167,6 +170,7 @@ h1 {
 
 .file-list {
     overflow-y: auto;
+    overflow-x: hidden;
     flex: 1;
     padding: 0;
     position: relative;
@@ -179,6 +183,7 @@ h1 {
     align-content: flex-start;
     position: relative;
     width: 100%;
+    overflow-x: hidden;
 }
 
 /* 그리드 뷰 (아이콘 모드) */
@@ -392,9 +397,9 @@ h1 {
 .file-item.drag-over {
     /* background-color: rgba(0, 123, 255, 0.3); */
     border: 2px dashed #0056b3 !important;
-    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
-    transform: scale(1.03);
-    transition: all 0.2s ease;
+    box-shadow: none; /* 그림자 제거: 좌우 스크롤 방지 */
+    /* transform: scale(1.03); */ /* 스케일 효과 제거: 좌우 스크롤 방지 */
+    transition: border-color 0.2s ease;
     z-index: 10;
 }
 
@@ -664,21 +669,21 @@ h1 {
 .file-item.drag-over {
     /* background-color: rgba(0, 123, 255, 0.3); */
     border: 2px dashed #0056b3 !important;
-    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
-    transform: scale(1.03);
-    transition: all 0.2s ease;
+    box-shadow: none; /* 그림자 제거: 좌우 스크롤 방지 */
+    /* transform: scale(1.03); */ /* 스케일 효과 제거: 좌우 스크롤 방지 */
+    transition: border-color 0.2s ease;
     z-index: 10;
 }
 
 /* 폴더에 드래그 오버 시 강조 효과 강화 */
 .file-item[data-is-folder="true"].drag-over {
     /* background-color: rgba(33, 150, 243, 0.3); */ /* 배경색 제거 */
-    border: 3px dashed #0056b3 !important;
-    box-shadow: 0 0 25px rgba(0, 123, 255, 0.8);
-    transform: scale(1.08);
-    transition: all 0.2s ease;
+    border: 2px dashed #0056b3 !important;
+    box-shadow: none; /* 그림자 제거: 좌우 스크롤 방지 */
+    /* transform: scale(1.08); */ /* 스케일 제거: 좌우 스크롤 방지 */
+    transition: border-color 0.2s ease;
     z-index: 20;
-    animation: folderPulse 1.2s infinite;
+    /* animation: folderPulse 1.2s infinite; */ /* 애니메이션 제거: 좌우 스크롤 방지 */
     position: relative;
 }
 
@@ -690,7 +695,7 @@ h1 {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(33, 150, 243, 0.2);
+    background: rgba(33, 150, 243, 0.15);
     border-radius: 4px;
     pointer-events: none;
 }
@@ -698,15 +703,15 @@ h1 {
 /* 외부 파일을 폴더에 드래그할 때 아이콘 색상 변경 및 효과 강화 */
 .file-item[data-is-folder="true"].drag-over .file-icon {
     color: #0056b3;
-    transform: scale(1.4);
-    transition: all 0.2s ease;
-    text-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+    /* transform: scale(1.2); */ /* 스케일 속성 제거: 좌우 스크롤 방지 */
+    transition: color 0.2s ease;
+    text-shadow: none; /* 텍스트 그림자 제거: 좌우 스크롤 방지 */
 }
 
 /* 폴더 아이콘 색상 강화 */
 .file-item[data-is-folder="true"].drag-over .file-icon i.fas.fa-folder {
     color: #2196F3;
-    animation: iconPulse 1.2s infinite;
+    /* animation: iconPulse 1.2s infinite; */ /* 애니메이션 제거: 좌우 스크롤 방지 */
 }
 
 @keyframes iconPulse {
