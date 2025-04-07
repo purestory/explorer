@@ -1,40 +1,10 @@
-# 대용량 파일 부분 수정을 위한 유틸리티 스크립트
+# 대용량 파일 관리 및 코드 정리를 위한 유틸리티 스크립트
 
-이 폴더에는 대용량 파일의 특정 부분을 안전하게 수정하기 위한 두 개의 파이썬 스크립트가 포함되어 있습니다.
+이 폴더에는 대용량 파일의 효율적인 관리와 코드 정리를 위한 다양한 파이썬 스크립트가 포함되어 있습니다.
 
-- `extract_for_edit.py`: 원본 파일을 복사하고 수정할 부분을 별도의 파일로 추출합니다.
-- `insert_edited_part.py`: 사용자가 수정한 부분을 다시 복사본 파일에 삽입합니다.
+## 1. 대용량 파일 부분 수정 유틸리티
 
-## 작업 흐름
-
-1.  **추출 단계:** `extract_for_edit.py`를 사용하여 원본 파일을 복사하고 수정할 라인 범위를 별도 파일로 만듭니다. 수정할 라인 범위는 해당 함수 전체로 한다.
-    ```bash
-    python util/extract_for_edit.py <원본 파일 경로> <시작 줄> <끝 줄>
-    ```
-    *   `util` 폴더에 `<원본 파일명>.copy` (복사본) 파일이 생성됩니다.
-    *   `util` 폴더에 `<원본 파일명>.part_to_edit` (수정할 부분) 파일이 생성됩니다.
-
-2.  **수정 단계:** `util/<원본 파일명>.part_to_edit` 파일을 텍스트 편집기로 열어 원하는 대로 수정합니다. 수정 후에는 반드시 제대로 수정했는지 확인 후 보고한다.
-
-3.  **삽입 단계:** `insert_edited_part.py`를 사용하여 수정된 내용을 복사본 파일에 다시 합칩니다.
-    ```bash
-    python util/insert_edited_part.py util/<원본 파일명>.copy <시작 줄> <끝 줄> util/<원본 파일명>.part_to_edit [-o <출력 파일 경로>]
-    ```
-    *   기본적으로 `util/<원본 파일명>.copy` 파일이 수정된 내용으로 업데이트됩니다.
-    *   `-o` 옵션을 사용하면 결과를 지정된 `<출력 파일 경로>`에 저장할 수 있습니다.
-
-4.  **반영 단계 (수동):** 수정이 완료된 `util/<원본 파일명>.copy` 파일을 **직접** 원래의 `<원본 파일 경로>`로 복사하여 변경 사항을 최종 반영합니다. 시스템 파일 등 권한이 필요한 경우 `sudo`를 사용하여 복사합니다.
-    ```bash
-    # 예시
-    sudo cp util/my_config.conf.copy /etc/my_config.conf
-    ```
-
-5.  **정리 단계 (선택):** `util` 폴더에 생성된 임시 파일들 (`*.copy`, `*.part_to_edit`)을 삭제합니다.
-    ```bash
-    rm util/*.copy util/*.part_to_edit
-    ```
-
-## 스크립트 상세 설명
+대용량 파일의 특정 부분을 안전하게 수정하기 위한 스크립트입니다.
 
 ### `extract_for_edit.py`
 
@@ -42,21 +12,21 @@
 
 **사용법:**
 ```bash
-python util/extract_for_edit.py source_file start_line end_line
+python util/extract_for_edit.py <원본 파일 경로> <시작 줄> <끝 줄>
 ```
 
 **인수:**
-- `source_file`: 수정할 원본 파일의 전체 경로.
-- `start_line`: 추출을 시작할 줄 번호 (1부터 시작).
-- `end_line`: 추출을 끝낼 줄 번호 (1부터 시작, 해당 줄 포함).
+- `원본 파일 경로`: 수정할 원본 파일의 전체 경로
+- `시작 줄`: 추출을 시작할 줄 번호 (1부터 시작)
+- `끝 줄`: 추출을 끝낼 줄 번호 (1부터 시작, 해당 줄 포함)
 
 **출력:**
-- `util/<원본 파일명>.copy`: 원본 파일의 복사본.
-- `util/<원본 파일명>.part_to_edit`: 추출된 라인 범위가 저장된 파일. 이 파일을 수정합니다.
+- `util/<원본 파일명>.copy`: 원본 파일의 복사본
+- `util/<원본 파일명>.part_to_edit`: 추출된 라인 범위가 저장된 파일 (이 파일을 수정)
 
-**예시:** `/var/log/long_log_file.log` 파일의 1000번째 줄부터 1500번째 줄까지 추출하기
+**예시:**
 ```bash
-python util/extract_for_edit.py /var/log/long_log_file.log 1000 1500
+python util/extract_for_edit.py backend/server.js 100 250
 ```
 
 ### `insert_edited_part.py`
@@ -65,32 +35,102 @@ python util/extract_for_edit.py /var/log/long_log_file.log 1000 1500
 
 **사용법:**
 ```bash
-python util/insert_edited_part.py copy_file start_line end_line edited_part_file [-o output_file]
+python util/insert_edited_part.py <복사본 파일> <시작 줄> <끝 줄> <수정된 파일> [-o <출력 파일>]
 ```
 
 **인수:**
-- `copy_file`: 수정 대상 복사본 파일 경로 (`util` 폴더 내, 예: `util/long_log_file.log.copy`).
-- `start_line`: 교체를 시작할 줄 번호 (1부터 시작).
-- `end_line`: 교체를 끝낼 줄 번호 (1부터 시작).
-- `edited_part_file`: 사용자가 수정한 코드가 담긴 파일 경로 (예: `util/long_log_file.log.part_to_edit`).
-- `-o output_file` (선택): 결과를 저장할 파일 경로. 지정하지 않으면 `copy_file`을 덮어씁니다.
+- `복사본 파일`: 수정 대상 복사본 파일 경로 (예: `util/server.js.copy`)
+- `시작 줄`: 교체를 시작할 줄 번호 (1부터 시작)
+- `끝 줄`: 교체를 끝낼 줄 번호 (1부터 시작)
+- `수정된 파일`: 사용자가 수정한 코드가 담긴 파일 경로 (예: `util/server.js.part_to_edit`)
+- `-o 출력 파일` (선택): 결과를 저장할 파일 경로. 지정하지 않으면 복사본 파일을 덮어씁니다.
 
-**출력:**
-- 지정된 `copy_file`이 업데이트되거나, `-o` 옵션으로 지정된 `output_file`이 생성됩니다.
-
-**예시 1:** `util/long_log_file.log.copy` 파일의 1000-1500 줄을 `util/long_log_file.log.part_to_edit` 내용으로 교체하기
+**예시:**
 ```bash
-python util/insert_edited_part.py util/long_log_file.log.copy 1000 1500 util/long_log_file.log.part_to_edit
+python util/insert_edited_part.py util/server.js.copy 100 250 util/server.js.part_to_edit
 ```
 
-**예시 2:** 위와 동일하지만, 결과를 `modified_log_file.log` 라는 새 파일로 저장하기
+## 2. 코드 중복 및 정리 유틸리티
+
+코드 중복을 감지하고 정리하기 위한 스크립트입니다.
+
+### `find_duplicate_functions.py`
+
+JavaScript 파일에서 중복된 함수를 찾고, 중복 제거를 위한 스크립트를 생성합니다.
+
+**사용법:**
 ```bash
-python util/insert_edited_part.py util/long_log_file.log.copy 1000 1500 util/long_log_file.log.part_to_edit -o modified_log_file.log
+python util/find_duplicate_functions.py <JavaScript 파일 경로>
 ```
+
+**인수:**
+- `JavaScript 파일 경로`: 중복 함수를 검사할 JavaScript 파일 경로
+
+**기능:**
+- 파일 내 모든 함수 선언을 찾아 정확한 위치(시작/끝 줄) 파악
+- 중복된 함수 목록과 각 함수의 모든 선언 위치를 표시
+- 중복 함수 제거를 위한 파이썬 스크립트 자동 생성 (마지막 선언을 제외한 모든 중복 선언 삭제)
+
+**예시:**
+```bash
+python util/find_duplicate_functions.py frontend/script.js
+```
+
+### `delete_lines.py` 
+
+파일에서 지정된 라인 범위를 삭제하는 간단한 유틸리티입니다.
+
+**사용법:**
+```bash
+python util/delete_lines.py <파일 경로> <시작 줄> <끝 줄>
+```
+
+**인수:**
+- `파일 경로`: 라인을 삭제할 파일의 경로
+- `시작 줄`: 삭제 시작 라인 번호 (1부터 시작)
+- `끝 줄`: 삭제 끝 라인 번호 (포함)
+
+**예시:**
+```bash
+python util/delete_lines.py frontend/script.js 100 150
+```
+
+## 작업 흐름 예시
+
+### 대용량 파일 부분 수정 흐름
+
+1. **추출 단계:** 대형 파일에서 수정할 부분 추출
+   ```bash
+   python util/extract_for_edit.py backend/server.js 1000 1500
+   ```
+
+2. **수정 단계:** `util/server.js.part_to_edit` 파일을 텍스트 편집기로 수정
+
+3. **삽입 단계:** 수정된 내용을 복사본 파일에 다시 합치기
+   ```bash
+   python util/insert_edited_part.py util/server.js.copy 1000 1500 util/server.js.part_to_edit
+   ```
+
+4. **반영 단계:** 수정된 복사본을 원래 위치로 복사
+   ```bash
+   cp util/server.js.copy backend/server.js
+   ```
+
+### 중복 함수 제거 흐름
+
+1. **중복 감지:** JavaScript 파일에서 중복 함수 찾기
+   ```bash
+   python util/find_duplicate_functions.py frontend/script.js
+   ```
+
+2. **자동 생성된 스크립트 실행:** 중복 함수 삭제
+   ```bash
+   python util/remove_duplicates_script_js.py frontend/script.js
+   ```
 
 ## 주의사항
 
-- 줄 번호는 1부터 시작합니다.
-- 시작 줄 번호는 끝 줄 번호보다 크거나 같아야 합니다.
-- 스크립트는 파일 인코딩을 UTF-8로 가정합니다. 다른 인코딩의 경우 스크립트 수정이 필요할 수 있습니다.
-- 최종 결과 반영(`cp` 또는 `sudo cp`) 및 임시 파일 정리는 사용자가 직접 수행해야 합니다. 
+- 모든 스크립트는 줄 번호를 1부터 시작합니다.
+- 파일 작업 전 백업을 권장합니다.
+- 스크립트는 파일 인코딩을 UTF-8로 가정합니다.
+- 시스템 파일 수정 시 적절한 권한(sudo)이 필요할 수 있습니다. 
