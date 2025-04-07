@@ -4114,7 +4114,7 @@ function downloadAndOpenFile(fileName) {
 }
 
 
-// 화면 클릭 시 파일 선택 해제 리스너 수정
+// 화면 클릭 시 파일 선택 해제 리스너 수정 
 document.addEventListener('click', (event) => {
     // 드래그 직후의 클릭이면 무시하고 플래그 초기화
     if (wasDragging) {
