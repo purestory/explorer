@@ -805,12 +805,18 @@ function handleDragEnd() {
             item.classList.remove('drag-over');
         });
         
-    isDragging = false;
+        isDragging = false;
     }
 }
 
 // 단축키 초기화
 function initShortcuts() {
+    // 이미 초기화되었는지 확인
+    if (window.shortcutsInitialized) {
+        console.log('단축키가 이미 초기화되어 있습니다. 중복 호출 방지.');
+        return;
+    }
+    
     document.addEventListener('keydown', (e) => {
         // F2: 이름 변경
         if (e.key === 'F2' && selectedItems.size === 1) {
@@ -849,6 +855,10 @@ function initShortcuts() {
             contextMenu.style.display = 'none';
         }
     });
+    
+    // 초기화 완료 플래그 설정
+    window.shortcutsInitialized = true;
+    console.log('단축키 초기화 완료');
 }
 
 // 디스크 사용량 가져오기
@@ -2372,7 +2382,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
                             }))
                                 .then(resolve)
                                 .catch(reject);
-            } else {
+        } else {
                             // 읽은 항목을 allEntries에 추가하고 계속 읽기
                             allEntries = allEntries.concat(entries);
                             readEntries();
@@ -2383,41 +2393,41 @@ function traverseFileTree(entry, path, filesWithPaths) {
                     });
                 };
                 readEntries();
-             return;
-        }
-        
-        console.log(`폴더 탐색: ${currentPath}`);
-        const dirReader = entry.createReader();
-        let allEntries = [];
-
-        const readEntries = () => {
-            dirReader.readEntries(entries => {
-                if (entries.length === 0) {
-                    // 모든 항목을 읽었으면 재귀 호출 실행
-                    Promise.all(allEntries.map(subEntry => {
-                        // 원본 entry 이름이 변경된 경우 하위 항목의 상대 경로 계산에도 적용
-                        const subPath = originalEntryName !== entryName ? 
-                            (currentPath) : 
-                            (path ? `${path}/${entry.name}` : entry.name);
-                        return traverseFileTree(subEntry, subPath, filesWithPaths);
-                    }))
-                        .then(resolve)
-                        .catch(reject); // 하위 탐색 중 오류 발생 시 reject
-                } else {
-                    // 읽은 항목을 allEntries에 추가하고 계속 읽기
-                    allEntries = allEntries.concat(entries);
-                    readEntries(); // 재귀적으로 호출하여 모든 항목 읽기
-                }
-            }, err => {
-                console.error(`폴더 읽기 오류 (${currentPath}):`, err);
-                reject(err); // 폴더 읽기 오류 시 reject
-            });
-        };
-        readEntries();
-    } else {
-        console.warn(`알 수 없는 항목 타입: ${entry.name}`);
-        resolve(); // 알 수 없는 타입은 무시하고 resolve
+         return;
     }
+        
+    console.log(`폴더 탐색: ${currentPath}`);
+    const dirReader = entry.createReader();
+    let allEntries = [];
+
+    const readEntries = () => {
+        dirReader.readEntries(entries => {
+            if (entries.length === 0) {
+                // 모든 항목을 읽었으면 재귀 호출 실행
+                Promise.all(allEntries.map(subEntry => {
+                    // 원본 entry 이름이 변경된 경우 하위 항목의 상대 경로 계산에도 적용
+                    const subPath = originalEntryName !== entryName ? 
+                        (currentPath) : 
+                        (path ? `${path}/${entry.name}` : entry.name);
+                    return traverseFileTree(subEntry, subPath, filesWithPaths);
+                }))
+                    .then(resolve)
+                    .catch(reject); // 하위 탐색 중 오류 발생 시 reject
+            } else {
+                // 읽은 항목을 allEntries에 추가하고 계속 읽기
+                allEntries = allEntries.concat(entries);
+                readEntries(); // 재귀적으로 호출하여 모든 항목 읽기
+            }
+        }, err => {
+            console.error(`폴더 읽기 오류 (${currentPath}):`, err);
+            reject(err); // 폴더 읽기 오류 시 reject
+        });
+    };
+    readEntries();
+} else {
+    console.warn(`알 수 없는 항목 타입: ${entry.name}`);
+    resolve(); // 알 수 없는 타입은 무시하고 resolve
+}
 });
 }
 
@@ -4822,56 +4832,9 @@ function downloadAndOpenFile(fileName) {
 }
 
 // 애플리케이션 초기화
-function init() {
-    // 혹시 이전 상태의 드래그 클래스가 있으면 초기화
-    (function cleanupDragClasses() {
-        console.log('초기화 시 드래그 클래스 정리');
-        document.querySelectorAll('.dragging, .drag-over').forEach(el => {
-            el.classList.remove('dragging');
-            el.classList.remove('drag-over');
-        });
-    })();
-    
-    // 기본 기능 초기화
-    initModals();
-    initContextMenu();
-    initDragSelect();
-    initDragAndDrop();
-    initShortcuts();
-    initViewModes();
-    initHistoryNavigation(); // 히스토리 네비게이션 초기화 추가
-    setupGlobalDragCleanup(); // 드래그 상태 정리 기능 초기화
-    
-    // 파일 관리 기능 초기화
-    initFolderCreation();
-    initRenaming();
-    initFileUpload();
-    initClipboardOperations();
-    initDeletion();
-    initSearch();
-    
-    // 다운로드 버튼 이벤트 추가
-    downloadBtn.addEventListener('click', downloadSelectedItems);
-    
-    // 새로고침 버튼 이벤트 추가
-    document.getElementById('refreshStorageBtn').addEventListener('click', () => {
-        loadDiskUsage();
-    });
-    
-    // 초기 파일 목록 로드
-    loadFiles(currentPath);
-    
-    // 드롭존 초기화
-    initDropZone();
-    
-    // 스토리지 정보 로드
-    loadDiskUsage();
-    
-    console.log('WebDAV 파일 탐색기 초기화됨');
 }
 
 // 페이지 로드 시 애플리케이션 초기화
-document.addEventListener('DOMContentLoaded', init);
 
 // 선택한 파일 압축
 function compressSelectedItems() {
@@ -6850,57 +6813,9 @@ function downloadAndOpenFile(fileName) {
 }
 
 // 애플리케이션 초기화
-function init() {
-    // 혹시 이전 상태의 드래그 클래스가 있으면 초기화
-    (function cleanupDragClasses() {
-        console.log('초기화 시 드래그 클래스 정리');
-        document.querySelectorAll('.dragging, .drag-over').forEach(el => {
-            el.classList.remove('dragging');
-            el.classList.remove('drag-over');
-        });
-    })();
-    
-    // 기본 기능 초기화
-    initModals();
-    initContextMenu();
-    initDragSelect();
-    initDragAndDrop();
-    initShortcuts();
-    initViewModes();
-    initHistoryNavigation(); // 히스토리 네비게이션 초기화 추가
-    setupGlobalDragCleanup(); // 드래그 상태 정리 기능 초기화
-    
-    // 파일 관리 기능 초기화
-    initFolderCreation();
-    initRenaming();
-    initFileUpload();
-    initClipboardOperations();
-    initDeletion();
-    initSearch();
-    
-    // 다운로드 버튼 이벤트 추가
-    downloadBtn.addEventListener('click', downloadSelectedItems);
-    
-    // 새로고침 버튼 이벤트 추가
-    document.getElementById('refreshStorageBtn').addEventListener('click', () => {
-        loadDiskUsage();
-    });
-    
-    // 초기 파일 목록 로드
-    loadFiles(currentPath);
-    
-    // 드롭존 초기화
-    initDropZone();
-    
-    // 스토리지 정보 로드
-    loadDiskUsage();
-    
-    console.log('WebDAV 파일 탐색기 초기화됨');
 }
 
 // 페이지 로드 시 애플리케이션 초기화
-document.addEventListener('DOMContentLoaded', init);
-
 
 // 화면 클릭 시 파일 선택 해제 리스너 수정
 document.addEventListener('click', (event) => {
@@ -7744,8 +7659,6 @@ function initDropZone() {
     dropZone.removeEventListener('dragover', handleDragOver);
     dropZone.removeEventListener('dragleave', handleDragLeave);
     dropZone.removeEventListener('drop', handleDrop);
-    // handleDropZoneDrop 함수는 제거되었으므로 관련 코드도 제거
-    // dropZone.removeEventListener('drop', handleDropZoneDrop);
     fileView.removeEventListener('dragover', handleDragOver);
     fileView.removeEventListener('dragleave', handleDragLeave);
     fileView.removeEventListener('drop', handleDrop);
