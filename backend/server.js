@@ -252,7 +252,8 @@ async function getDiskUsage() {
 
     log(`[DiskUsage] Raw stdout: [${stdoutTrimmed}]`, forceLogLevel);
     if (stderr) {
-      errorLog(`[DiskUsage] du command stderr: [${stderr.trim()}]`); 
+      // Optional chaining 추가
+      errorLog(`[DiskUsage] du command stderr: [${stderr?.trim()}]`); 
     }
 
     // 파싱 시도
@@ -1279,89 +1280,85 @@ app.post('/api/files/:folderPath(*)', async (req, res) => {
   }
 });
 
-// 파일/폴더 이름 변경 또는 이동 (시스템 명령어로 변경, 비동기 유지)
+// 파일/폴더 이름 변경 또는 이동 (시스템 명령어로 재수정)
 app.put('/api/files/*', express.json(), async (req, res) => {
   try {
-    const oldPath = decodeURIComponent(req.params[0] || '');
+    const oldPathRelative = decodeURIComponent(req.params[0] || '');
     const { newName, targetPath, overwrite } = req.body;
 
-    logWithIP(`[Move/Rename Request - CMD] '${oldPath}' -> '${newName}' (대상: ${targetPath !== undefined ? targetPath : '동일 경로'})`, req, 'minimal');
-    log(`이름 변경/이동 요청 (명령어 사용): ${oldPath} -> ${newName}, 대상 경로: ${targetPath !== undefined ? targetPath : '현재 경로'}, 덮어쓰기: ${overwrite ? '예' : '아니오'}`, req, 'info');
+    logWithIP(`[Move/Rename Request - CMD] '${oldPathRelative}' -> '${newName}' (대상: ${targetPath !== undefined ? targetPath : '동일 경로'})`, req, 'minimal');
 
     if (!newName) {
       errorLogWithIP('새 이름이 제공되지 않음', null, req);
       return res.status(400).send('새 이름이 제공되지 않았습니다.');
     }
 
-    const fullOldPath = path.join(ROOT_DIRECTORY, oldPath);
-    const escapedFullOldPath = escapeShellArg(fullOldPath); // 경로 이스케이프
+    const fullOldPath = path.join(ROOT_DIRECTORY, oldPathRelative);
+    const escapedFullOldPath = escapeShellArg(fullOldPath);
 
-    // 원본 존재 확인 (fs.promises.access 유지)
+    // 원본 존재 확인 (fs.promises.access 유지 - stat으로 변경해도 무방)
     try {
       await fs.promises.access(fullOldPath);
     } catch (error) {
       if (error.code === 'ENOENT') {
         errorLogWithIP(`원본 파일/폴더를 찾을 수 없음: ${fullOldPath}`, null, req);
-        return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPath}`);
+        return res.status(404).send(`파일 또는 폴더를 찾을 수 없습니다: ${oldPathRelative}`);
       } else {
         errorLogWithIP(`원본 접근 오류: ${fullOldPath}`, error, req);
         return res.status(500).send('서버 오류가 발생했습니다.');
       }
     }
 
-    // 잠금 폴더 목록 로드 (기존 로직 유지)
-    let lockedFolders = [];
-    // ... (잠금 폴더 로드 로직) ...
-
-    // 원본 경로 잠금 확인 (기존 로직 유지)
-    const isSourceLocked = lockedFolders.some(/* ... */);
-    if (isSourceLocked) {
+    // 잠금 확인 로직 (기존과 동일)
+    if (isPathAccessRestricted(oldPathRelative)) {
         errorLogWithIP(`잠긴 항목 이동/이름 변경 시도: ${fullOldPath}`, null, req);
         return res.status(403).send('잠긴 폴더 또는 그 하위 항목은 이동하거나 이름을 변경할 수 없습니다.');
     }
 
-
-    // 타겟 경로 설정
-    const targetDir = targetPath !== undefined ? targetPath : path.dirname(oldPath);
-    const fullTargetPath = path.join(ROOT_DIRECTORY, targetDir);
+    // 대상 경로 설정
+    const targetDirRelative = targetPath !== undefined ? targetPath : path.dirname(oldPathRelative);
+    const fullTargetPath = path.join(ROOT_DIRECTORY, targetDirRelative);
     const fullNewPath = path.join(fullTargetPath, newName);
-    const escapedFullTargetPath = escapeShellArg(fullTargetPath); // 경로 이스케이프
-    const escapedFullNewPath = escapeShellArg(fullNewPath);     // 경로 이스케이프
+    const escapedFullTargetPath = escapeShellArg(fullTargetPath);
+    const escapedFullNewPath = escapeShellArg(fullNewPath);
 
-    logWithIP(`전체 경로 처리 (명령어 사용): ${fullOldPath} -> ${fullNewPath}`, 'debug');
+    logWithIP(`전체 경로 처리 (CMD): ${fullOldPath} -> ${fullNewPath}`, req, 'debug');
 
-    // 원본과 대상이 같은 경우 무시 (기존 로직 유지)
+    // 원본과 대상이 같은 경우
     if (fullOldPath === fullNewPath) {
-      logWithIP(`동일한 경로로의 이동/변경 무시: ${fullOldPath}`, 'debug');
+      logWithIP(`동일한 경로로의 이동/변경 무시: ${fullOldPath}`, req, 'debug');
       return res.status(200).send('이름 변경/이동이 완료되었습니다.');
     }
-    
-    // 대상 경로가 잠긴 폴더의 하위인지 확인 (기존 로직 유지)
-    const isTargetLocked = lockedFolders.some(/* ... */);
-    if (isTargetLocked) {
-        errorLogWithIP(`잠긴 폴더 내부로 이동 시도: ${fullNewPath}`, null, req);
-        return res.status(403).send('잠긴 폴더 내부로 이동할 수 없습니다.');
+
+    // 대상 경로 잠금 확인 (기존과 동일)
+    if (isPathAccessRestricted(path.join(targetDirRelative, newName))) {
+        errorLogWithIP(`잠긴 폴더 내부 또는 잠긴 이름으로 이동/변경 시도: ${fullNewPath}`, null, req);
+        return res.status(403).send('잠긴 폴더 내부로 이동하거나 잠긴 이름으로 변경할 수 없습니다.');
     }
 
-    // 대상 디렉토리 생성 (mkdir -p && chmod 777 사용)
+    // 대상 디렉토리 생성 (mkdir -p)
     try {
-      const mkdirCommand = `mkdir -p ${escapedFullTargetPath} && chmod 777 ${escapedFullTargetPath}`;
-      log(`대상 디렉토리 생성 명령어 실행: ${mkdirCommand}`, 'debug');
-      await exec(mkdirCommand); // 비동기 실행
-      log(`대상 디렉토리 확인/생성 완료: ${fullTargetPath}`, 'debug');
+      const mkdirCommand = `mkdir -p ${escapedFullTargetPath}`;
+      logWithIP(`대상 디렉토리 생성 명령어 실행: ${mkdirCommand}`, req, 'debug');
+      const { stdout: mkdirStdout, stderr: mkdirStderr } = await exec(mkdirCommand);
+      if (mkdirStderr) {
+        // Optional chaining 추가
+        logWithIP(`mkdir stderr (정보): ${mkdirStderr?.trim()}`, req, 'debug'); // mkdir -p는 존재해도 오류 아님
+      }
+      logWithIP(`대상 디렉토리 확인/생성 완료: ${fullTargetPath}`, req, 'debug');
     } catch (mkdirError) {
       errorLogWithIP(`대상 디렉토리 생성 명령어 오류: ${fullTargetPath}`, mkdirError, req);
-      // 오류 응답 전에 stderr 내용도 로깅하면 좋음
       if (mkdirError.stderr) {
-          errorLogWithIP(`mkdir stderr: ${mkdirError.stderr}`, null, req);
+        // Optional chaining 추가
+        errorLogWithIP(`mkdir stderr: ${mkdirError?.stderr}`, null, req);
       }
       return res.status(500).send('대상 폴더 생성 중 오류가 발생했습니다.');
     }
 
-    // 대상 경로에 이미 존재하는 경우 처리 (rm -rf 사용)
+    // 대상 경로에 이미 존재하는 경우 처리
     try {
-      // 존재 여부 확인 (fs.promises.stat 유지)
-      await fs.promises.stat(fullNewPath);
+      // 존재 여부 확인 (fs.promises.access 또는 stat 유지)
+      await fs.promises.access(fullNewPath);
 
       // 존재하면 덮어쓰기 옵션 확인
       if (!overwrite) {
@@ -1369,40 +1366,65 @@ app.put('/api/files/*', express.json(), async (req, res) => {
         return res.status(409).send('같은 이름의 파일이나 폴더가 이미 대상 경로에 존재합니다.');
       }
 
-      // 덮어쓰기 실행 - 기존 항목 삭제 (rm -rf 사용)
-      logWithIP(`대상 경로에 존재하는 항목 덮어쓰기 시도 (rm 사용): ${fullNewPath}`, 'debug');
+      // 덮어쓰기 실행 - 기존 항목 삭제 (rm -rf)
+      logWithIP(`대상 경로에 존재하는 항목 덮어쓰기 시도 (rm 사용): ${fullNewPath}`, req, 'debug');
       const rmCommand = `rm -rf ${escapedFullNewPath}`;
-      log(`기존 항목 삭제 명령어 실행: ${rmCommand}`, 'debug');
+      logWithIP(`기존 항목 삭제 명령어 실행: ${rmCommand}`, req, 'debug');
       try {
-        await exec(rmCommand); // 비동기 실행
-        logWithIP(`기존 항목 삭제 완료 (rm 사용): ${fullNewPath}`, 'debug');
+        const { stdout: rmStdout, stderr: rmStderr } = await exec(rmCommand);
+        if (rmStderr) {
+            // Optional chaining 추가
+            errorLogWithIP(`rm stderr: ${rmStderr?.trim()}`, null, req);
+            // rm -rf 오류는 심각할 수 있으므로 500 반환 고려
+            return res.status(500).send('기존 파일/폴더 삭제 중 오류가 발생했습니다.');
+        }
+        logWithIP(`기존 항목 삭제 완료 (rm 사용): ${fullNewPath}`, req, 'debug');
       } catch (rmError) {
         errorLogWithIP(`기존 항목 삭제 명령어 오류 (덮어쓰기): ${fullNewPath}`, rmError, req);
         if (rmError.stderr) {
-            errorLogWithIP(`rm stderr: ${rmError.stderr}`, null, req);
+          // Optional chaining 추가
+          errorLogWithIP(`rm stderr: ${rmError?.stderr}`, null, req);
         }
         return res.status(500).send('기존 파일/폴더 삭제 중 오류가 발생했습니다.');
       }
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        // stat 오류 (존재하지 않는 경우가 아님) - 예상치 못한 오류
-        errorLogWithIP(`대상 경로 상태 확인 오류: ${fullNewPath}`, error, req);
+        // access/stat 오류 (존재하지 않는 경우가 아님)
+        errorLogWithIP(`대상 경로 확인/삭제 준비 중 오류: ${fullNewPath}`, error, req);
         return res.status(500).send('대상 경로 확인 중 오류가 발생했습니다.');
       }
-      // ENOENT는 정상 (파일/폴더 없음)
+      // ENOENT는 정상 (파일/폴더 없음, 덮어쓰기 필요 없음)
+      logWithIP(`대상 경로에 파일 없음. 덮어쓰기 불필요: ${fullNewPath}`, req, 'debug');
     }
 
-    // 최종 이름 변경/이동 실행 (mv 사용)
+    // 최종 이름 변경/이동 실행 (mv)
     const mvCommand = `mv ${escapedFullOldPath} ${escapedFullNewPath}`;
-    log(`이름 변경/이동 명령어 실행: ${mvCommand}`, 'debug');
+    logWithIP(`이름 변경/이동 명령어 실행: ${mvCommand}`, req, 'debug');
     try {
-      await exec(mvCommand); // 비동기 실행
-      logWithIP(`이름 변경/이동 완료 (mv 사용): ${fullOldPath} -> ${fullNewPath}`, 'info');
+      const { stdout: mvStdout, stderr: mvStderr } = await exec(mvCommand);
+      
+      // stderr가 유효한 문자열이고 내용이 있는지 확인 후 처리
+      if (typeof mvStderr === 'string' && mvStderr.trim().length > 0) {
+        const lowerStderr = mvStderr.toLowerCase(); // 이제 mvStderr는 유효한 문자열
+        if (lowerStderr.includes('no such file or directory') || lowerStderr.includes('permission denied')) {
+          errorLogWithIP(`mv 명령어 오류 (치명적): ${mvStderr.trim()}`, { command: mvCommand }, req);
+          return res.status(500).send('파일/폴더 이동 중 오류가 발생했습니다.');
+        } else {
+          logWithIP(`mv stderr (정보/경고): ${mvStderr.trim()}`, req, 'info'); // 단순 정보/경고는 로그만 남김
+        }
+      }
+      
+      // stderr가 없거나 비어있으면 성공으로 간주
+      logWithIP(`이름 변경/이동 완료 (mv 사용): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
       res.status(200).send('이름 변경/이동이 완료되었습니다.');
+      // 디스크 사용량 갱신 (비동기)
+      getDiskUsage().catch(err => errorLogWithIP('이동/변경 후 디스크 사용량 갱신 오류', err, req));
+      
     } catch (mvError) {
       errorLogWithIP(`이름 변경/이동 명령어 오류: ${mvCommand}`, mvError, req);
       if (mvError.stderr) {
-          errorLogWithIP(`mv stderr: ${mvError.stderr}`, null, req);
+        // Optional chaining 추가 (오류 객체 내의 stderr)
+        errorLogWithIP(`mv stderr: ${mvError?.stderr}`, null, req);
       }
       res.status(500).send('파일/폴더 이동 또는 이름 변경 중 오류가 발생했습니다.');
     }
