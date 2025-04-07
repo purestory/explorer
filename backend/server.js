@@ -34,15 +34,6 @@ let logFile;
 let errorLogFile;
 
 // *** 로그 스트림 설정 함수 정의 (위치 조정) ***
-function setupLogStreams() {
-  try {
-    logFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'server.log'), { flags: 'a' });
-    errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
-  } catch (streamError) {
-    console.error('FATAL: Failed to create log streams:', streamError);
-    process.exit(1);
-  }
-}
 async function initializeDirectories() {
   try {
     try {
@@ -387,11 +378,6 @@ function truncateBytes(str, maxBytes) {
 }
 
 // --- 쉘 인자 이스케이프 함수 정의 ---
-function escapeShellArg(arg) {
-    // 윈도우 환경에서는 다른 방식이 필요할 수 있으나, 현재 리눅스 환경 기준으로 작성
-    // 작은따옴표(')로 감싸고, 내부의 작은따옴표는 '\'' 로 변경
-    return "'" + arg.replace(/'/g, "'\\''") + "'";
-}
 
 // Multer 설정 (Disk Storage 사용 - 파일명 자동 자르기 추가)
 const storage = multer.diskStorage({
