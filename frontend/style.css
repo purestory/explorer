@@ -281,7 +281,8 @@ h1 {
 }
 
 .file-view.list-view .file-item:hover {
-    background-color: #f1f3f5;
+    /* 리스트 뷰 호버 시 배경색도 선택 색상으로 통일 */
+    background-color: #e3f2fd; 
 }
 
 /* 아이콘 열 (공통) */
@@ -370,7 +371,7 @@ h1 {
 }
 
 .file-item:hover {
-    background-color: #f0f0f0;
+    background-color: #e3f2fd;
     transform: translateY(-2px);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
@@ -378,6 +379,9 @@ h1 {
 .file-item.selected {
     background-color: #e3f2fd;
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+    border: 1px solid #007bff;
+    outline: 1px solid #007bff;
+    outline-offset: -1px;
 }
 
 .file-item.cut {
@@ -642,7 +646,7 @@ h1 {
 }
 
 .file-item:hover {
-    background-color: #f0f0f0;
+    background-color: #e3f2fd;
     transform: translateY(-2px);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
@@ -650,6 +654,9 @@ h1 {
 .file-item.selected {
     background-color: #e3f2fd;
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+    border: 1px solid #007bff;
+    outline: 1px solid #007bff;
+    outline-offset: -1px;
 }
 
 .file-item.cut {
