@@ -2214,8 +2214,42 @@ function formatFileSize(bytes) {
 
 // 날짜 포맷
 function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    if (!dateString) return '--'; // 유효하지 않은 경우 처리
+    try {
+        const date = new Date(dateString);
+
+        // Intl.DateTimeFormat을 사용하여 원하는 형식으로 포맷
+        const options = {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+            hour12: true // 오전/오후 사용
+        };
+
+        // 1. ko-KR 로케일로 기본 포맷 얻기 (오전/오후 포함)
+        const formatted = new Intl.DateTimeFormat('ko-KR', options).format(date);
+        // 예: "2023. 10. 27. 오후 3:15"
+
+        // 2. 원하는 형식('YYYY-MM-DD 오전/오후 HH:MM')으로 재조립
+        const parts = formatted.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2})/);
+
+        if (parts) {
+            const year = parts[1];
+            const month = parts[2].padStart(2, '0'); // 월 2자리
+            const day = parts[3].padStart(2, '0');   // 일 2자리
+            const ampm = parts[4];
+            const hour = parts[5].padStart(2, '0');  // 시간 2자리
+            const minute = parts[6].padStart(2, '0'); // 분 2자리
+            return `${year}-${month}-${day} ${ampm} ${hour}:${minute}`;
+        } else {
+            // 파싱 실패 시 기본 형식 사용 (이전 형식)
+            console.warn("날짜 형식 재조립 실패:", formatted);
+            return date.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\. /g, '.').replace(/ /g, ' ').replace(/,/g, '');
+        }
+
+    } catch (error) {
+        console.error("날짜 형식 변환 오류:", dateString, error);
+        return '--'; // 오류 발생 시
+    }
 }
 
 // 경로 표시 업데이트
