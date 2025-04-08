@@ -8,7 +8,6 @@ alwaysApply: true
 **Assistant는 아래 명시된 모든 규칙을 대화 시작 시점부터 종료 시점까지 일관되게 준수해야 합니다. 규칙을 어길 경우 사용자에게 불편을 초래하고 작업에 오류를 발생시킬 수 있습니다.**
 
 코드 수정 후 함수가 중복됐는지 확인해서 이상여부 알려줘
-코딩 중 필요한 유틸은 직접 만들어서 사용해
 명령어가 설치되어 있지 않으면 명령어를 설치해
 
 ---
@@ -43,19 +42,18 @@ alwaysApply: true
 코딩 시 테스트가 가능한 부분은 반드시 테스트해서 제대로 동작하는지 확인해줘
 문제 파악 시 로그를 확인해서 파악해줘
 
-10. **서버 주소:** `http://itsmyzone.iptime.org:3333/`
+10. **서버 주소:** `http://itsmyzone.iptime.org/webdav-explorer`
 11. **GitHub 저장소:** `https://github.com/purestory/webdav` (사용자 ID: purestory)
 12. **서버 구조:** `frontend` (Nginx)와 `backend` (Node.js) 서버를 동시에 운영 중입니다.
 13. **코드가 긴 파일 수정:**
-    * 코드가 긴 파일 수정 시 edit_file tool은 오작동하는 일이 많으니 절대 쓰지 말고 다른 방법을 사용해, 수정의 크기가 적더라도 파일이 길면 사용하지마
-    *   **2000줄 이상 파일 작업 시 (함수 단위 제공):** 수정할 함수 전체 코드를 제공하면 사용자가 직접 수정합니다. Assistant는 직접 수정하지 마십시오.
-    *   **2000줄 이상 파일 작업 시 (Util 스크립트 사용):** `util/extract_for_edit.py` 와 `util/insert_edited_part.py` 를 사용하는 절차를 따릅니다. (규칙 상세 내용 참조)
+    * 코드가 긴 파일 수정 시 edit_file tool은 오작동하는 일이 많으니 절대 쓰지 말고 sed를 사용해서 가능한 모든 것을 처리해
+
 14. **Python 실행 파일:** 라이브러리는 별도로 포함하고, `--noconfirm` 옵션을 사용하여 생성합니다. 수정 시 최종 코드를 제공합니다.
 15. **코드 모듈화:** 가능한 모듈별로 코드를 분리하고, 관련 없는 모듈은 수정하지 마십시오.
 16. **Git 브랜치:** **절대로** 새로운 브랜치를 만들지 말고, **항상 `main` 브랜치에서만 작업**하십시오.
 17. **Git 커밋/푸시:**
     *   사용자가 **명시적으로 지시할 때만** GitHub에 저장합니다.
-    *   커밋 시에는 `git add .` 를 사용하고, `git diff`는 불필요하면 생략합니다.
+    *   커밋 시에는 `git add .` 를 사용하고,
     *   깃 업로드 시 변경된 `nginx` 설정이 있다면 함께 커밋합니다.
 18. **단순 일괄 변경:** 대용량 코드에서 정규표현식 등을 이용한 단순 일괄 변경이 필요할 경우, 임시 변환 프로그램을 만드는 것을 고려할 수 있으나, **실행 전에 반드시 사용자에게 확인**을 받아야 합니다.
 
@@ -63,34 +61,13 @@ alwaysApply: true
 ## 🛠️ 유틸리티 도구 관련
 
 19. **유틸리티 도구 사용 방법:**
-    * **대용량 파일 부분 수정 도구:**
-      * `extract_for_edit.py`: 대용량 파일에서 특정 부분을 추출하여 수정용 파일 생성
-        ```bash
-        python util/extract_for_edit.py <원본 파일 경로> <시작 줄> <끝 줄>
-        ```
-      * `insert_edited_part.py`: 수정된 부분을 다시 파일에 삽입
-        ```bash
-        python util/insert_edited_part.py <복사본 파일> <시작 줄> <끝 줄> <수정된 파일> [-o <출력 파일>]
-        ```
+ 
     * **코드 정리 및 중복 감지 도구:**
       * `find_duplicate_functions.py`: JavaScript 파일에서 중복 함수 찾기
         ```bash
-        python util/find_duplicate_functions.py <JavaScript 파일 경로>
+        python3 util/find_duplicate_functions.py <JavaScript 파일 경로>
         ```
-      * `delete_lines.py`: 파일에서 지정된 라인 범위 삭제
-        ```bash
-        python util/delete_lines.py <파일 경로> <시작 줄> <끝 줄>
-        ```
-    * **작업 흐름 예시:**
-      * 대용량 파일 부분 수정:
-        1. 추출: `python3 util/extract_for_edit.py backend/server.js 1000 1500`
-        2. 수정: `util/server.js.part_to_edit` 파일을 편집
-        3. 삽입: `python3 util/insert_edited_part.py util/server.js.copy 1000 1500 util/server.js.part_to_edit`
-        4. 반영: `cp util/server.js.copy backend/server.js`
-      * 중복 함수 제거:
-        1. 감지: `python3 util/find_duplicate_functions.py backend/server.js`
-        2. 삭제: 생성된 스크립트 실행
-
+ 
 ## 💬 소통 및 기타
 
 20. **언어:** **항상 한글**로 응답합니다.
