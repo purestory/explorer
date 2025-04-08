@@ -1,12 +1,10 @@
 // frontend/upload.js
 // --- 전역 변수 선언 ---
 
-let toggleFileListBtn;
-let uploadFileList;
+let isCancelled = false;
 
 // --- 업로드 상태 관리 ---
 let currentUploadXHRs = [];
-let isCancelled = false;
 let totalBytesToUpload = 0;
 let totalBytesUploaded = 0;
 
@@ -22,35 +20,24 @@ let uploadProgressModal = null;
 let overallProgressBar = null;
 let overallProgressText = null;
 let currentFileInfo = null;
-let cancelUploadBtn = null;
 let uploadSpeed = null;
 let uploadTimeRemaining = null;
 
 // --- 업로드 모달 표시/숨김 ---
 function showUploadModal() {
-    // DOM 요소 가져오기 - 최초 접근 시 또는 필요 시
     if (!uploadProgressModal) uploadProgressModal = document.getElementById('upload-progress-modal');
     if (!overallProgressBar) overallProgressBar = document.getElementById('overall-progress-bar');
     if (!overallProgressText) overallProgressText = document.getElementById('overall-progress-text');
     if (!currentFileInfo) currentFileInfo = document.getElementById('current-file-info');
-    if (!cancelUploadBtn) {
-        cancelUploadBtn = document.getElementById('cancel-upload-btn');
-        // 이벤트 리스너 중복 방지 (이미 추가되지 않았다면 추가)
-        if (cancelUploadBtn && !cancelUploadBtn.hasAttribute('data-listener-added')) {
-             cancelUploadBtn.addEventListener('click', cancelUpload);
-             cancelUploadBtn.setAttribute('data-listener-added', 'true');
-        }
-    }
     if (!uploadSpeed) uploadSpeed = document.getElementById('upload-speed');
     if (!uploadTimeRemaining) uploadTimeRemaining = document.getElementById('upload-time-remaining');
-
+    
     // 필수 요소 확인
-    if (!uploadProgressModal || !cancelUploadBtn) {
-        console.error('[Upload] 필수 모달 요소(#upload-progress-modal, #cancel-upload-btn)를 찾을 수 없습니다.');
+    if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining) {
+        console.error('[Upload] 필수 모달 요소 또는 관련 요소(#upload-progress-modal, ...)를 찾을 수 없습니다.');
         return;
     }
-    
-    console.log('[Upload] 업로드 모달 표시');
+
     isCancelled = false;
     totalBytesToUpload = 0;
     totalBytesUploaded = 0;
@@ -62,15 +49,12 @@ function showUploadModal() {
 
     // 초기 상태 설정
     if (overallProgressBar) overallProgressBar.style.width = '0%';
-    if (overallProgressText) overallProgressText.textContent = '전체 진행률: 0% (0/0 파일)';
-    if (currentFileInfo) currentFileInfo.textContent = '업로드 준비 중...';
-    if (uploadSpeed) uploadSpeed.textContent = '속도: 계산 중...';
+    if (overallProgressText) overallProgressText.textContent = '0% (0/0)';
+    if (currentFileInfo) currentFileInfo.textContent = '대기 중...';
+    if (uploadSpeed) uploadSpeed.textContent = '속도: 0 KB/s';
     if (uploadTimeRemaining) uploadTimeRemaining.textContent = '남은 시간: 계산 중...';
-    
-    cancelUploadBtn.disabled = false; 
-    cancelUploadBtn.textContent = '취소';
-    
-    uploadProgressModal.style.display = 'block';
+
+    uploadProgressModal.style.display = 'flex';
 }
 
 function hideUploadModal() {
@@ -78,10 +62,6 @@ function hideUploadModal() {
         uploadProgressModal.style.display = 'none';
     }
     console.log('[Upload] 업로드 모달 숨김');
-    // 업로드 완료 또는 취소 후 상태 초기화
-    if (cancelUploadBtn) {
-        cancelUploadBtn.disabled = true; 
-    }
     currentUploadXHRs = []; 
 }
 
@@ -274,7 +254,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
 }
 
 // --- 병렬 파일 업로드 관리 함수 ---
-async function uploadFilesSequentially(filesWithPaths, targetPath) { // 함수 이름은 유지하되 로직 변경
+async function uploadFilesSequentially(filesWithPaths, targetPath) {
     // 모달 요소는 showUploadModal에서 가져오므로 여기서는 확인 생략
     
     showUploadModal(); // 모달 표시 및 변수 초기화
@@ -575,44 +555,26 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
 
 // --- 업로드 취소 함수 --- 
 function cancelUpload() {
-    if (!isCancelled) {
-        isCancelled = true;
-        console.log('[Upload] 사용자가 업로드를 취소했습니다.');
-        
-        if (typeof showToast === 'function') {
-            showToast('업로드가 취소되었습니다.', 'warning');
+    isCancelled = true;
+    console.log('[Upload] 업로드 취소 요청됨.');
+
+    // 현재 진행 중인 모든 XHR 요청 취소
+    currentUploadXHRs.forEach(xhr => {
+        if (xhr && xhr.readyState !== XMLHttpRequest.DONE) {
+            xhr.abort();
+            console.log('[Upload] 진행 중인 XHR 요청 취소됨.');
         }
-        
-        // 현재 진행 중인 모든 XHR 요청 취소
-        console.log(`[Upload] ${currentUploadXHRs.length}개의 활성 업로드 취소 시도...`);
-        currentUploadXHRs.forEach(xhr => {
-            if (xhr && xhr.readyState !== 4) { // 완료되지 않은 요청만 취소
-                xhr.abort();
-            }
-        });
-        currentUploadXHRs = []; // 배열 비우기
-        
-        if (cancelUploadBtn) {
-            cancelUploadBtn.disabled = true;
-            cancelUploadBtn.textContent = '취소됨';
-        }
-    }
+    });
+    currentUploadXHRs = []; // 배열 비우기
+
+    // UI 업데이트 (함수 호출 시 totalFiles 필요)
+    // 이 부분은 uploadFilesSequentially 함수 내에서 처리되므로 여기서는 직접 호출하지 않음
+    // updateUICancelled(totalFiles); 
 }
 
 // --- 초기화 함수 (initializeUploader) ---
 window.initializeUploader = function() {
     console.log('[Upload Init] 업로더 초기화 시작...');
-    
-    // 취소 버튼 이벤트 리스너는 showUploadModal에서 처리하므로 여기서는 제거 가능
-    // 또는 최초 한 번만 설정하도록 유지
-    const localCancelBtn = document.getElementById('cancel-upload-btn');
-    if (localCancelBtn && !localCancelBtn.hasAttribute('data-listener-added')) {
-        localCancelBtn.addEventListener('click', cancelUpload); 
-        localCancelBtn.setAttribute('data-listener-added', 'true');
-        localCancelBtn.disabled = true; // 초기 비활성화
-    } else if (!localCancelBtn) {
-         console.error('[Upload Init] 취소 버튼(#cancel-upload-btn)을 찾을 수 없습니다.');
-    }
     
     // 파일 선택 이벤트 리스너
     const localFileUploadInput = document.getElementById('fileUpload'); 
