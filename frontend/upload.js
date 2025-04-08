@@ -413,11 +413,13 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         setTimeout(() => {
             console.log('[Upload] 업로드 완료/실패 후 파일 목록 새로고침 시작');
             loadFiles(currentPath);
+            /*
             setTimeout(() => {
                 console.log('[Upload] 2차 파일 목록 새로고침 시작');
                 loadFiles(currentPath);
             }, 1500);
-        }, 500);
+            */
+        }, 1000);
     }
 }
 

@@ -1,0 +1,1 @@
+uploadFilesSequentially(filesWithPaths, currentPath); // 현재 경로에 업로드 
