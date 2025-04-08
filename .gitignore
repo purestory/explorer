@@ -129,3 +129,6 @@ backend/tmp/
 
 # Test files
 frontend/upload-test/
+
+#data file
+reports/*
