@@ -172,11 +172,25 @@ function initModals() {
 
 // 로딩 표시
 function showLoading() {
-    loadingOverlay.style.display = 'flex';
+    if (!loadingOverlay) { 
+        loadingOverlay = document.getElementById('loadingOverlay');
+    }
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+    } else {
+        console.error('[showLoading] loadingOverlay 요소를 찾을 수 없습니다!');
+    }
 }
 
 function hideLoading() {
-    loadingOverlay.style.display = 'none';
+    if (!loadingOverlay) {
+        loadingOverlay = document.getElementById('loadingOverlay');
+    }
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'none';
+    } else {
+        console.error('[hideLoading] loadingOverlay 요소를 찾을 수 없습니다!');
+    }
 }
 
 // 컨텍스트 메뉴 초기화
@@ -1755,95 +1769,6 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
 }
 
 // 외부 파일 드롭 처리 함수
-async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키워드 추가
-    if (isHandlingDrop) {
-        console.log('이미 드롭 처리 중입니다. 중복 호출 방지.');
-        return; // 중복 실행 방지
-    }
-    isHandlingDrop = true; // 처리 시작 플래그 설정
-
-    try {
-        // 진행 중인 업로드가 있는지 확인
-        if (progressContainer.style.display === 'block') {
-            statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
-            console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
-            return;
-        }
-
-        // DataTransferItemList 사용
-        const items = e.dataTransfer.items;
-        if (!items || items.length === 0) {
-            console.log('드롭된 항목이 없습니다.');
-            return;
-        }
-
-        // 업로드 소스 설정 및 카운터 초기화
-        uploadSource = 'dragdrop';
-        dragDropCounter = 0;
-
-        let targetPath = currentPath; // 기본 업로드 경로는 현재 경로
-
-        // 타겟 폴더가 지정된 경우 경로 업데이트
-        if (targetFolderItem) {
-            const targetFolder = targetFolderItem.getAttribute('data-name');
-            targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
-            console.log('외부 파일 드래그 감지: 대상 폴더:', targetFolder);
-                    } else {
-            console.log('외부 파일 드래그 감지: 현재 경로에 업로드');
-        }
-
-        showLoading();
-        statusInfo.textContent = '파일 목록을 읽는 중...';
-
-        const filesWithPaths = [];
-        const promises = [];
-
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            if (item.kind === 'file') {
-                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-                if (entry) {
-                    promises.push(traverseFileTree(entry, '', filesWithPaths));
-                } else {
-                    // webkitGetAsEntry가 지원되지 않는 경우 직접 파일 가져오기
-                    const file = item.getAsFile();
-                    if (file) {
-                        filesWithPaths.push({ file, relativePath: file.name });
-                    }
-                }
-            }
-        }
-
-        await Promise.all(promises);
-
-        hideLoading();
-
-        if (filesWithPaths.length === 0) {
-            statusInfo.textContent = '업로드할 파일을 찾을 수 없습니다.';
-            console.log('업로드할 파일이 없습니다.');
-            return;
-        }
-
-        console.log(`총 ${filesWithPaths.length}개의 파일 수집 완료.`);
-        // uploadFiles 함수 호출 시 targetPath 전달
-        uploadFiles(filesWithPaths, targetPath); // 수정: targetPath 전달
-
-    } catch (error) {
-        hideLoading();
-        statusInfo.textContent = '파일 목록 읽기 오류.';
-        console.error('파일 트리 탐색 오류:', error);
-        alert('파일 목록을 읽는 중 오류가 발생했습니다.');
-    } finally {
-        isHandlingDrop = false; // 처리 완료 또는 오류 발생 시 플래그 해제
-    }
-}
-
-// 파일 트리 탐색 함수 (폴더 포함)
-
-
-// 특정 폴더에 파일 업로드 (files 인자 변경: File[] -> { file: File, relativePath: string }[])
-// targetUploadPath 인자 추가
-
 // 파일/폴더 이동 함수
 
 // 뷰 모드 전환
@@ -1877,31 +1802,63 @@ async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키
 
 // 애플리케이션 초기화
 function init() {
-    // 혹시 이전 상태의 드래그 클래스가 있으면 초기화
-    (function cleanupDragClasses() {
-        console.log('초기화 시 드래그 클래스 정리');
-        document.querySelectorAll('.dragging, .drag-over').forEach(el => {
-            el.classList.remove('dragging');
-            el.classList.remove('drag-over');
-        });
-    })();
+    // 마우스 및 키보드 이벤트 핸들러 설정
+    setupGlobalDragCleanup();
     
-    // 기본 기능 초기화
+    console.log('WebDAV 파일 탐색기 초기화 시작');
+    
+    // 모달 초기화
     initModals();
-    initContextMenu();
-    initDragSelect();
-    initDragAndDrop();
-    initShortcuts();
-    initViewModes();
-    initHistoryNavigation(); // 히스토리 네비게이션 초기화 추가
-    setupGlobalDragCleanup(); // 드래그 상태 정리 기능 초기화
     
-    // 파일 관리 기능 초기화
+    // 드래그 선택 초기화
+    initDragSelect();
+    
+    // 컨텍스트 메뉴 초기화
+    initContextMenu();
+    
+    // 뷰 모드 초기화
+    initViewModes();
+    
+    // 새 폴더 생성 초기화
     initFolderCreation();
+    
+    // 이름 변경 초기화
     initRenaming();
-    initFileUpload();
+    
+    // 파일 업로드 초기화 (upload.js 기능 사용)
+    // initFileUpload(); // 기존 코드 주석 처리
+    
+    // 대신 업로드 버튼에 클릭 이벤트 추가
+    const uploadButton = document.querySelector('.upload-form .btn-success');
+    if (uploadButton) {
+        uploadButton.addEventListener('click', () => {
+            const fileUploadInput = document.getElementById('fileUpload');
+            if (fileUploadInput) {
+                fileUploadInput.click(); // 파일 선택 창 열기
+                console.log('[Script] 업로드 버튼 클릭 - 파일 선택 대화상자 열기');
+            } else {
+                console.error('[Script] 파일 업로드 입력 요소를 찾을 수 없습니다.');
+            }
+        });
+    } else {
+        console.error('[Script] 업로드 버튼을 찾을 수 없습니다.');
+    }
+    
+    // upload.js의 초기화 함수 호출
+    if (typeof window.initializeUploader === 'function') {
+        console.log('[Script] upload.js 초기화 함수 호출');
+        window.initializeUploader();
+    } else {
+        console.error('[Script] upload.js의 초기화 함수를 찾을 수 없습니다.');
+    }
+    
+    // 잘라내기/붙여넣기 초기화
     initClipboardOperations();
+    
+    // 삭제 초기화
     initDeletion();
+    
+    // 검색 초기화
     initSearch();
     
     // 다운로드 버튼 이벤트 추가
@@ -2119,8 +2076,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         // 실제 항목 이동 (이동할 항목의 전체 경로 배열 전달)
         await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
         
-        console.log('[Internal Drop] 이동 작업 성공');
-        showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
+        // console.log('[Internal Drop] 이동 작업 성공');
+        // showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
         
         // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
         // loadFiles(currentPath);
@@ -2138,90 +2095,6 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
 }
 
 // 외부 파일 드롭 처리 함수
-async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키워드 추가
-    if (isHandlingDrop) {
-        console.log('이미 드롭 처리 중입니다. 중복 호출 방지.');
-        return; // 중복 실행 방지
-    }
-    isHandlingDrop = true; // 처리 시작 플래그 설정
-
-    try {
-        // 진행 중인 업로드가 있는지 확인
-        if (progressContainer.style.display === 'block') {
-            statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
-            console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
-            return;
-        }
-
-        // DataTransferItemList 사용
-        const items = e.dataTransfer.items;
-        if (!items || items.length === 0) {
-            console.log('드롭된 항목이 없습니다.');
-            return;
-        }
-
-        // 업로드 소스 설정 및 카운터 초기화
-        uploadSource = 'dragdrop';
-        dragDropCounter = 0;
-
-        let targetPath = currentPath; // 기본 업로드 경로는 현재 경로
-
-        // 타겟 폴더가 지정된 경우 경로 업데이트
-        if (targetFolderItem) {
-            const targetFolder = targetFolderItem.getAttribute('data-name');
-            targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
-            console.log('외부 파일 드래그 감지: 대상 폴더:', targetFolder);
-                    } else {
-            console.log('외부 파일 드래그 감지: 현재 경로에 업로드');
-        }
-
-        showLoading();
-        statusInfo.textContent = '파일 목록을 읽는 중...';
-
-        const filesWithPaths = [];
-        const promises = [];
-
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            if (item.kind === 'file') {
-                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-                if (entry) {
-                    promises.push(traverseFileTree(entry, '', filesWithPaths));
-                } else {
-                    // webkitGetAsEntry가 지원되지 않는 경우 직접 파일 가져오기
-                    const file = item.getAsFile();
-                    if (file) {
-                        filesWithPaths.push({ file, relativePath: file.name });
-                    }
-                }
-            }
-        }
-
-        await Promise.all(promises);
-
-        hideLoading();
-
-        if (filesWithPaths.length === 0) {
-            statusInfo.textContent = '업로드할 파일을 찾을 수 없습니다.';
-            console.log('업로드할 파일이 없습니다.');
-            return;
-        }
-
-        console.log(`총 ${filesWithPaths.length}개의 파일 수집 완료.`);
-        // uploadFiles 함수 호출 시 targetPath 전달
-        uploadFiles(filesWithPaths, targetPath); // 수정: targetPath 전달
-
-    } catch (error) {
-        hideLoading();
-        statusInfo.textContent = '파일 목록 읽기 오류.';
-        console.error('파일 트리 탐색 오류:', error);
-        alert('파일 목록을 읽는 중 오류가 발생했습니다.');
-    } finally {
-        isHandlingDrop = false; // 처리 완료 또는 오류 발생 시 플래그 해제
-    }
-}
-
-// 파일 트리 탐색 함수 (폴더 포함)
 
 
 // 특정 폴더에 파일 업로드 (files 인자 변경: File[] -> { file: File, relativePath: string }[])
@@ -2505,7 +2378,7 @@ function navigateToFolder(folderName) {
     loadFiles(newPath);
     
     // 선택 초기화
-    clearSelection();
+        clearSelection();
 }
 
 // 이름 변경 다이얼로그 표시
@@ -2529,12 +2402,12 @@ async function deleteSelectedItems() { // async 키워드 추가
     });
     if (hasRestrictedItems) {
         alert('잠긴 폴더 또는 파일은 삭제할 수 없습니다.');
-        return;
-    }
+            return;
+        }
 
     if (!confirm(`선택한 ${itemCount}개 항목을 삭제하시겠습니까?\n(대용량 폴더는 백그라운드에서 처리됩니다.)`)) {
-        return;
-    }
+            return;
+        }
 
     showLoading();
     statusInfo.textContent = `삭제 요청 중... (0/${itemCount})`;
@@ -2562,7 +2435,7 @@ async function deleteSelectedItems() { // async 키워드 추가
                 // UI에서 숨길 항목 추가
                 const element = document.querySelector(`.file-item[data-name=\"${CSS.escape(itemName)}\"]`);
                 if (element) itemsToDeleteUI.push(element);
-            } else {
+                } else {
                 // 기타 응답은 실패로 간주
                 failureCount++;
                 const errorText = await response.text();
@@ -2578,7 +2451,7 @@ async function deleteSelectedItems() { // async 키워드 추가
     // 모든 요청이 완료될 때까지 기다림
     await Promise.all(deletePromises);
 
-    hideLoading();
+        hideLoading();
 
     // 성공한 항목들 UI에서 숨기기
     itemsToDeleteUI.forEach(element => {
@@ -2774,7 +2647,7 @@ function handleDragStart(e, fileItem) {
             if (fileItem.getAttribute('data-is-folder') === 'true' && !fileItem.classList.contains('selected')) {
                 clearAllDragOverClasses();
                 fileItem.classList.add('drag-over');
-            } else {
+    } else {
                 clearAllDragOverClasses();
             }
         }
@@ -3054,91 +2927,6 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     }
 }
 
-// 외부 파일 드롭 처리 함수
-
-// 외부 파일 드롭 처리 함수
-async function handleExternalFileDrop(e, targetFolderItem = null) { // async 키워드 추가
-    if (isHandlingDrop) {
-        console.log('이미 드롭 처리 중입니다. 중복 호출 방지.');
-        return; // 중복 실행 방지
-    }
-    isHandlingDrop = true; // 처리 시작 플래그 설정
-
-    try {
-        // 진행 중인 업로드가 있는지 확인
-        if (progressContainer.style.display === 'block') {
-            statusInfo.textContent = '이미 업로드가 진행 중입니다. 완료 후 다시 시도하세요.';
-            console.log('이미 진행 중인 업로드가 있어 새 업로드를 취소합니다.');
-            return;
-        }
-
-        // DataTransferItemList 사용
-        const items = e.dataTransfer.items;
-        if (!items || items.length === 0) {
-            console.log('드롭된 항목이 없습니다.');
-            return;
-        }
-
-        // 업로드 소스 설정 및 카운터 초기화
-        uploadSource = 'dragdrop';
-        dragDropCounter = 0;
-
-        let targetPath = currentPath; // 기본 업로드 경로는 현재 경로
-
-        // 타겟 폴더가 지정된 경우 경로 업데이트
-        if (targetFolderItem) {
-            const targetFolder = targetFolderItem.getAttribute('data-name');
-            targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder;
-            console.log('외부 파일 드래그 감지: 대상 폴더:', targetFolder);
-        } else {
-            console.log('외부 파일 드래그 감지: 현재 경로에 업로드');
-        }
-
-        showLoading();
-        statusInfo.textContent = '파일 목록을 읽는 중...';
-
-        const filesWithPaths = [];
-        const promises = [];
-
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            if (item.kind === 'file') {
-                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-                if (entry) {
-                    promises.push(traverseFileTree(entry, '', filesWithPaths));
-                } else {
-                    // webkitGetAsEntry가 지원되지 않는 경우 직접 파일 가져오기
-                    const file = item.getAsFile();
-                    if (file) {
-                        filesWithPaths.push({ file, relativePath: file.name });
-                    }
-                }
-            }
-        }
-
-        await Promise.all(promises);
-
-        hideLoading();
-
-        if (filesWithPaths.length === 0) {
-            statusInfo.textContent = '업로드할 파일을 찾을 수 없습니다.';
-            console.log('업로드할 파일이 없습니다.');
-             return;
-        }
-
-        console.log(`총 ${filesWithPaths.length}개의 파일 수집 완료.`);
-        // uploadFiles 함수 호출 시 targetPath 전달
-        uploadFiles(filesWithPaths, targetPath); // 수정: targetPath 전달
-
-    } catch (error) {
-        hideLoading();
-        statusInfo.textContent = '파일 목록 읽기 오류.';
-        console.error('파일 트리 탐색 오류:', error);
-        alert('파일 목록을 읽는 중 오류가 발생했습니다.');
-    } finally {
-        isHandlingDrop = false; // 처리 완료 또는 오류 발생 시 플래그 해제
-    }
-}
 
 // 파일 트리 탐색 함수 (폴더 포함)
 function traverseFileTree(entry, path, filesWithPaths) {
@@ -3808,6 +3596,11 @@ function initRenaming() {
 
 // 파일 업로드 기능 초기화
 function initFileUpload() {
+    // 이 함수는 더 이상 사용하지 않고 window.initializeUploader로 대체됨
+    console.log('[Script] initFileUpload 함수는 더 이상 사용되지 않음');
+    
+    // 기존 코드 주석 처리
+    /*
     fileUploadInput.addEventListener('change', (e) => {
         const files = e.target.files;
 
@@ -3845,6 +3638,7 @@ function initFileUpload() {
         // 파일 입력 초기화
         e.target.value = '';
     });
+    */
 }
 
 // 잘라내기/붙여넣기 기능 초기화

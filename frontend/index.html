@@ -133,8 +133,9 @@
         <div class="spinner"></div>
     </div>
     
+    <!-- 스크립트 로딩 (upload.js를 먼저 로드) -->
+    <script src="upload.js?v=20250405_upload2"></script>
     <script src="script.js?v=20250405"></script>
-    <script src="upload.js?v=20250405_upload"></script>
 
     <!-- 업로드 진행률 모달 -->
     <div id="upload-progress-modal" class="modal">
@@ -145,7 +146,19 @@
             </div>
             <p id="overall-progress-text"></p>
             <p id="current-file-info"></p>
-            <button id="cancel-upload-btn">취소</button> <!-- 취소 기능은 추후 구현 -->
+            <div class="upload-details">
+                <p id="upload-speed">속도: 0 KB/s</p>
+                <p id="upload-time-remaining">남은 시간: 계산 중...</p>
+            </div>
+            <div class="file-list-toggle">
+                <button id="toggle-file-list-btn">파일 목록 표시 <i class="fas fa-chevron-down"></i></button>
+            </div>
+            <div id="upload-file-list" class="upload-file-list">
+                <!-- 업로드 파일 목록이 여기에 표시됩니다 -->
+            </div>
+            <div class="upload-modal-buttons">
+                <button id="cancel-upload-btn">업로드 취소</button>
+            </div>
         </div>
     </div>
 
