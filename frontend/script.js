@@ -1861,6 +1861,9 @@ function init() {
     // 검색 초기화
     initSearch();
     
+    console.log('WebDAV 파일 탐색기 초기화됨');
+   
+   
     // 다운로드 버튼 이벤트 추가
     downloadBtn.addEventListener('click', downloadSelectedItems);
     
@@ -1874,11 +1877,8 @@ function init() {
     
     // 드롭존 초기화
     initDropZone();
-    
+    initShortcuts();
     // 스토리지 정보 로드
-    loadDiskUsage();
-    
-    console.log('WebDAV 파일 탐색기 초기화됨');
 }
 
 // 페이지 로드 시 애플리케이션 초기화

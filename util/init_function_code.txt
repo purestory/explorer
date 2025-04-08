@@ -1,0 +1,35 @@
+    })();
+    
+    // 기본 기능 초기화
+    initModals();
+    initContextMenu();
+    initDragSelect();
+    initDragAndDrop();
+    initShortcuts();
+    initViewModes();
+    initHistoryNavigation(); // 히스토리 네비게이션 초기화 추가
+    setupGlobalDragCleanup(); // 드래그 상태 정리 기능 초기화
+    
+    // 파일 관리 기능 초기화
+    initFolderCreation();
+    initRenaming();
+    initFileUpload();
+    initClipboardOperations();
+    initDeletion();
+    initSearch();
+    
+    // 다운로드 버튼 이벤트 추가
+    downloadBtn.addEventListener('click', downloadSelectedItems);
+    
+    // 새로고침 버튼 이벤트 추가
+    document.getElementById('refreshStorageBtn').addEventListener('click', () => {
+        loadDiskUsage();
+    });
+    
+    // 초기 파일 목록 로드
+    loadFiles(currentPath);
+    
+    // 드롭존 초기화
+    initDropZone();
+    
+    // 스토리지 정보 로드
