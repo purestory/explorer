@@ -817,12 +817,14 @@ function handleDragEnd() {
         window.clearDragState();
     } else {
         console.log('handleDragEnd 호출: 기본 정리 로직 수행');
-        // 모든 dragging 클래스 제거 (선택자 범위 확장)
+        // 모든 dragging 클래스 제거 (주석 처리)
+        /*
         document.querySelectorAll('.dragging').forEach(item => {
             item.classList.remove('dragging');
         });
+        */
         
-        // 모든 drag-over 클래스 제거 (선택자 범위 확장)
+        // 모든 drag-over 클래스 제거
         document.querySelectorAll('.drag-over').forEach(item => {
             item.classList.remove('drag-over');
         });
@@ -1410,10 +1412,10 @@ function initDragAndDrop() {
         console.log('드래그 시작:', fileName);
         
         // 선택되지 않은 항목을 드래그하는 경우, 선택 초기화 후 해당 항목만 선택
-    if (!fileItem.classList.contains('selected')) {
-        clearSelection();
-        selectItem(fileItem);
-    }
+        if (!fileItem.classList.contains('selected')) {
+            clearSelection();
+            selectItem(fileItem);
+        }
 
         // 드래그 중인 항목 개수
         const dragCount = selectedItems.size;
@@ -1439,36 +1441,43 @@ function initDragAndDrop() {
             // 3. 일반 텍스트 데이터로도 저장 (호환성 유지)
             e.dataTransfer.setData('text/plain', draggedItems.join('\n'));
             
-            // 4. 드래그 이미지 효과 설정
-            if (dragCount > 1) {
-                e.dataTransfer.setDragImage(fileItem, 15, 15);
-                e.dataTransfer.effectAllowed = 'move';
-            }
+            // 4. 드래그 이미지 설정 수정 (Data URI 사용)
+            const transparentImage = new Image();
+            transparentImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
 
-            console.log('[File Drag Start] 내부 드래그 마커 설정 완료 (json, x-internal-drag)');
+            // 투명 GIF 이미지를 드래그 이미지로 설정 (오프셋 0, 0)
+            e.dataTransfer.setDragImage(transparentImage, 0, 0);
+
+            // effectAllowed 설정 (모든 경우에 적용)
+            e.dataTransfer.effectAllowed = 'move';
+
+            console.log('[File Drag Start] 커스텀 투명 GIF 드래그 이미지 설정 완료');
             console.log('[File Drag Start] dataTransfer types set:', Array.from(e.dataTransfer.types));
 
-            // 5. 드래그 중인 항목에 시각적 효과 적용
-            setTimeout(() => {
-                document.querySelectorAll('.file-item.selected').forEach(item => {
-                    item.classList.add('dragging');
-                });
-            }, 0);
+            // 5. 드래그 중인 항목에 시각적 효과 적용 (클래스 추가 주석 처리)
+            /*
+            document.querySelectorAll('.file-item.selected').forEach(item => {
+                item.classList.add('dragging'); // 동기적으로 클래스 추가
+            });
+            */
 
         } catch (error) {
             console.error('드래그 시작 중 오류:', error);
             // 기본 정보만이라도 설정
-            e.dataTransfer.setData('text/plain', fileName);
+            if (fileItem) {
+                const fileName = fileItem.getAttribute('data-name');
+                e.dataTransfer.setData('text/plain', fileName);
+            }
         }
     }
     
     function handleFileDragEnd(e) {
         console.log('파일 리스트 dragend 이벤트 발생');
         
-        // 보편적인 드래그 상태 정리 함수 호출
-        handleDragEnd();
+        // 2. 보편적인 드래그 상태 정리 함수 호출 (내부 클래스 제거 확인 필요)
+        handleDragEnd(); // .dragging 클래스 제거 등 포함
         
-        // 드롭존 비활성화
+        // 3. 드롭존 비활성화
         dropZone.classList.remove('active');
     }
     
@@ -1643,6 +1652,30 @@ function handleDropZoneDrop(e) {
     
     // 개발 모드에서 폴더 항목 CSS 선택자 유효성 확인
     console.log('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
+}
+
+// 전역 handleDragEnd 함수도 확인해야 함
+function handleDragEnd() {
+    // 전역 드래그 상태 정리 함수 호출
+    if (window.clearDragState) {
+        console.log('handleDragEnd 호출: 전역 함수로 정리');
+        window.clearDragState();
+    } else {
+        console.log('handleDragEnd 호출: 기본 정리 로직 수행');
+        // 모든 dragging 클래스 제거 (주석 처리)
+        /*
+        document.querySelectorAll('.dragging').forEach(item => {
+            item.classList.remove('dragging');
+        });
+        */
+        
+        // 모든 drag-over 클래스 제거
+        document.querySelectorAll('.drag-over').forEach(item => {
+            item.classList.remove('drag-over');
+        });
+        
+        isDragging = false;
+    }
 }
 
 // 내부 드래그인지 확인하는 함수 (파일 경로 기반 + 기본값은 내부)
@@ -2240,7 +2273,7 @@ function formatDate(dateString) {
             const hour = parts[5].padStart(2, '0');  // 시간 2자리
             const minute = parts[6].padStart(2, '0'); // 분 2자리
             return `${year}-${month}-${day} ${ampm} ${hour}:${minute}`;
-        } else {
+            } else {
             // 파싱 실패 시 기본 형식 사용 (이전 형식)
             console.warn("날짜 형식 재조립 실패:", formatted);
             return date.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\. /g, '.').replace(/ /g, ' ').replace(/,/g, '');
@@ -2299,7 +2332,7 @@ function handleFileClick(e, fileItem) {
         if (fileItem.classList.contains('selected')) {
             fileItem.classList.remove('selected');
             selectedItems.delete(fileItem.getAttribute('data-name'));
-        } else {
+    } else {
             fileItem.classList.add('selected');
             selectedItems.add(fileItem.getAttribute('data-name'));
         }
@@ -2632,7 +2665,7 @@ function pasteItems() {
             // 파일 목록 새로고침
     // 초기화 시 window.currentPath 설정
     window.currentPath = currentPath || "";
-            loadFiles(currentPath);
+    loadFiles(currentPath);
             statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
             hideLoading();
         })
@@ -4848,7 +4881,7 @@ function initDropZone() {
             if (fileItem) {
                 // 폴더인 경우에만 타겟으로 반환
                 if (fileItem.getAttribute('data-is-folder') === 'true') {
-                    // 상위 폴더(..)는 제외
+    // 상위 폴더(..)는 제외
                     if (fileItem.getAttribute('data-parent-dir') !== 'true') {
                         return fileItem;
                     }
@@ -5079,9 +5112,9 @@ function handleFileDrop(e, targetFolderItem = null) {
         // 상위 디렉토리로 이동 처리는 무시
         if (targetName === '..' || targetFolderItem.hasAttribute('data-parent-dir')) {
             console.log('상위 디렉토리로의 이동은 처리하지 않음');
-            return;
-        }
-        
+        return;
+    }
+    
         // 드래그 오버 스타일 제거
         targetFolderItem.classList.remove('drag-over');
     } else {

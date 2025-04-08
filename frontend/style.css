@@ -389,13 +389,22 @@ h1 {
 }
 
 .file-item.dragging {
-    opacity: 0.6;
-    transform: scale(0.95);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    z-index: 100;
+    /* 레이아웃에 영향을 주지 않도록 높이를 0으로 설정 */
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important; 
+    border: 0 !important;
+    overflow: hidden !important;
+    
+    /* 시각적으로 숨김 */
+    opacity: 0;
+    pointer-events: none;
+    
+    /* 커서 유지 */
     cursor: grabbing;
-    outline: 1px dashed #007bff;
-    background-color: rgba(0, 123, 255, 0.05);
+    
+    /* 제거: z-index, outline, background-color, box-shadow */
 }
 
 .file-item.drag-over {
@@ -661,16 +670,6 @@ h1 {
 
 .file-item.cut {
     opacity: 0.5;
-}
-
-.file-item.dragging {
-    opacity: 0.6;
-    transform: scale(0.95);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    z-index: 100;
-    cursor: grabbing;
-    outline: 1px dashed #007bff;
-    background-color: rgba(0, 123, 255, 0.05);
 }
 
 .file-item.drag-over {

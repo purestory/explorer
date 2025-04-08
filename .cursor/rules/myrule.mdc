@@ -30,15 +30,16 @@ alwaysApply: true
 # ... existing code ...
 9.  **서버 구조:** `frontend` (Nginx)와 `backend` (Node.js) 서버를 동시에 운영 중입니다.
 10. **함수 단위 코드 수정 (유틸리티 사용 필수):**
-    
-    * 코드가 긴 파일 수정 시 edit_file tool은 오작동하는 일이 많으니 절대 쓰지 말고
+    server.js, script.js 직접 수정시에는 절대 edit_file tool 쓰지마
+    * 코드가 긴 파일 수정 시 **edit_file tool**은  **절대 쓰지 마**, 긴 파일은 절대절대 직접 수정하지마(오작동해서 코드를 망쳐놓는 바보야야)
 
-    *   JavaScript 파일 내 특정 함수를 수정해야 할 경우, **반드시** 다음 절차를 따릅니다:
-        1.  `util/find_function.py`를 사용하여 대상 함수 코드를 임시 파일(예: `util/tmp_func_code.js`)로 추출하고 시작/끝 라인 번호를 확인합니다.
+    *   JavaScript 파일 내 특정 함수를 수정해야 할 경우, **반드시** 유틸을 써서 다음 절차대로해해:
+        1.  `util/find_function.py`를 사용하여 대상 함수 코드를 임시 파일(예: `util/tmp_func_code.js`)로 추출하고 시작/끝 라인 번호를 확인합니다. 함수를 못찾으면 코드에서 정확한 함수명을 다시 찾아 본후 다시 시도해
            ```bash
            # 예시: frontend/script.js에서 initShortcuts 함수 추출
            python3 util/find_function.py frontend/script.js initShortcuts util/tmp_func_code.js
            ```
+           
         2.  추출된 임시 파일(`util/tmp_func_code.js`)의 내용을 사용자에게 제시하거나, 직접 수정합니다.
         3.  수정이 완료된 임시 파일과, 1단계에서 확인한 시작/끝 라인 번호를 사용하여 `util/replace_code_block.py`를 실행하여 원본 파일에 수정 내용을 반영합니다. 이 스크립트는 원본 파일을 자동으로 백업합니다.
            ```bash
