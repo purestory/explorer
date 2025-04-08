@@ -410,16 +410,20 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
 
     // 파일 목록 새로고침 (기존 유지)
     if (typeof loadFiles === 'function' && (successCount > 0 || failedCount > 0)) { // 성공 또는 실패한 파일이 있을 때만 새로고침
+        // 파일 개수에 따른 새로고침 시간 설정
+        let refreshDelay;
+        if (totalFiles <= 100) {
+            refreshDelay = 300;  // 100개 이하: 0.5초
+        } else if (totalFiles <= 1000) {
+            refreshDelay = 1000; // 1000개 이하: 1초
+        } else {
+            refreshDelay = 2000; // 1000개 초과: 2초
+        }
+
         setTimeout(() => {
-            console.log('[Upload] 업로드 완료/실패 후 파일 목록 새로고침 시작');
+            console.log(`[Upload] 업로드 완료/실패 후 파일 목록 새로고침 시작 (파일 수: ${totalFiles}, 대기 시간: ${refreshDelay}ms)`);
             loadFiles(currentPath);
-            /*
-            setTimeout(() => {
-                console.log('[Upload] 2차 파일 목록 새로고침 시작');
-                loadFiles(currentPath);
-            }, 1500);
-            */
-        }, 1000);
+        }, refreshDelay);
     }
 }
 
