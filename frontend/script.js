@@ -35,6 +35,14 @@ window.dragSelectState = {
 };
 
 // 파일 최상단 또는 적절한 전역 스코프에 추가
+// currentPath를 window 객체에 동기화하는 함수
+function syncCurrentPath(path) {
+    currentPath = path;
+    window.currentPath = path;
+    console.log(`[Path Updated] 현재 경로 업데이트: ${path || "루트"}`);
+    return path;
+}
+
 let wasDragging = false;
 
 // DOM 요소
@@ -956,7 +964,7 @@ function updateStorageInfoDisplay() {
 // 파일 목록 로드 함수
 function loadFiles(path = '') {
     showLoading();
-    currentPath = path;
+    syncCurrentPath(path);
     
     // URL 인코딩 처리
     const encodedPath = path ? encodeURIComponent(path) : '';
@@ -1084,6 +1092,8 @@ function renderFiles(files) {
                             sortField = sortBy;
                             sortDirection = 'asc';
                         }
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
                         loadFiles(currentPath);
                     });
                 });
@@ -1754,6 +1764,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
         
         // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } catch (error) {
         console.error('[Internal Drop] 이동 중 오류 발생:', error);
@@ -1761,6 +1773,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
         
         // 오류 발생 시에도 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } finally {
         hideLoading();
@@ -1873,6 +1887,8 @@ function init() {
     });
     
     // 초기 파일 목록 로드
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
     loadFiles(currentPath);
     
     // 드롭존 초기화
@@ -2080,6 +2096,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         // showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
         
         // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } catch (error) {
         console.error('[Internal Drop] 이동 중 오류 발생:', error);
@@ -2087,6 +2105,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
         
         // 오류 발생 시에도 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } finally {
         hideLoading();
@@ -2217,6 +2237,8 @@ function updateBreadcrumb(path) {
             currentPath = span.getAttribute('data-path');
             // 히스토리 상태 업데이트 추가
             updateHistoryState(currentPath);
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
     loadFiles(currentPath);
     
             // 선택 초기화
@@ -2334,7 +2356,7 @@ function handleFileDblClick(e, fileItem) {
 // 폴더 탐색
 function navigateToFolder(folderName) {
     let newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-    currentPath = newPath;
+    syncCurrentPath(newPath);
     
     // 폴더 이동 히스토리 상태 업데이트
     updateHistoryState(currentPath);
@@ -2574,6 +2596,8 @@ function pasteItems() {
             document.getElementById('ctxPaste').style.display = 'none';
             
             // 파일 목록 새로고침
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
             loadFiles(currentPath);
             statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
             hideLoading();
@@ -2582,6 +2606,8 @@ function pasteItems() {
         .catch(error => {
             alert(`오류 발생: ${error.message}`);
             hideLoading();
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
             loadFiles(currentPath);
         });
 }
@@ -2913,6 +2939,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         // showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
         
         // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } catch (error) {
         console.error('[Internal Drop] 이동 중 오류 발생:', error);
@@ -2920,6 +2948,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
         
         // 오류 발생 시에도 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } finally {
         hideLoading();
@@ -3420,6 +3450,8 @@ function initViewModes() {
         listView = false;
         gridViewBtn.classList.add('active');
         listViewBtn.classList.remove('active');
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         loadFiles(currentPath); 
     });
     
@@ -3427,6 +3459,8 @@ function initViewModes() {
         listView = true;
         listViewBtn.classList.add('active');
         gridViewBtn.classList.remove('active');
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         loadFiles(currentPath);
     });
     
@@ -3513,6 +3547,8 @@ function initFolderCreation() {
                 throw new Error('폴더 생성에 실패했습니다.');
             }
             folderModal.style.display = 'none';
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
             loadFiles(currentPath); // 파일 목록 새로고침
             statusInfo.textContent = '폴더 생성 완료';
         })
@@ -3582,6 +3618,8 @@ function initRenaming() {
                 throw new Error('이름 변경에 실패했습니다.');
             }
             renameModal.style.display = 'none';
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
             loadFiles(currentPath); // 파일 목록 새로고침
             statusInfo.textContent = '이름 변경 완료';
         })
@@ -3838,6 +3876,8 @@ function navigateToParentFolder() {
     updateHistoryState(currentPath);
     
     // 파일 목록 새로고침
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
     loadFiles(currentPath);
     
     // 선택 초기화
@@ -3872,6 +3912,8 @@ function initHistoryNavigation() {
     window.addEventListener('popstate', (e) => {
         if (e.state && e.state.path !== undefined) {
             currentPath = e.state.path;
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
             loadFiles(currentPath);
         }
     });
@@ -4036,6 +4078,8 @@ function compressSelectedItems() {
         hideLoading();
         
         // 압축 후 파일 목록 새로고침
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
         loadFiles(currentPath);
     })
     .catch(error => {
@@ -4187,6 +4231,8 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
                     clearSelection();
                     
                     // 목록 새로고침
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
                     return loadFiles(currentPath);
                 })
                 .catch(error => {
@@ -4343,6 +4389,8 @@ function toggleFolderLock(action = 'lock') {
         if (index >= foldersToProcess.length) {
             // 모든 폴더 처리 완료
             loadLockStatus().then(() => {
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
                 loadFiles(currentPath); // 파일 목록 새로고침
                 const actionText = action === 'lock' ? '잠금' : '잠금 해제';
                 statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
@@ -4378,6 +4426,8 @@ function toggleFolderLock(action = 'lock') {
         .catch(error => {
             alert(`오류 발생: ${error.message}`);
             hideLoading();
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
             loadFiles(currentPath);
         });
     };
