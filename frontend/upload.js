@@ -22,6 +22,7 @@ let overallProgressText = null;
 let currentFileInfo = null;
 let uploadSpeed = null;
 let uploadTimeRemaining = null;
+let totalUploadSizeEl = null; // 총 용량 표시 요소
 
 // --- 업로드 모달 표시/숨김 ---
 function showUploadModal() {
@@ -31,10 +32,11 @@ function showUploadModal() {
     if (!currentFileInfo) currentFileInfo = document.getElementById('current-file-info');
     if (!uploadSpeed) uploadSpeed = document.getElementById('upload-speed');
     if (!uploadTimeRemaining) uploadTimeRemaining = document.getElementById('upload-time-remaining');
+    if (!totalUploadSizeEl) totalUploadSizeEl = document.getElementById('total-upload-size');
     
-    // 필수 요소 확인
-    if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining) {
-        console.error('[Upload] 필수 모달 요소 또는 관련 요소(#upload-progress-modal, ...)를 찾을 수 없습니다.');
+    // 필수 요소 확인 (totalUploadSizeEl 추가)
+    if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining || !totalUploadSizeEl) {
+        console.error('[Upload] 필수 모달 요소(#upload-progress-modal, ...)를 찾을 수 없습니다.');
         return;
     }
 
@@ -47,9 +49,10 @@ function showUploadModal() {
     speedHistory.length = 0; 
     currentUploadXHRs = []; 
 
-    // 초기 상태 설정
+    // 초기 상태 설정 (총 용량 추가)
     if (overallProgressBar) overallProgressBar.style.width = '0%';
     if (overallProgressText) overallProgressText.textContent = '0% (0/0)';
+    if (totalUploadSizeEl) totalUploadSizeEl.textContent = '업로드: 0 B / 0 B'; // 초기 텍스트 설정
     if (currentFileInfo) currentFileInfo.textContent = '대기 중...';
     if (uploadSpeed) uploadSpeed.textContent = '속도: 0 KB/s';
     if (uploadTimeRemaining) uploadTimeRemaining.textContent = '남은 시간: 계산 중...';
@@ -152,7 +155,14 @@ function updateUploadProgress(uploadedFileCount, totalFiles, currentFileName, cu
     
     overallProgressBar.style.width = `${overallPercent}%`;
     overallProgressText.textContent = `전체 진행률: ${overallPercent}% (${uploadedFileCount}/${totalFiles} 파일)`; 
-    currentFileInfo.textContent = `현재 파일: ${currentFileName} (${currentFilePercent}%)`;
+    
+    // 현재 파일 정보 업데이트 (이름만 표시)
+    currentFileInfo.textContent = `현재 파일: ${currentFileName}`; 
+
+    // 업로드된 용량 / 총 용량 업데이트
+    if (totalUploadSizeEl) {
+        totalUploadSizeEl.textContent = `업로드: ${formatFileSize(totalBytesUploaded)} / ${formatFileSize(totalBytesToUpload)}`;
+    }
 }
 
 // --- 개별 파일 업로드 함수 (XMLHttpRequest 사용) ---
@@ -255,8 +265,6 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
 
 // --- 병렬 파일 업로드 관리 함수 ---
 async function uploadFilesSequentially(filesWithPaths, targetPath) {
-    // 모달 요소는 showUploadModal에서 가져오므로 여기서는 확인 생략
-    
     showUploadModal(); // 모달 표시 및 변수 초기화
     
     const totalFiles = filesWithPaths.length;
@@ -276,6 +284,11 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
     // 전체 업로드할 바이트 계산
     totalBytesToUpload = filesWithPaths.reduce((sum, { file }) => sum + file.size, 0);
     totalBytesUploaded = 0; // 업로드된 바이트 초기화
+
+    // 총 용량 표시 업데이트 (showUploadModal 이후, 여기서 총 용량만 설정)
+    if (totalUploadSizeEl) {
+        totalUploadSizeEl.textContent = `업로드: 0 B / ${formatFileSize(totalBytesToUpload)}`; 
+    }
 
     console.log(`[Upload Parallel] 총 ${totalFiles}개 파일 병렬 업로드 시작. 대상 경로: ${targetPath}`);
 
