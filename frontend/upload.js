@@ -499,17 +499,7 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
                 logWarn(`[Upload] 잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`);
                 if (showToast) showToast(`잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`, 'warning');
                 return; 
-            } else if (!isPathLocked) {
-                logWarn('[Upload] isPathLocked 함수 없음. 잠금 확인 없이 진행.');
-            }
-            targetPath = potentialTargetPath;
-            targetName = folderName;
-            logLog('[Upload] 외부 파일 드래그 감지: 대상 폴더:', targetName);
-        } else {
-            if (isPathLocked && isPathLocked(currentPath)) {
-                logWarn(`[Upload] 현재 폴더 '${currentPath || '루트'}'가 잠겨 있어 업로드할 수 없습니다.`);
-                if (showToast) showToast('현재 폴더가 잠겨 있어 업로드할 수 없습니다.', 'warning');
-                return; 
+            
             } else if (!isPathLocked){
                 logWarn('[Upload] isPathLocked 함수 없음. 현재 폴더 잠금 확인 없이 진행.');
             }
@@ -600,17 +590,12 @@ window.initializeUploader = function() {
     if (localFileUploadInput) {
         localFileUploadInput.addEventListener('change', async (event) => {
             const files = event.target.files;
-            if (!files || files.length === 0) return;
-
-            const currentPath = typeof window.currentPath !== 'undefined' ? window.currentPath : '';
-            const isPathLockedDefined = typeof isPathLocked === 'function';
-            if (isPathLockedDefined && isPathLocked(currentPath)) {
-                logWarn(`[Upload] 현재 폴더 '${currentPath || '루트'}'가 잠겨 업로드 불가.`);
-                if (typeof showToast === 'function') showToast('현재 폴더가 잠겨 있어 업로드할 수 없습니다.', 'warning');
-                event.target.value = null; 
-                return; 
+            if (!files || files.length === 0) {
+                return;
             }
 
+            const currentPath = typeof window.currentPath !== 'undefined' ? window.currentPath : '';
+            
             logLog(`[Upload] ${files.length}개 파일 선택됨.`);
             const filesWithPaths = Array.from(files).map(file => {
                 const normalizedName = file.name.normalize ? file.name.normalize('NFC') : file.name;
