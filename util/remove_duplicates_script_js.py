@@ -32,6 +32,7 @@ TARGET_FILE = "/home/purestory/webdav/frontend/script.js"
 
 # 삭제할 행 범위 (시작행, 끝행)
 ranges = [
+    (2617, 2722),
 ]
 
 if __name__ == '__main__':
