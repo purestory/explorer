@@ -1,5 +1,6 @@
 // 전역 변수
 // URL 경로에 따라 적절한 API 베이스 URL 설정
+const minDragDistance = 10; // Minimum pixels to start drag selection
 const API_BASE_URL = window.location.hostname === 'itsmyzone.iptime.org' ? 
     window.location.origin : window.location.origin;
 let currentPath = '';
@@ -64,7 +65,6 @@ const confirmRenameBtn = document.getElementById('confirmRenameBtn');
 const cancelRenameBtn = document.getElementById('cancelRenameBtn');
 const searchInput = document.getElementById('searchInput');
 const loadingOverlay = document.getElementById('loadingOverlay');
-const selectionBox = document.getElementById('selectionBox');
 const dropZone = document.getElementById('dropZone');
 const progressContainer = document.getElementById('progressContainer');
 const progressBar = document.getElementById('progressBar');
@@ -458,23 +458,23 @@ function initDragSelect() {
             autoScrollAnimationId = null;
         }
     }
-    
-// ===== 자동 스크롤 관련 전역 변수 (추가) =====
-let autoScrollIntervalId = null; // requestAnimationFrame ID
-let scrollDirection = 0; // -1: 위로, 1: 아래로, 0: 정지
-let currentScrollSpeed = 0; // 현재 스크롤 속도 (px/frame)
-const scrollZoneHeight = 50; // 스크롤 발동 영역 높이 (px)
-const minScrollSpeed = 2;    // 최소 스크롤 속도
-const maxScrollSpeed = 20;   // 최대 스크롤 속도
+}
+// ===== 자동 스크롤 관련 전역 변수 =====
+let autoScrollIntervalId = null;
+let scrollDirection = 0;
+let currentScrollSpeed = 0;
+const scrollZoneHeight = 50;
+const minScrollSpeed = 2;
+const maxScrollSpeed = 20;
 
-// scrollLoop 함수 정의 (추가)
+// ===== scrollLoop 함수 =====
 function scrollLoop() {
     if (scrollDirection === 0) {
-        autoScrollIntervalId = null; // 스크롤 멈추면 ID 초기화
-        return;
+         autoScrollIntervalId = null;
+         return;
     }
-    const fileListContainer = document.getElementById('fileList'); // 스크롤 대상 컨테이너
-    if (fileListContainer) { 
+    const fileListContainer = document.getElementById('fileList');
+    if (fileListContainer) {
         fileListContainer.scrollTop += scrollDirection * currentScrollSpeed;
     } else {
         if (autoScrollIntervalId !== null) {
@@ -484,60 +484,38 @@ function scrollLoop() {
         }
         return;
     }
-    
     autoScrollIntervalId = requestAnimationFrame(scrollLoop);
 }
 
-// 마우스 이벤트를 document에 연결 (화면 어디서나 드래그 가능하도록)
-document.addEventListener('mousedown', (e) => {
-    // 컨텍스트 메뉴, 또는 다른 상호작용 요소에서 시작된 이벤트는 무시
-    if (e.target.closest('.context-menu') || e.button !== 0
-        || e.target.closest('button') || e.target.closest('input')
-        || e.target.closest('select') || e.target.closest('a')
-        || e.target.closest('.modal') || e.target.closest('.dropdown-menu')
-        || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT'
-        || e.target.tagName === 'SELECT' || e.target.tagName === 'A') {
-        return;
-    }
-    
-    // 자동 스크롤 중지 (이전에 진행 중인 것이 있다면)
-    if (autoScrollIntervalId !== null) { // cancelAutoScroll() 대신 직접 호출
-        cancelAnimationFrame(autoScrollIntervalId);
-        autoScrollIntervalId = null;
-        scrollDirection = 0;
-    }
-    
-    const fileList = document.getElementById('fileList'); // 변수 선언 위치 조정
-    if (!fileList) return; // fileList 없으면 중단
 
-    // 초기 클라이언트 좌표 저장 (스크롤 위치와 무관)
+// ===== mousedown 핸들러 =====
+document.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.context-menu') || e.button !== 0 /*... 다른 상호작용 요소 체크 ...*/) { return; }
+    if (autoScrollIntervalId !== null) { cancelAnimationFrame(autoScrollIntervalId); autoScrollIntervalId = null; scrollDirection = 0; }
+    
+    const fileList = document.getElementById('fileList'); 
+    if (!fileList) return; 
+
     let startClientX = e.clientX;
     let startClientY = e.clientY;
-    let originalTarget = e.target;
     
-    // 파일 항목 위에서 시작되었는지 확인
     const fileItemElement = e.target.closest('.file-item') || e.target.closest('.file-item-grid');
     window.dragSelectState.startedOnFileItem = fileItemElement !== null;
     
-    // 선택된 항목 위에서 시작된 경우 드래그 선택을 하지 않음 (파일 이동 우선)
     if (window.dragSelectState.startedOnFileItem && fileItemElement.classList.contains('selected')) {
         window.dragSelectState.startedOnSelectedItem = true;
-        return; // 선택된 항목에서는 드래그 선택을 시작하지 않음
+        return; 
     }
     
     e.preventDefault();
     
     window.dragSelectState.dragStarted = false;
-    
-    // 초기 스크롤 위치 저장
     const initialScrollTop = fileList.scrollTop;
-    const initialScrollLeft = fileList.scrollLeft; // 수평 스크롤 위치도 저장
-    
+    const initialScrollLeft = fileList.scrollLeft; 
     window.dragSelectState.isSelecting = true;
     
-    // 선택 박스 초기화 (아직 보이지 않음)
     const selectionBox = document.getElementById('selectionBox');
-    if (!selectionBox) return; // selectionBox 없으면 중단
+    if (!selectionBox) return; 
     selectionBox.style.position = 'fixed'; 
     selectionBox.style.left = `${startClientX}px`;
     selectionBox.style.top = `${startClientY}px`;
@@ -546,103 +524,91 @@ document.addEventListener('mousedown', (e) => {
     selectionBox.style.display = 'none'; 
     selectionBox.style.zIndex = '9999'; 
     
-    // 시작 정보 저장
     selectionBox.dataset.startClientX = startClientX;
     selectionBox.dataset.startClientY = startClientY;
     selectionBox.dataset.initialScrollTop = initialScrollTop;
     selectionBox.dataset.initialScrollLeft = initialScrollLeft; 
-
     wasDragging = false;
 });
 
-// 마우스 이동 이벤트
+
+// ===== mousemove 핸들러 (수정됨) =====
 document.addEventListener('mousemove', (e) => {
-    // 선택된 항목에서 시작된 경우 드래그 선택하지 않음 (파일 이동 우선)
     if (window.dragSelectState.startedOnSelectedItem) return;
-    
     if (!window.dragSelectState.isSelecting) return;
-    
+
     const fileList = document.getElementById('fileList');
     const selectionBox = document.getElementById('selectionBox');
-    // 필수 요소 없으면 중단
-    if (!fileList || !selectionBox) return; 
-    const rect = fileList.getBoundingClientRect(); // 컨테이너 위치
-    
-    // 저장된 시작 클라이언트 좌표
+    if (!fileList || !selectionBox) return;
+    const rect = fileList.getBoundingClientRect();
+
     const startClientX = parseFloat(selectionBox.dataset.startClientX);
     const startClientY = parseFloat(selectionBox.dataset.startClientY);
-    // 데이터 속성이 유효하지 않으면 중단
     if (isNaN(startClientX) || isNaN(startClientY) || !selectionBox.dataset.initialScrollTop) {
-         window.dragSelectState.isSelecting = false; 
-         selectionBox.style.display = 'none';
-         return;
+         window.dragSelectState.isSelecting = false; selectionBox.style.display = 'none'; return;
     }
     const initialScrollTop = parseFloat(selectionBox.dataset.initialScrollTop);
     const initialScrollLeft = parseFloat(selectionBox.dataset.initialScrollLeft || 0);
-    
-    // 현재 클라이언트 좌표
+
     const currentClientX = e.clientX;
     const currentClientY = e.clientY;
-    
-    // 이동 거리 계산
-    const dragDistanceX = Math.abs(currentClientX - startClientX);
-    const dragDistanceY = Math.abs(currentClientY - startClientY);
-    const dragDistance = Math.sqrt(dragDistanceX * dragDistanceX + dragDistanceY * dragDistanceY);
-    
-    // 최소 드래그 거리를 넘으면 드래그 선택 시작
-    if (!window.dragSelectState.dragStarted && dragDistance >= minDragDistance) {
-        window.dragSelectState.dragStarted = true;
-        wasDragging = true;
-        selectionBox.style.display = 'block';
-        if (!e.ctrlKey) {
-            clearSelection();
-        }
+    const dragDistance = Math.sqrt(Math.pow(currentClientX - startClientX, 2) + Math.pow(currentClientY - startClientY, 2));
+
+    if (!window.dragSelectState.dragStarted && dragDistance >= minDragDistance) { 
+        window.dragSelectState.dragStarted = true; 
+        wasDragging = true; 
+        selectionBox.style.display = 'block'; 
+        if (!e.ctrlKey) { clearSelection(); }
     }
-    
     if (!window.dragSelectState.dragStarted) return;
-    
-    // 선택 박스 위치 계산 (고정 위치 기반)
+
     const left = Math.min(currentClientX, startClientX);
     const top = Math.min(currentClientY, startClientY);
     const width = Math.abs(currentClientX - startClientX);
     const height = Math.abs(currentClientY - startClientY);
-    
-    // 선택 박스 업데이트 (fixed 위치)
     selectionBox.style.left = `${left}px`;
     selectionBox.style.top = `${top}px`;
     selectionBox.style.width = `${width}px`;
     selectionBox.style.height = `${height}px`;
 
-    // --- 자동 스크롤 로직 (수정/추가) ---
-    const mouseY = e.clientY; 
-
+    // --- 자동 스크롤 로직 (수정됨 - 영역 밖에서도 동작) ---
+    const mouseY = e.clientY;
     scrollDirection = 0;
     currentScrollSpeed = 0;
 
-    if (mouseY < rect.top + scrollZoneHeight && mouseY >= rect.top) {
+    // 마우스가 상단 영역 근처 또는 위에 있을 때
+    if (mouseY < rect.top + scrollZoneHeight) {
         scrollDirection = -1; 
-        const distance = mouseY - rect.top; 
+        const distance = Math.max(0, mouseY - rect.top); 
         currentScrollSpeed = maxScrollSpeed - ((distance / scrollZoneHeight) * (maxScrollSpeed - minScrollSpeed));
-        currentScrollSpeed = Math.max(minScrollSpeed, currentScrollSpeed); 
+        currentScrollSpeed = Math.max(minScrollSpeed, Math.min(maxScrollSpeed, currentScrollSpeed));
     }
-    else if (mouseY > rect.bottom - scrollZoneHeight && mouseY <= rect.bottom) {
+    // 마우스가 하단 영역 근처 또는 아래에 있을 때
+    else if (mouseY > rect.bottom - scrollZoneHeight) {
         scrollDirection = 1; 
-        const distance = rect.bottom - mouseY; 
+        const distance = Math.max(0, rect.bottom - mouseY);
         currentScrollSpeed = maxScrollSpeed - ((distance / scrollZoneHeight) * (maxScrollSpeed - minScrollSpeed));
-        currentScrollSpeed = Math.max(minScrollSpeed, currentScrollSpeed); 
+        currentScrollSpeed = Math.max(minScrollSpeed, Math.min(maxScrollSpeed, currentScrollSpeed));
     }
 
-    if (scrollDirection !== 0 && autoScrollIntervalId === null) {
-        autoScrollIntervalId = requestAnimationFrame(scrollLoop);
+    // 스크롤 시작 또는 중지
+    if (scrollDirection !== 0) {
+        if (autoScrollIntervalId === null) { 
+            autoScrollIntervalId = requestAnimationFrame(scrollLoop);
+        }
+    } else {
+        if (autoScrollIntervalId !== null) { 
+            cancelAnimationFrame(autoScrollIntervalId);
+            autoScrollIntervalId = null;
+        }
     }
     // --- 자동 스크롤 로직 끝 ---
-    
-    // 파일 항목 선택 로직 (스크롤 고려)
+
+    // 파일 항목 선택 로직 (기존과 동일)
     const currentScrollTop = fileList.scrollTop;
     const currentScrollLeft = fileList.scrollLeft;
     const scrollDiffY = currentScrollTop - initialScrollTop;
     const scrollDiffX = currentScrollLeft - initialScrollLeft;
-    
     const selectLeft = Math.min(currentClientX, startClientX) - rect.left + scrollDiffX;
     const selectRight = Math.max(currentClientX, startClientX) - rect.left + scrollDiffX;
     const startY_abs = startClientY - rect.top + initialScrollTop;
@@ -650,7 +616,6 @@ document.addEventListener('mousemove', (e) => {
     const selectTop = Math.min(startY_abs, currentY_abs);
     const selectBottom = Math.max(startY_abs, currentY_abs);
     
-    // 모든 파일 항목들을 순회하면서 선택 영역과 겹치는지 확인
     const items = document.querySelectorAll('.file-item');
     items.forEach(item => {
         if (item.getAttribute('data-parent-dir') === 'true') return;
@@ -660,17 +625,10 @@ document.addEventListener('mousemove', (e) => {
         const itemRight = itemLeft + itemRect.width;
         const itemBottom = itemTop + itemRect.height;
         const overlap = !(itemRight < selectLeft || itemLeft > selectRight || itemBottom < selectTop || itemTop > selectBottom);
-        
         if (overlap) {
-            if (!item.classList.contains('selected')) {
-                item.classList.add('selected');
-                selectedItems.add(item.getAttribute('data-name'));
-            }
+            if (!item.classList.contains('selected')) { item.classList.add('selected'); selectedItems.add(item.getAttribute('data-name')); }
         } else if (!e.ctrlKey) {
-            if (item.classList.contains('selected')) {
-                item.classList.remove('selected');
-                selectedItems.delete(item.getAttribute('data-name'));
-            }
+            if (item.classList.contains('selected')) { item.classList.remove('selected'); selectedItems.delete(item.getAttribute('data-name')); }
         }
     });
     
@@ -683,48 +641,30 @@ document.addEventListener('mousemove', (e) => {
         const itemRight = itemLeft + itemRect.width;
         const itemBottom = itemTop + itemRect.height;
         const overlap = !(itemRight < selectLeft || itemLeft > selectRight || itemBottom < selectTop || itemTop > selectBottom);
-
         if (overlap) {
-            if (!item.classList.contains('selected')) {
-                item.classList.add('selected');
-                selectedItems.add(item.getAttribute('data-name'));
-            }
+            if (!item.classList.contains('selected')) { item.classList.add('selected'); selectedItems.add(item.getAttribute('data-name')); }
         } else if (!e.ctrlKey) {
-            if (item.classList.contains('selected')) {
-                item.classList.remove('selected');
-                selectedItems.delete(item.getAttribute('data-name'));
-            }
+            if (item.classList.contains('selected')) { item.classList.remove('selected'); selectedItems.delete(item.getAttribute('data-name')); }
         }
     });
     
     updateButtonStates();
 });
 
-// 마우스 업 이벤트
+
+// ===== mouseup 핸들러 =====
 document.addEventListener('mouseup', (e) => {
     if (!window.dragSelectState.isSelecting) return;
-
-    // --- 자동 스크롤 중지 (수정) ---
-    if (autoScrollIntervalId !== null) {
-        cancelAnimationFrame(autoScrollIntervalId);
-        autoScrollIntervalId = null;
-        scrollDirection = 0; // 스크롤 상태 초기화
-    }
-    // --- 자동 스크롤 중지 끝 ---
-
-    const selectionBox = document.getElementById('selectionBox');
-    if (selectionBox) { // selectionBox null 체크 추가
-        selectionBox.style.display = 'none';
-    }
-    
+    if (autoScrollIntervalId !== null) { cancelAnimationFrame(autoScrollIntervalId); autoScrollIntervalId = null; scrollDirection = 0; }
+    const selectionBox = document.getElementById('selectionBox'); 
+    if (selectionBox) { selectionBox.style.display = 'none'; }
     window.dragSelectState.isSelecting = false;
     window.dragSelectState.dragStarted = false;
     window.dragSelectState.startedOnFileItem = false;
     window.dragSelectState.startedOnSelectedItem = false;
-    
     updateButtonStates();
 });       
-}
+
 
 // 전역 마우스 업 이벤트 핸들러 추가 - 드래그 상태 정리를 위한 안전장치
 function setupGlobalDragCleanup() {
@@ -4966,9 +4906,10 @@ async function moveItem(sourcePath, targetPathBase, overwrite = false) {
     // 성공 시 이동된 항목 이름 반환 (또는 void)
     return itemName;
 } 
+
+
 // 최종 handleInternalFileDrop 함수 코드 (잠금 확인 수정)
 async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    // ... (함수 시작 부분 동일) ...
     logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
 
     // 타겟 폴더 경로 결정
@@ -4978,13 +4919,13 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
         const folderName = targetFolderItem.getAttribute('data-name');
         if (folderName) {
-             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-             targetName = folderName;
+            targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+            targetName = folderName;
         } else {
-             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
+            logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
         }
     } else if (targetFolderItem) {
-         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
+        logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
     }
 
     logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
@@ -4993,7 +4934,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
         logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
         showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
-             return;
+        return;
     }
     const validItemPaths = draggedItemPaths.filter(path => typeof path === 'string' && path.trim());
     if (validItemPaths.length === 0) {
@@ -5020,9 +4961,9 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
         if (targetInDraggedItems) {
             logWarn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
-             showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
-             if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
-             return;
+            showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
+            if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
+            return;
         }
     }
     // 2. 자신의 하위 폴더로 이동하는 경우
@@ -5030,7 +4971,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         if (item.isFolder && targetPath.startsWith(item.fullPath + '/')) {
             logWarn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
             showToast(`폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`, 'warning');
-             if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
+            if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
             return;
         }
     }
@@ -5040,7 +4981,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         logLog('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
         showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
         clearSelection();
-         if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
+        if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
         return;
     }
 
@@ -5048,8 +4989,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     const lockedItems = itemsToMove.filter(item => {
         // isPathLocked 함수가 정의되어 있는지 확인
         if (typeof isPathLocked === 'function') {
-             // item.fullPath가 lockedFolders 배열에 정확히 일치하는지 확인
-             return isPathLocked(item.fullPath); // isPathAccessRestricted -> isPathLocked 로 변경
+            // item.fullPath가 lockedFolders 배열에 정확히 일치하는지 확인
+            return isPathLocked(item.fullPath); // isPathAccessRestricted -> isPathLocked 로 변경
         } else {
             logWarn("[Internal Drop] isPathLocked function not found. Cannot check lock status.");
             return false;
@@ -5061,8 +5002,8 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         if (typeof clearAllDragOverClasses === 'function') {
             clearAllDragOverClasses();
         } else {
-             document.querySelectorAll('.file-item.drag-over').forEach(item => item.classList.remove('drag-over'));
-             logWarn("[Internal Drop] clearAllDragOverClasses function not found. Manually removing drag-over classes.");
+            document.querySelectorAll('.file-item.drag-over').forEach(item => item.classList.remove('drag-over'));
+            logWarn("[Internal Drop] clearAllDragOverClasses function not found. Manually removing drag-over classes.");
         }
         clearSelection();
         return; // 이동 작업 중단
@@ -5084,6 +5025,9 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         clearSelection();
         if (typeof clearAllDragOverClasses === 'function') {
             clearAllDragOverClasses();
+        } else {
+            document.querySelectorAll('.file-item.drag-over').forEach(item => item.classList.remove('drag-over'));
+            logWarn("[Internal Drop] clearAllDragOverClasses function not found. Manually removing drag-over classes.");
         }
     }
-} 
+}
