@@ -1781,7 +1781,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     } catch (error) {
         logError('[Internal Drop] 이동 중 오류 발생:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        showToast(`항목 이동 중 오류: ${errorMessage}`, 'warning');
+        showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
         
         // 오류 발생 시에도 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
     // 초기화 시 window.currentPath 설정
@@ -2685,27 +2685,17 @@ function pasteItems() {
     // 초기화 시 window.currentPath 설정
     window.currentPath = currentPath || "";
     loadFiles(currentPath);
-        statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
-        hideLoading();
-    })
+            statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
+            hideLoading();
+        })
 
-    .catch(error => {
-        let message = `오류 발생: ${error.message}`;
-        let type = 'error'; // 기본 오류 타입
-
-        // 이름 충돌 오류 메시지 확인 (서버 응답에 따라 조정 필요)
-        // 예시: '이미 존재하는 이름입니다.', '409 Conflict' 등 포함 여부 확인
-        if (error.message && (error.message.includes('같은 이름') || error.message.includes('409'))) {
-            message = `대상 폴더에 같은 이름의 항목이 존재하여 일부 이동 실패: ${error.message.split(':')[1]?.trim() || ''}`; // 충돌 항목 이름 추출 시도 (서버 응답 따라 다름)
-            type = 'warning'; // 이름 충돌 시 경고 타입 (노란색)
-        }
-
-        showToast(message, type); // 수정된 메시지와 타입으로 호출
-        hideLoading();
-        // 초기화 시 window.currentPath 설정
-        window.currentPath = currentPath || "";
-        loadFiles(currentPath); // 실패 시에도 목록 새로고침
-    });
+        .catch(error => {
+            showToast(`오류 발생: ${error.message}`, 'error');
+            hideLoading();
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
+            loadFiles(currentPath);
+        });
 }
 
 // 드래그 시작 처리
@@ -3723,68 +3713,18 @@ document.addEventListener('click', (event) => {
 });
 
 
-// 압축 이름 지정 모달 표시 및 처리
-function showCompressModal(defaultName) {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('compressModal');
-        const input = document.getElementById('compressName');
-        const confirmBtn = document.getElementById('confirmCompressBtn');
-        const cancelBtn = document.getElementById('cancelCompressBtn');
-        const closeBtn = modal.querySelector('.modal-close');
-
-        input.value = defaultName || ''; // 기본 이름 설정
-        modal.style.display = 'flex';
-        input.focus();
-        input.select();
-
-        const confirmHandler = () => {
-            const name = input.value.trim();
-            if (name) {
-                cleanup();
-                resolve(name);
-            } else {
-                // 이름이 비어있으면 포커스 유지 및 알림 (선택적)
-                input.focus();
-                alert('압축 파일 이름을 입력해주세요.');
-            }
-        };
-
-        const cancelHandler = () => {
-            cleanup();
-            resolve(null); // 취소 시 null 반환
-        };
-
-        const keydownHandler = (event) => {
-            if (event.key === 'Enter') {
-                confirmHandler();
-            } else if (event.key === 'Escape') {
-                cancelHandler();
-            }
-        };
-
-        const cleanup = () => {
-            modal.style.display = 'none';
-            confirmBtn.removeEventListener('click', confirmHandler);
-            cancelBtn.removeEventListener('click', cancelHandler);
-            closeBtn.removeEventListener('click', cancelHandler);
-            input.removeEventListener('keydown', keydownHandler);
-        };
-
-        confirmBtn.addEventListener('click', confirmHandler);
-        cancelBtn.addEventListener('click', cancelHandler);
-        closeBtn.addEventListener('click', cancelHandler);
-        input.addEventListener('keydown', keydownHandler);
-    });
-} // 선택한 파일 압축
-async function compressSelectedItems() {
+// 선택한 파일 압축
+function compressSelectedItems() {
     if (selectedItems.size === 0) return;
     
+    // 선택된 파일/폴더 중 첫 번째 항목의 이름 가져오기
     const selectedItemsArray = Array.from(selectedItems);
     const firstItemName = selectedItemsArray[0];
     
-    // 파일 크기 확인 (500MB 제한)
-    const MAX_FILE_SIZE = 500 * 1024 * 1024;
+    // 파일 크기 확인
     let hasLargeFile = false;
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+    
     for (const item of selectedItemsArray) {
         const fileInfo = fileInfoMap.get(item);
         if (fileInfo && fileInfo.type === 'file' && fileInfo.size > MAX_FILE_SIZE) {
@@ -3794,11 +3734,11 @@ async function compressSelectedItems() {
     }
     
     if (hasLargeFile) {
-        showToast('500MB 이상의 파일이 포함되어 있어 압축할 수 없습니다.', 'error');
+        alert('500MB 이상의 파일이 포함되어 있어 압축할 수 없습니다.');
         return;
     }
     
-    // 기본 압축 파일 이름 설정 (첫 번째 선택 항목 + 날짜시간)
+    // 현재 날짜와 시간을 문자열로 변환
     const now = new Date();
     const dateTimeStr = now.getFullYear() +
                         String(now.getMonth() + 1).padStart(2, '0') +
@@ -3806,167 +3746,224 @@ async function compressSelectedItems() {
                         String(now.getHours()).padStart(2, '0') +
                         String(now.getMinutes()).padStart(2, '0') +
                         String(now.getSeconds()).padStart(2, '0');
+    
+    // 기본 압축 파일 이름 설정 (첫 번째 선택 항목 + 날짜시간)
     const defaultZipName = `${firstItemName}_${dateTimeStr}`;
     
-    // 모달을 통해 압축 파일 이름 입력 받기
-    const zipNameWithoutExt = await showCompressModal(defaultZipName);
-    if (!zipNameWithoutExt) return; // 사용자가 취소한 경우
-
-    const zipName = `${zipNameWithoutExt}.zip`; // 확장자 추가
+    // 압축 파일 이름 입력 받기
+    const zipName = prompt('압축 파일 이름을 입력하세요:', defaultZipName);
+    if (!zipName) return; // 취소한 경우
     
     showLoading();
     statusInfo.textContent = '압축 중...';
     
+    // 압축할 파일 목록 생성
     const filesToCompress = selectedItemsArray;
     
+    // API 요청 데이터
     const requestData = {
         files: filesToCompress,
         targetPath: currentPath,
-        zipName: zipName // 확장자가 포함된 이름 사용
+        zipName: zipName
     };
     
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/compress`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestData)
-        });
-
+    // 압축 API 호출
+    fetch(`${API_BASE_URL}/api/compress`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
         if (!response.ok) {
-            let errorData;
-            try {
-                errorData = await response.json();
-            } catch (e) {
-                // JSON 파싱 실패 시 텍스트로 에러 처리
-                 const errorText = await response.text();
-                 throw new Error(errorText || `HTTP error! status: ${response.status}`);
-            }
-             throw new Error(errorData.error || '압축 중 오류가 발생했습니다.');
+            return response.json().then(data => {
+                throw new Error(data.error || '압축 중 오류가 발생했습니다.');
+            });
         }
-
-        const data = await response.json();
+        return response.json();
+    })
+    .then(data => {
+        // 성공 처리
         statusInfo.textContent = `${filesToCompress.length}개 항목이 ${data.zipFile}로 압축되었습니다.`;
-        showToast(`${filesToCompress.length}개 항목 압축 완료: ${data.zipFile}`, 'success');
-        // 압축 후 파일 목록 새로고침
-        window.currentPath = currentPath || "";
-        loadFiles(currentPath);
-
-    } catch (error) {
-        logError('압축 실패:', error);
-        showToast(`압축 실패: ${error.message}`, 'error');
-        statusInfo.textContent = '압축 실패';
-    } finally {
         hideLoading();
-    }
+        
+        // 압축 후 파일 목록 새로고침
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
+        loadFiles(currentPath);
+    })
+    .catch(error => {
+        // 오류 처리
+        logError('압축 오류:', error);
+        statusInfo.textContent = `압축 실패: ${error.message}`;
+        alert(`압축 실패: ${error.message}`);
+        hideLoading();
+    });
 }
 
-function pasteItems() {
-    if (clipboardItems.length === 0) return;
-    
-    // --- 추가된 부분: 'cut' 작업 시 원본 항목 잠금 확인 ---
-    if (clipboardOperation === 'cut') {
-        const lockedItems = clipboardItems.filter(item => {
-            const sourcePath = item.originalPath ? `${item.originalPath}/${item.name}` : item.name;
-            // isPathAccessRestricted 함수가 정의되어 있는지 확인
-            if (typeof isPathAccessRestricted === 'function') {
-                return isPathAccessRestricted(sourcePath);
-            } else {
-                logWarn("[pasteItems] isPathAccessRestricted function not found. Cannot check lock status.");
-                return false; // 함수가 없으면 확인 불가
-            }
-        });
 
-        if (lockedItems.length > 0) {
-            const lockedNames = lockedItems.map(item => item.name).join(', ');
-            showToast(`다음 잠긴 항목은 이동할 수 없습니다: ${lockedNames}`, 'warning');
-            return; // 이동 작업 중단
-        }
+// 파일 또는 폴더를 지정된 대상 폴더로 이동하는 함수
+function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
+    // 이동 중복 호출 방지 상태 확인
+    if (window.isMovingFiles) {
+        logLog('이미 파일 이동 작업이 진행 중입니다.');
+        return Promise.reject('이미 파일 이동 작업이 진행 중입니다.');
     }
-    // --- 추가된 부분 끝 ---
-
-    const promises = [];
-    showLoading();
-    statusInfo.textContent = '붙여넣기 중...';
     
-    clipboardItems.forEach(item => {
-        // 소스 경로 (원본 파일 경로)
-        const sourcePath = item.originalPath ? `${item.originalPath}/${item.name}` : item.name;
-        // 대상 경로 (현재 경로)
-        // 현재 경로가 비어있으면 루트('/') 경로로 처리
-        const targetPathBase = (currentPath === '') ? '' : currentPath;
+    // 이동할 항목이 없으면 무시
+    if (!itemsToMove || itemsToMove.length === 0) {
+        logLog('이동할 항목이 없습니다.');
+        return Promise.reject('이동할 항목이 없습니다.');
+    }
+    
+    // 드롭된 폴더 경로 계산
+    let targetPath;
+    if (targetFolder.startsWith('/')) {
+        targetPath = targetFolder; // 절대 경로
+    } else if (currentPath && targetFolder.startsWith(currentPath + '/')) {
+        targetPath = targetFolder; // 이미 currentPath 포함된 경우
+    } else {
+        targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder; // currentPath 기준으로 상대 경로
+    }
+    
+    // 호출 카운터 증가 - 함수 호출 추적
+    dragDropMoveCounter++;
+    logLog(`[moveToFolder] 파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`);
+    statusInfo.textContent = `파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`;
+    
+    // 이동 중 상태 설정
+    window.isMovingFiles = true;
+    
+    // 이동 전 충돌 항목 확인 (모든 항목에 대해 한 번만 확인)
+    const conflictCheckPromises = itemsToMove.map(item => {
+        const sourceFullPath = item.startsWith("/") ? item : (currentPath ? `${currentPath}/${item}` : item);
+        const fileName = item;
         
-        // 경로에 한글이 포함된 경우를 위해 인코딩 처리
-        const encodedSourcePath = encodeURIComponent(sourcePath);
-        
-        if (clipboardOperation === 'cut') {
-            logLog(`이동 요청: 소스=${sourcePath}, 대상 경로=${targetPathBase}, 파일명=${item.name}, 현재경로=${currentPath}`);
-            
-            // 잘라내기는 이름 변경(이동)으로 처리
-            promises.push(
-                fetch(`${API_BASE_URL}/api/files/${encodedSourcePath}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        newName: item.name,
-                        targetPath: targetPathBase
-                    })
-                })
-                .then(response => {
-                    // 응답이 정상적이지 않으면 에러 텍스트 추출
-                    if (!response.ok) {
-                        return response.text().then(text => {
-                            throw new Error(text || `${item.name} 이동 실패 (${response.status})`);
-                        });
-                    }
-                    
-                    // 이동된 항목 표시에서 'cut' 클래스 제거
-                    document.querySelectorAll('.file-item.cut').forEach(el => {
-                        el.classList.remove('cut');
-                    });
-                    
-                    return item.name;
-                })
-            );
+        // 소스와 타겟이 같은 경로인지 확인
+        if (sourceFullPath === `${targetPath}/${fileName}`) {
+            logLog(`[${fileName}] 소스와 타겟이 동일합니다. 무시합니다.`);
+            return { item, exists: false, skip: true };
         }
+        
+        // 파일 존재 여부 확인 과정을 생략하고 항상 존재하지 않는다고 가정
+        // 이렇게 하면 404 오류가 콘솔에 표시되지 않음
+        // 실제 충돌은 moveItem 함수 내에서 처리됨
+        return Promise.resolve({ item, exists: false, skip: false });
     });
     
-    Promise.all(promises)
-        .then(() => {
-            // 클립보드 초기화
-            clipboardItems = [];
-            clipboardOperation = '';
-            pasteBtn.disabled = true;
-            document.getElementById('ctxPaste').style.display = 'none';
+    return Promise.all(conflictCheckPromises)
+        .then(results => {
+            // 충돌 항목만 필터링
+            const conflictItems = results.filter(result => result.exists && !result.skip);
+            const skipItems = results.filter(result => result.skip);
+            const nonConflictItems = results.filter(result => !result.exists && !result.skip);
             
-            // 파일 목록 새로고침
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-    loadFiles(currentPath);
-            statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
-        hideLoading();
-        })
-
-        .catch(error => {
-            let message = `오류 발생: ${error.message}`;
-            let type = 'error'; // 기본 오류 타입
-
-            // 이름 충돌 오류 메시지 확인 (서버 응답에 따라 조정 필요)
-            // 예시: '이미 존재하는 이름입니다.', '409 Conflict' 등 포함 여부 확인
-            if (error.message && (error.message.includes('이미 존재하는 이름입니다') || error.message.includes('409'))) {
-                message = `대상 폴더에 같은 이름의 항목이 존재하여 일부 이동 실패: ${error.message.split(':')[1]?.trim() || ''}`; // 충돌 항목 이름 추출 시도 (서버 응답 따라 다름)
-                type = 'warning'; // 이름 충돌 시 경고 타입 (노란색)
+            // 로그 정보
+            logLog(`충돌 항목: ${conflictItems.length}, 동일 경로 무시: ${skipItems.length}, 비충돌 항목: ${nonConflictItems.length}`);
+            
+            // 자동 이동 모드일 경우, 또는 충돌이 없는 경우 확인 메시지 없이 진행
+            let shouldOverwrite = autoMove;
+            
+            // 충돌 항목이 있고 자동 이동 모드가 아닌 경우만 확인
+            if (conflictItems.length > 0 && !autoMove) {
+                const confirmMsg = 
+                    conflictItems.length === 1 
+                    ? `'${targetFolder}' 폴더에 이미 '${conflictItems[0].item}'이(가) 존재합니다. 덮어쓰시겠습니까?` 
+                    : `'${targetFolder}' 폴더에 ${conflictItems.length}개의 항목이 이미 존재합니다. 모두 덮어쓰시겠습니까?`;
+                
+                shouldOverwrite = confirm(confirmMsg);
+                
+                // 덮어쓰기 거부시
+                if (!shouldOverwrite) {
+                    logLog('사용자가 덮어쓰기를 거부했습니다.');
+                    
+                    // 비충돌 항목만 이동하도록 필터링
+                    itemsToMove = nonConflictItems.map(item => item.item);
+                    
+                    // 이동할 항목이 없으면 작업 중단
+                    if (itemsToMove.length === 0) {
+                        window.isMovingFiles = false;
+                        return Promise.reject('모든 이동 작업이 취소되었습니다.');
+                    }
+                }
             }
-
-            showToast(message, type); // 수정된 메시지와 타입으로 호출
-            hideLoading();
+            
+            // 로딩 표시
+            showLoading();
+            statusInfo.textContent = '파일 이동 중...';
+            
+            // 이동할 최종 항목 목록 (충돌 항목 포함 여부는 사용자 선택에 따름)
+            const finalItemsToMove = shouldOverwrite 
+                ? [...nonConflictItems, ...conflictItems].map(item => item.item) 
+                : nonConflictItems.map(item => item.item);
+            
+            // 무시할 항목은 이미 제외됨
+            
+            // 선택된 모든 항목 이동
+            const movePromises = finalItemsToMove.map(item => {
+                // 기존 로직: const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                // 기존 로직: const sourceFullPath = currentPath ? `${currentPath}/${item}` : item;
+                // 수정된 로직: 절대 경로인지 확인하여 처리
+                let sourceFullPath;
+                if (item.startsWith('/')) {
+                    sourceFullPath = item; // 절대 경로
+                } else if (currentPath && item.startsWith(currentPath + '/')) {
+                    sourceFullPath = item; // 이미 currentPath 포함된 경우
+                } else {
+                    sourceFullPath = currentPath ? `${currentPath}/${item}` : item; // currentPath 기준으로 상대 경로
+                }
+            
+                // 로그 추가: 이동 경로 확인 (이 부분은 유지하거나 필요에 따라 수정)
+                logLog(`[moveToFolder] 이동 호출: ${sourceFullPath} -> ${targetPath}`);
+            
+                return moveItem(sourceFullPath, targetPath, shouldOverwrite);
+            });
+            
+            return Promise.allSettled(movePromises)
+                .then(moveResults => {
+                    // 결과 분석
+                    const fulfilled = moveResults.filter(result => result.status === 'fulfilled').length;
+                    const rejected = moveResults.filter(result => result.status === 'rejected').length;
+                    
+                    // 이동 결과 메시지
+                    let resultMessage = `${fulfilled}개 항목을 이동했습니다.`;
+                    if (rejected > 0) {
+                        resultMessage += ` ${rejected}개 항목 이동 실패.`;
+                    }
+                    if (skipItems.length > 0) {
+                        resultMessage += ` ${skipItems.length}개 항목 동일 경로로 무시됨.`;
+                    }
+                    
+                    // 화면에 결과 표시
+                    statusInfo.textContent = resultMessage;
+                    
+                    // 선택 초기화
+                    clearSelection();
+                    
+                    // 목록 새로고침
     // 초기화 시 window.currentPath 설정
     window.currentPath = currentPath || "";
-            loadFiles(currentPath); // 실패 시에도 목록 새로고침
-        });
+                    return loadFiles(currentPath);
+                })
+                .catch(error => {
+                    // 이동 실패
+                    statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error}`;
+                    logError('Move error:', error);
+                    return Promise.reject(error);
+                })
+                .finally(() => {
+                    // 이동 상태 초기화 및 로딩 숨김
+                    window.isMovingFiles = false;
+                    hideLoading();
+                });
+        })
+        .catch(error => {
+            window.isMovingFiles = false;
+            statusInfo.textContent = `이동 준비 중 오류: ${error}`;
+            logError('Move preparation error:', error);
+            return Promise.reject(error);
+    });
 }
 
 // 폴더 잠금 상태 확인
@@ -4944,239 +4941,5 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         showToast('이동할 유효한 항목이 없습니다.', 'error');
         return;
     }
-}
 
-// moveToFolder 함수 최종 코드 (confirm -> showToast, 충돌 시 중단)
-function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
-    if (window.isMovingFiles) {
-        logLog('이미 파일 이동 작업이 진행 중입니다.');
-        return Promise.reject('이미 파일 이동 작업이 진행 중입니다.');
-    }
-    if (!itemsToMove || itemsToMove.length === 0) {
-        logLog('이동할 항목이 없습니다.');
-        return Promise.reject('이동할 항목이 없습니다.');
-    }
-    let targetPath;
-    if (targetFolder.startsWith('/')) { targetPath = targetFolder; }
-    else if (currentPath && targetFolder.startsWith(currentPath + '/')) { targetPath = targetFolder; }
-    else { targetPath = currentPath ? `${currentPath}/${targetFolder}` : targetFolder; }
-
-    dragDropMoveCounter++;
-    logLog(`[moveToFolder] 파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`);
-    // statusInfo.textContent = `파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`; // 임시 로그 제거
-    window.isMovingFiles = true;
-
-    // !!! 중요: 프론트엔드에서의 충돌 확인 로직 제거 !!!
-    // 백엔드에서 충돌을 감지하고 409 Conflict를 반환하도록 의존합니다.
-
-    // 바로 이동 로직 실행
-    showLoading();
-    statusInfo.textContent = '파일 이동 중...';
-
-    // 이동할 최종 항목 목록 (itemsToMove 그대로 사용)
-    const finalItemsToMove = itemsToMove; // itemsToMove는 경로 배열이어야 함
-
-    // 이동할 항목이 없으면 종료 (이전 검사에서 처리)
-    if (finalItemsToMove.length === 0) {
-        logLog('[moveToFolder] 이동할 최종 항목 없음');
-        window.isMovingFiles = false;
-        hideLoading();
-        return Promise.resolve();
-    }
-
-    const movePromises = finalItemsToMove.map(itemFullPath => { // item -> itemFullPath 로 변경 (경로를 직접 받음)
-        // sourceFullPath 계산
-        let sourceFullPath = itemFullPath; // 기본값 설정
-        // 아래 로직은 handleInternalFileDrop에서 fullPath를 정확히 전달한다고 가정
-        // if (itemFullPath.startsWith('/')) { sourceFullPath = itemFullPath; }
-        // else if (currentPath && itemFullPath.startsWith(currentPath + '/')) { sourceFullPath = itemFullPath; }
-        // else { sourceFullPath = currentPath ? `${currentPath}/${itemFullPath}` : itemFullPath; }
-
-        logLog(`[moveToFolder] 이동 호출: ${sourceFullPath} -> ${targetPath}`);
-        // 백엔드가 충돌을 처리하므로 덮어쓰기 옵션은 false
-        return moveItem(sourceFullPath, targetPath, false);
-    });
-
-    return Promise.allSettled(movePromises)
-        .then(moveResults => {
-            const fulfilled = moveResults.filter(result => result.status === 'fulfilled').length;
-            const rejected = moveResults.filter(result => result.status === 'rejected').length;
-            const rejectedReasons = moveResults.filter(result => result.status === 'rejected').map(r => r.reason);
-
-            let resultMessage = `${fulfilled}개 항목을 이동했습니다.`;
-            if (rejected > 0) {
-                resultMessage += ` ${rejected}개 항목 이동 실패.`;
-                // 실패 사유 중 이름 충돌이 있는지 확인 (서버 응답 기반)
-                const hasConflict = rejectedReasons.some(reason => reason && reason.message && (reason.message.includes('409') || reason.message.includes('exists') || reason.message.includes('이미 존재하는'))); // 충돌 관련 키워드 추가
-                if (hasConflict) {
-                     // 409 충돌 시 노란색 토스트 표시 (다른 실패는 기본 error 메시지)
-                     showToast(`대상 폴더에 같은 이름의 항목이 존재하여 일부 이동 실패`, 'warning');
-                } else if (rejectedReasons.length > 0){
-                    // 다른 실패 이유가 있으면 기본 에러 토스트
-                    showToast(`일부 항목 이동 실패: ${rejectedReasons[0]?.message || '알 수 없는 오류'}`, 'error');
-                }
-            }
-            // skipItems 관련 로직 제거됨
-
-            statusInfo.textContent = resultMessage;
-            clearSelection();
-            window.currentPath = currentPath || "";
-            return loadFiles(currentPath); // 성공/실패 여부와 관계없이 목록 새로고침
-        })
-        // .catch 블록 제거 또는 간소화 (Promise.allSettled는 reject되지 않음)
-        .finally(() => {
-            window.isMovingFiles = false;
-            hideLoading();
-            // 이동 완료/실패 후 강조 해제
-             if (typeof clearAllDragOverClasses === 'function') {
-                 clearAllDragOverClasses();
-             }
-        });
-    // .catch 블록 제거됨 (Promise.allSettled 사용)
-}
-
-// 개별 항목 이동 함수 (백엔드 호출)
-async function moveItem(sourcePath, targetPathBase, overwrite = false) {
-    const encodedSourcePath = encodeURIComponent(sourcePath);
-    const itemName = sourcePath.includes('/') ? sourcePath.substring(sourcePath.lastIndexOf('/') + 1) : sourcePath;
-
-    const response = await fetch(`${API_BASE_URL}/api/files/${encodedSourcePath}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        // overwrite 플래그는 백엔드 API가 지원해야 함 (현재 API는 body로 처리)
-        body: JSON.stringify({ newName: itemName, targetPath: targetPathBase /*, overwrite: overwrite */ })
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        // 409 Conflict 에러를 명시적으로 throw하여 Promise.allSettled에서 구분
-        if (response.status === 409) {
-            // 409 오류 시 에러 메시지에 상태 코드와 파일명 포함하여 전달
-            throw new Error(`409 Conflict: ${itemName}`);
-        }
-        throw new Error(errorText || `${itemName} 이동 실패 (${response.status})`);
-    }
-    // 성공 시 이동된 항목 이름 반환 (또는 void)
-    return itemName;
-} 
-// 최종 handleInternalFileDrop 함수 코드 (잠금 확인 수정)
-async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    // ... (함수 시작 부분 동일) ...
-    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
-
-    // 타겟 폴더 경로 결정
-    let targetPath = currentPath;
-    let targetName = '현재 폴더';
-
-    if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
-        const folderName = targetFolderItem.getAttribute('data-name');
-        if (folderName) {
-             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-             targetName = folderName;
-        } else {
-             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
-        }
-    } else if (targetFolderItem) {
-         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
-    }
-
-    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
-
-    // 드래그된 데이터 유효성 검사
-    if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
-        logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
-        showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
-             return;
-    }
-    const validItemPaths = draggedItemPaths.filter(path => typeof path === 'string' && path.trim());
-    if (validItemPaths.length === 0) {
-        logError('[Internal Drop] 유효한 경로가 없음');
-        showToast('이동할 유효한 항목이 없습니다.', 'error');
-        return;
-    }
-
-    // 항목 정보 추출
-    const itemsInfo = validItemPaths.map(path => {
-        const itemName = path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path;
-        const parentPath = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
-        const itemInfo = fileInfoMap.get(itemName) || null;
-        return {
-            fullPath: path, name: itemName, parentPath,
-            isFolder: itemInfo ? itemInfo.isFolder : false, info: itemInfo
-        };
-    });
-    logLog('[Internal Drop] 항목 정보:', itemsInfo);
-
-    // --- 유효성 검사 시작 ---
-    // 1. 타겟이 드래그 항목 중 하나인 경우
-    if (targetFolderItem) {
-        const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
-        if (targetInDraggedItems) {
-            logWarn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
-             showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
-             if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
-             return;
-        }
-    }
-    // 2. 자신의 하위 폴더로 이동하는 경우
-    for (const item of itemsInfo) {
-        if (item.isFolder && targetPath.startsWith(item.fullPath + '/')) {
-            logWarn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
-            showToast(`폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`, 'warning');
-             if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
-            return;
-        }
-    }
-    // 3. 이미 대상 폴더에 있는 항목 필터링
-    const itemsToMove = itemsInfo.filter(item => item.parentPath !== targetPath);
-    if (itemsToMove.length === 0) {
-        logLog('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
-        showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
-        clearSelection();
-         if (typeof clearAllDragOverClasses === 'function') clearAllDragOverClasses();
-        return;
-    }
-
-    // --- 추가된 부분: 이동할 원본 항목 잠금 확인 --- (isPathLocked 사용)
-    const lockedItems = itemsToMove.filter(item => {
-        // isPathLocked 함수가 정의되어 있는지 확인
-        if (typeof isPathLocked === 'function') {
-             // item.fullPath가 lockedFolders 배열에 정확히 일치하는지 확인
-             return isPathLocked(item.fullPath); // isPathAccessRestricted -> isPathLocked 로 변경
-        } else {
-            logWarn("[Internal Drop] isPathLocked function not found. Cannot check lock status.");
-            return false;
-        }
-    });
-    if (lockedItems.length > 0) {
-        const lockedNames = lockedItems.map(item => item.name).join(', ');
-        showToast(`다음 잠긴 항목은 이동할 수 없습니다: ${lockedNames}`, 'warning');
-        if (typeof clearAllDragOverClasses === 'function') {
-            clearAllDragOverClasses();
-        } else {
-             document.querySelectorAll('.file-item.drag-over').forEach(item => item.classList.remove('drag-over'));
-             logWarn("[Internal Drop] clearAllDragOverClasses function not found. Manually removing drag-over classes.");
-        }
-        clearSelection();
-        return; // 이동 작업 중단
-    }
-    // --- 추가된 부분 끝 ---
-    // --- 유효성 검사 끝 ---
-
-    // 이동 시작
-    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, itemsToMove.map(item => item.name));
-    showLoading();
-    try {
-        await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
-    } catch (error) {
-        logError('[Internal Drop] 이동 중 오류 발생:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
-    } finally {
-        hideLoading();
-        clearSelection();
-        if (typeof clearAllDragOverClasses === 'function') {
-            clearAllDragOverClasses();
-        }
-    }
-} 
+}  

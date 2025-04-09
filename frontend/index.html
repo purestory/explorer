@@ -118,6 +118,24 @@
         </div>
     </div>
     
+    <!-- 압축 이름 지정 모달 -->
+    <div class="modal" id="compressModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>압축 파일 이름 지정</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="compressName">압축 파일 이름 (.zip)</label>
+                <input type="text" id="compressName" placeholder="압축 파일 이름 입력 (확장자 제외)">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelCompressBtn">취소</button>
+                <button class="btn btn-primary" id="confirmCompressBtn">압축</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- 컨텍스트 메뉴 -->
     <div id="contextMenu" class="context-menu">
         <div id="ctxNewFolder" class="context-menu-item"><i class="fas fa-folder-plus"></i> 새폴더</div>

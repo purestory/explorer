@@ -16,11 +16,7 @@ function pasteItems() {
 
         if (lockedItems.length > 0) {
             const lockedNames = lockedItems.map(item => item.name).join(', ');
-            alert(`다음 잠긴 항목은 이동할 수 없습니다: ${lockedNames}`);
-            // 클립보드 상태는 유지하여 사용자가 다른 작업을 시도할 수 있도록 함
-            // clipboardItems = []; // 클립보드 비우지 않음
-            // clipboardOperation = '';
-            // pasteBtn.disabled = true;
+            showToast(`다음 잠긴 항목은 이동할 수 없습니다: ${lockedNames}`, 'warning');
             return; // 이동 작업 중단
         }
     }
@@ -91,10 +87,20 @@ function pasteItems() {
         })
 
         .catch(error => {
-            alert(`오류 발생: ${error.message}`);
+            let message = `오류 발생: ${error.message}`;
+            let type = 'error'; // 기본 오류 타입
+
+            // 이름 충돌 오류 메시지 확인 (서버 응답에 따라 조정 필요)
+            // 예시: '이미 존재하는 이름입니다.', '409 Conflict' 등 포함 여부 확인
+            if (error.message && (error.message.includes('이미 존재하는 이름입니다') || error.message.includes('409'))) {
+                message = `대상 폴더에 같은 이름의 항목이 존재하여 이동(붙여넣기)할 수 없습니다: ${error.message.split(':')[1]?.trim() || ''}`; // 충돌 항목 이름 추출 시도 (서버 응답 따라 다름)
+                type = 'warning'; // 이름 충돌 시 경고 타입 (노란색)
+            }
+
+            showToast(message, type); // 수정된 메시지와 타입으로 호출
             hideLoading();
     // 초기화 시 window.currentPath 설정
     window.currentPath = currentPath || "";
-            loadFiles(currentPath);
+            loadFiles(currentPath); // 실패 시에도 목록 새로고침
         });
 }
