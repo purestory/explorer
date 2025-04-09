@@ -23,7 +23,7 @@ alwaysApply: true
 코딩 시 테스트가 가능한 부분은 반드시 테스트해서 제대로 동작하는지 확인해줘
 문제 파악 시 로그를 확인해서 파악해줘
 
-10. **서버 주소:** `http://itsmyzone.iptime.org/webdav-explorer`
+10. **서버 주소:** `http://itsmyzone.iptime.org/webdav-explorer/`
 11. **GitHub 저장소:** `https://github.com/purestory/webdav` (사용자 ID: purestory)
 12. **서버 구조:** `frontend` (Nginx)와 `backend` (Node.js) 서버를 동시에 운영 중입니다.
 13. **코드가 긴 파일 수정:**(1000라인)

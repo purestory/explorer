@@ -40,7 +40,10 @@ Express.js와 WebDAV 서버를 기반으로 구현된 파일 탐색기 웹 애�
 
 3. 브라우저에서 접속
    ```
-   http://localhost:3333
+   
+   http://itsmyzone.iptime.org:3333
+   http://itsmyzone.iptime.org/webdav
+   http://itsmyzone.iptime.org/webdav/
    ```
 
 ## 특징
@@ -89,7 +92,7 @@ Express.js와 WebDAV 서버를 기반으로 구현된 파일 탐색기 웹 애�
 ## 프로젝트 구조
 
 ```
-webdav-explorer/
+webdav/
 ├── frontend/             # 프론트엔드 코드
 │   ├── index.html        # 메인 HTML 파일
 │   ├── style.css         # 스타일시트
@@ -114,7 +117,7 @@ webdav-explorer/
 
 1. 저장소 클론:
 ```
-git clone https://github.com/purestory/webdav-explorer.git
+git clone https://github.com/purestory/webdav.git
 ```
 
 2. 필요한 패키지 설치:
@@ -287,7 +290,7 @@ journalctl -u webdav --since today
 ## 개발 정보
 
 - **개발자**: purestory
-- **GitHub**: https://github.com/purestory/webdav-explorer
+- **GitHub**: https://github.com/purestory/webdav
 - **라이선스**: MIT
 
 ## 주의사항
