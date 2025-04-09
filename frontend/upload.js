@@ -265,10 +265,10 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
     });
 }
 
-// --- 병렬 파일 업로드 관리 함수 ---
+// --- 병렬 파일 업로드 관리 함수 (파일 목록 요약 로그 추가) ---
 async function uploadFilesSequentially(filesWithPaths, targetPath) {
     showUploadModal(); // 모달 표시 및 변수 초기화
-    
+
     const totalFiles = filesWithPaths.length;
     if (totalFiles === 0) {
         logLog('[Upload] 업로드할 파일 없음.');
@@ -277,19 +277,50 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         return;
     }
 
+    // 전체 업로드할 바이트 계산 및 초기화
+    totalBytesToUpload = filesWithPaths.reduce((sum, { file }) => sum + file.size, 0);
+    totalBytesUploaded = 0; // 업로드된 바이트 초기화
+
+    // --- 추가/수정: 서버에 업로드 시작 액션 로그 전송 (파일 목록 요약 포함) ---
+    let logMessage = `[Upload Action] `;
+    // 파일 목록 요약 생성
+    let fileSummary = '';
+    if (totalFiles === 1) {
+        fileSummary = `'${filesWithPaths[0].relativePath || filesWithPaths[0].file.name}'`; // 폴더 내 파일은 relativePath 사용
+    } else {
+        const firstFiles = filesWithPaths.slice(0, 2).map(item => `'${item.relativePath || item.file.name}'`).join(', ');
+        fileSummary = `${firstFiles}${totalFiles > 2 ? ` 외 ${totalFiles - 2}개` : ''} (${totalFiles}개)`;
+    }
+    logMessage += `${fileSummary} 업로드 시작.`; // 파일 요약을 먼저 표시
+
+    logMessage += ` 총 용량: ${formatFileSize(totalBytesToUpload)}.`;
+    // 업로드 소스(버튼/드래그드롭) 및 대상 경로 추가
+    const uploadSrc = typeof uploadSource !== 'undefined' && uploadSource ? ` (소스: ${uploadSource})` : '';
+    const targetDir = targetPath || '루트'; // 대상 경로가 없으면 루트로 표시
+    logMessage += ` 대상 경로: ${targetDir}${uploadSrc}`;
+
+    // uploadSource 변수 초기화 (다음 업로드를 위해)
+    if (typeof uploadSource !== 'undefined') {
+         uploadSource = '';
+    }
+
+    fetch(`${API_BASE_URL}/api/log-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: logMessage, level: 'minimal' })
+    }).catch(error => console.error('업로드 시작 액션 로그 전송 실패:', error));
+    // --- 로그 전송 끝 ---
+
+
     let successCount = 0;
     let failedCount = 0;
     let cancelledCount = 0;
     const failedFiles = [];
     let uploadedFileCounter = { count: 0 }; // 완료된 파일 수 카운터 (객체로 전달하여 참조 유지)
 
-    // 전체 업로드할 바이트 계산
-    totalBytesToUpload = filesWithPaths.reduce((sum, { file }) => sum + file.size, 0);
-    totalBytesUploaded = 0; // 업로드된 바이트 초기화
-
     // 총 용량 표시 업데이트 (showUploadModal 이후, 여기서 총 용량만 설정)
     if (totalUploadSizeEl) {
-        totalUploadSizeEl.textContent = `업로드: 0 B / ${formatFileSize(totalBytesToUpload)}`; 
+        totalUploadSizeEl.textContent = `업로드: 0 B / ${formatFileSize(totalBytesToUpload)}`;
     }
 
     logLog(`[Upload Parallel] 총 ${totalFiles}개 파일 병렬 업로드 시작. 대상 경로: ${targetPath}`);
@@ -313,22 +344,25 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
 
     function runNextUpload() {
         // 취소되었거나, 대기열이 비었으면 더 이상 새 작업 시작 안 함
-        if (isCancelled || queue.length === 0) {
+        // isCancelled 변수가 upload.js 스코프에 있다고 가정
+        if (typeof isCancelled !== 'undefined' && isCancelled || queue.length === 0) {
             checkCompletion(); // 완료 여부 확인
             return;
         }
-        
+
         // 동시 업로드 한도 확인
         if (activeUploads.length >= CONCURRENT_UPLOADS) {
             return; // 한도 도달 시 대기
         }
 
         const { file, relativePath } = queue.shift(); // 대기열에서 파일 가져오기
-        
+
         // uploadSingleFile 호출, 완료 시 activeUploads에서 제거하고 결과 저장
+        // uploadSingleFile 함수가 upload.js 스코프에 있다고 가정
         const uploadPromise = uploadSingleFile(file, targetPath, relativePath, totalFiles, uploadedFileCounter)
             .then(result => {
                 results.push(result); // 성공/취소 결과 저장
+                // 성공 시에만 카운터 증가 (실패/취소는 제외)
                 if (result.status === 'success') uploadedFileCounter.count++;
                 return result;
             })
@@ -346,7 +380,8 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
             });
 
         activeUploads.push(uploadPromise); // 진행 중 목록에 추가
-        runNextUpload(); // 즉시 다른 슬롯이 비었는지 확인하고 추가 작업 시작 시도
+        // 슬롯이 비었을 수 있으므로 즉시 다음 업로드 시도
+        setTimeout(runNextUpload, 0); // 비동기적으로 다음 업로드 시도
     }
 
     // 초기 동시 업로드 시작
@@ -369,13 +404,20 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
             cancelledCount++;
         }
     });
-    
+
     // 취소 시 대기열에 남은 파일들 카운트
-    if (isCancelled && queue.length > 0) {
+    // isCancelled 변수가 upload.js 스코프에 있다고 가정
+    if (typeof isCancelled !== 'undefined' && isCancelled && queue.length > 0) {
         cancelledCount += queue.length;
     }
 
-    hideUploadModal(); 
+    // isCancelled 변수가 없으면 정의되지 않았다는 경고 로깅
+    if (typeof isCancelled === 'undefined') {
+         logWarn("[Upload] isCancelled 변수를 찾을 수 없어 취소 로직이 완전하지 않을 수 있습니다.");
+    }
+
+
+    hideUploadModal();
 
     // 최종 결과 알림 (showToast 함수가 script.js에 있다고 가정)
     if (typeof showToast === 'function') {
@@ -404,18 +446,19 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
              finalMessage = '업로드 작업 상태 불일치';
              messageType = 'error';
         }
-        
+
         if (finalMessage) {
             showToast(finalMessage, messageType, failedCount > 0 ? 10000 : 5000); // 실패 시 더 길게 표시
         }
     }
 
     // 파일 목록 새로고침 (기존 유지)
+    // loadFiles 함수가 script.js에 있다고 가정
     if (typeof loadFiles === 'function' && (successCount > 0 || failedCount > 0)) { // 성공 또는 실패한 파일이 있을 때만 새로고침
         // 파일 개수에 따른 새로고침 시간 설정
         let refreshDelay;
         if (totalFiles <= 100) {
-            refreshDelay = 300;  // 100개 이하: 0.5초
+            refreshDelay = 300;  // 100개 이하: 0.3초
         } else if (totalFiles <= 1000) {
             refreshDelay = 1000; // 1000개 이하: 1초
         } else {
@@ -424,8 +467,11 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
 
         setTimeout(() => {
             logLog(`[Upload] 업로드 완료/실패 후 파일 목록 새로고침 시작 (파일 수: ${totalFiles}, 대기 시간: ${refreshDelay}ms)`);
-            loadFiles(currentPath);
+            // currentPath 변수가 script.js의 전역 스코프에 있다고 가정
+            loadFiles(typeof currentPath !== 'undefined' ? currentPath : '');
         }, refreshDelay);
+    } else {
+         logLog('[Upload] 파일 목록 새로고침 건너뜀 (성공/실패 파일 없음).');
     }
 }
 

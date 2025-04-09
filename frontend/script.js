@@ -3088,51 +3088,6 @@ function initRenaming() {
 }
 
 
-// 파일 업로드 기능 초기화
-function initFileUpload() {
-    // 이 함수는 더 이상 사용하지 않고 window.initializeUploader로 대체됨
-    logLog('[Script] initFileUpload 함수는 더 이상 사용되지 않음');
-    
-    // 기존 코드 주석 처리
-    /*
-    fileUploadInput.addEventListener('change', (e) => {
-        const files = e.target.files;
-
-        if (!files || files.length === 0) return;
-
-        // 파일 크기 제한 확인
-        const maxFileSize = 10 * 1024 * 1024 * 1024; // 10GB
-        let hasLargeFile = false;
-        for (let i = 0; i < files.length; i++) {
-            if (files[i].size > maxFileSize) {
-                alert(`파일 크기가 너무 큽니다: ${files[i].name} (${formatFileSize(files[i].size)})
-최대 파일 크기: 10GB`);
-                hasLargeFile = true;
-                break;
-            }
-        }
-
-        if (hasLargeFile) {
-            e.target.value = ''; // 파일 입력 초기화
-            return;
-        }
-
-        // 업로드 소스 설정 및 카운터 초기화
-        uploadSource = 'button';
-        uploadButtonCounter = 0;
-
-        // FileList를 { file: File, relativePath: string } 형태의 배열로 변환
-        const filesWithPaths = Array.from(files).map(file => ({
-            file: file,
-            relativePath: file.name // 버튼 업로드는 상대 경로가 파일명 자체
-        }));
-uploadFilesSequentially(filesWithPaths, currentPath); // 현재 경로에 업로드         uploadFiles(filesWithPaths, currentPath); // 현재 경로에 업로드
-
-        // 파일 입력 초기화
-        e.target.value = '';
-    });
-    */
-}
 
 // 잘라내기/붙여넣기 기능 초기화
 function initClipboardOperations() {
