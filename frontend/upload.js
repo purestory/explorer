@@ -143,7 +143,7 @@ function formatFileSize(bytes) {
 
 // --- 전체 업로드 진행률 업데이트 ---
 // (파일 인덱스 대신 업로드된 파일 수와 바이트 기반으로 수정)
-function updateUploadProgress(uploadedFileCount, totalFiles, currentFileName, currentFilePercent) {
+function updateUploadProgress(uploadedFileCount, totalFiles, currentFileRelativePath, currentFilePercent) {
     // DOM 요소가 아직 할당되지 않았을 수 있으므로 확인
     if (!overallProgressBar || !overallProgressText || !currentFileInfo) {
         // 모달 표시 함수에서 DOM 요소를 가져오므로, 여기서는 로그만 남김
@@ -156,8 +156,10 @@ function updateUploadProgress(uploadedFileCount, totalFiles, currentFileName, cu
     overallProgressBar.style.width = `${overallPercent}%`;
     overallProgressText.textContent = `전체 진행률: ${overallPercent}% (${uploadedFileCount}/${totalFiles} 파일)`; 
     
-    // 현재 파일 정보 업데이트 (이름만 표시)
-    currentFileInfo.textContent = `현재 파일: ${currentFileName}`; 
+    // 현재 파일 정보 업데이트 (폴더 경로 포함)
+    // currentFileRelativePath가 빈 문자열일 경우 처리
+    const displayPath = currentFileRelativePath ? currentFileRelativePath.replace(/\\/g, '/') : '...'; 
+    currentFileInfo.textContent = `현재 파일: ${displayPath}`;
 
     // 업로드된 용량 / 총 용량 업데이트
     if (totalUploadSizeEl) {
@@ -535,7 +537,7 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
                 await Promise.all(promises); 
             } catch (treeError) {
                 logError('[Upload] 파일 트리 순회 중 최종 오류:', treeError);
-                if (showToast) showToast('폴더 구조를 읽는 중 오류가 발생했습니다.', 'error');
+                if (showToast) showToast('폴더 구조를 읽는 중 오류가 발생했습니다. 구조가 너무 긴 경우 읽을 수 없습니다.', 'error');
                 if (hideLoading) hideLoading();
                 return; 
             }

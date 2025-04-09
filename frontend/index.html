@@ -163,15 +163,21 @@
     <div id="upload-progress-modal" class="modal">
         <div class="modal-content">
             <h4>파일 업로드 중...</h4>
-            <div id="overall-progress-bar-container">
+            <!-- 진행률 + 남은 시간 그룹 -->
+            <div class="progress-time-group">
+                <p id="overall-progress-text"></p>
+                <p id="upload-time-remaining">남은 시간: 계산 중...</p>
+            </div>
+            <!-- 현재 파일 정보 -->
+            <p id="current-file-info"></p>
+            <!-- 진행률 막대 -->
+            <div id="overall-progress-bar-container" style="margin: 10px 0;"> 
                 <div id="overall-progress-bar"></div>
             </div>
-            <p id="overall-progress-text"></p>
-            <p id="total-upload-size">업로드: 0 B / 0 B</p>
-            <p id="current-file-info"></p>
-            <div class="upload-details">
+            <!-- 속도 + 총 크기 그룹 -->
+            <div class="speed-size-group">
                 <p id="upload-speed">속도: 0 KB/s</p>
-                <p id="upload-time-remaining">남은 시간: 계산 중...</p>
+                <p id="total-upload-size">업로드: 0 B / 0 B</p>
             </div>
         </div>
     </div>

@@ -13,6 +13,16 @@ const archiver = require('archiver');
 const { promisify } = require('util');
 const fs_stream = require('fs');
 
+// 쉘 인자를 안전하게 이스케이프하는 함수 (추가)
+function escapeShellArg(arg) {
+    // 빈 문자열은 ''로 처리
+    if (arg === '') {
+        return "''";
+    }
+    // 작은따옴표(')를 포함하는 경우: ' -> '\'' 로 변환하고 전체를 작은따옴표로 감쌈
+    return "'" + arg.replace(/'/g, "'\\''") + "'";
+}
+
 // 특수문자를 완벽하게 이스케이프하는 전역 함수 정의
 // 이 함수는 코드 전체에서 재사용됩니다
 
@@ -1774,6 +1784,9 @@ async function startServer() {
   await initializeDirectories(); // 디렉토리 초기화 및 로그 스트림 설정 완료 대기
   // setupLogStreams(); // 여기서 호출 제거
 
+  // *** 서버 시작 전 임시 디렉토리 정리 (추가) ***
+  await cleanupTmpDirectory(); 
+
   // 서버 리스닝 시작
   app.listen(PORT, () => {
     log(`서버가 ${PORT} 포트에서 실행 중입니다. 로그 레벨: ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel)}`, 'minimal');
@@ -1961,3 +1974,52 @@ app.post('/api/upload/test', testUploadMiddleware.single('testFile'), (req, res)
   });
 });
 // ===== 테스트용 파일 업로드 라우트 끝 =====
+
+// --- 서버 시작 전 임시 디렉토리 정리 함수 (추가) ---
+const cleanupTmpDirectory = async () => {
+  const tmpDir = path.join(__dirname, 'tmp');
+  log(`서버 시작 전 임시 디렉토리 정리 시작: ${tmpDir}`, 'info');
+  try {
+    const items = await fs.promises.readdir(tmpDir);
+    if (items.length === 0) {
+      log('임시 디렉토리가 비어있습니다. 정리할 항목 없음.', 'info');
+      return;
+    }
+    log(`${items.length}개의 항목을 임시 디렉토리에서 삭제합니다...`, 'info');
+
+    const execPromise = util.promisify(require('child_process').exec);
+    const cleanupPromises = items.map(async (item) => {
+      const itemPath = path.join(tmpDir, item);
+      const escapedPath = escapeShellArg(itemPath);
+      const command = `rm -rf ${escapedPath}`;
+      try {
+        log(`임시 항목 삭제 명령어 실행: ${command}`, 'debug');
+        const { stdout, stderr } = await execPromise(command);
+        if (stderr) {
+          log(`임시 항목 삭제 중 stderr 발생 (${item}): ${stderr.trim()}`, 'debug'); // 오류가 아니어도 로깅
+        }
+        log(`임시 항목 삭제 완료: ${itemPath}`, 'debug');
+      } catch (error) {
+        errorLog(`임시 항목 삭제 실패: ${itemPath}`, error);
+        // 개별 항목 삭제 실패 시 전체 중단하지 않음
+      }
+    });
+
+    await Promise.allSettled(cleanupPromises); // 모든 삭제 시도 완료까지 대기
+    log('임시 디렉토리 정리 완료.', 'info');
+
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      log('임시 디렉토리가 존재하지 않습니다. 정리 건너뜀.', 'info');
+    } else {
+      errorLog('임시 디렉토리 정리 중 오류 발생:', error);
+    }
+  }
+};
+
+// 외부에서 사용할 수 있도록 함수 노출 (추가)
+module.exports = {
+  app: app, // 기존 Express 앱 객체 (만약 필요하다면)
+  cleanupTmpDirectory: cleanupTmpDirectory,
+  // 다른 필요한 함수나 변수가 있다면 여기에 추가
+};

@@ -1387,4 +1387,24 @@ h1 {
 
 /* === End of Upload Progress Modal Styling === */
 
+/* === Upload Progress Modal Layout Adjustments === */
+#upload-progress-modal .modal-content p {
+    margin: 5px 0; /* الفقرات بين الهوامش */
+}
+
+#upload-progress-modal .progress-time-group,
+#upload-progress-modal .speed-size-group {
+    display: flex;
+    justify-content: space-between; /* 양쪽 끝으로 배치 */
+    align-items: center;
+}
+
+#upload-progress-modal #current-file-info {
+    margin-top: 10px; /* 현재 파일 정보 위쪽 여백 추가 */
+    font-size: 0.9em;
+    color: #555;
+    word-break: break-all; /* 긴 경로 줄바꿈 */
+}
+/* === End of Upload Progress Modal Layout Adjustments === */
+
 
