@@ -100,10 +100,10 @@ async function initializeDirectories() {
 // --- 로그 레벨 및 모드 설정 ---
 const LOG_LEVELS = { minimal: 0, info: 1, debug: 2 };
 const isDevelopment = process.env.NODE_ENV === 'development';
-// !!!! 로그 레벨을 debug로 직접 설정 !!!!
+// !!!! 로그 레벨 기본값을 minimal로 복원 !!!!
 let currentLogLevel = LOG_LEVELS.minimal; 
-// let currentLogLevel = isDevelopment ? LOG_LEVELS.info : LOG_LEVELS.minimal;
-const requestLogLevel = isDevelopment ? 'info' : 'minimal'; // 요청 로그 레벨
+// let currentLogLevel = isDevelopment ? LOG_LEVELS.info : LOG_LEVELS.minimal; // <- 환경 변수 기반 설정은 주석 유지
+const requestLogLevel = 'info'; // 요청 로그 레벨은 info 유지
 
 // 로그 레벨 설정 함수
 function setLogLevel(levelName) {
@@ -529,7 +529,7 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
       } else {
           fileSummary = '0개'; // 파일이 없는 경우
       }
-      logWithIP(`[Upload Request] ${fileSummary} 파일 업로드 요청 (${baseUploadPath || '루트'})`, req, 'minimal');
+      logWithIP(`[Upload Request] ${fileSummary} 파일 업로드 요청 (${baseUploadPath || '루트'})`, req, 'info'); // 레벨 변경: minimal -> info
       // ----------------------------------------------
       logWithIP(`[Upload Start] 파일 정보 수신: ${fileInfoArray.length}개 항목`, req, 'info');
     } catch (parseError) {
@@ -904,7 +904,7 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
   try {
     const { files, targetPath, zipName } = req.body;
     
-    logWithIP(`[Compress Request] ${files.length}개 파일 '${zipName}'으로 압축 요청 (${targetPath || '루트'})`, req, 'minimal');
+    logWithIP(`[Compress Request] ${files.length}개 파일 '${zipName}'으로 압축 요청 (${targetPath || '루트'})`, req, 'info'); // 레벨 변경: minimal -> info
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return res.status(400).json({ error: '압축할 파일이 선택되지 않았습니다.' });
@@ -1051,7 +1051,7 @@ app.post('/api/lock/:path(*)', express.json(), async (req, res) => { // *** asyn
     const action = req.body.action || 'lock'; // 'lock' 또는 'unlock'
     const fullPath = path.join(ROOT_DIRECTORY, folderPath);
     
-    logWithIP(`[Lock Request] '${folderPath}' ${action === 'lock' ? '잠금' : '잠금 해제'} 요청`, req, 'minimal');
+    logWithIP(`[Lock Request] '${folderPath}' ${action === 'lock' ? '잠금' : '잠금 해제'} 요청`, req, 'info'); // 레벨 변경: minimal -> info
     log(`폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 요청: ${fullPath}`, 'info');
 
     let stats;
@@ -1377,7 +1377,7 @@ app.put('/api/files/*', express.json(), async (req, res) => {
     const oldPathRelative = decodeURIComponent(req.params[0] || '');
     const { newName, targetPath, overwrite } = req.body;
 
-    logWithIP(`[Move/Rename Request - CMD] '${oldPathRelative}' -> '${newName}' (대상: ${targetPath !== undefined ? targetPath : '동일 경로'})`, req, 'minimal');
+    logWithIP(`[Move/Rename Request - CMD] '${oldPathRelative}' -> '${newName}' (대상: ${targetPath !== undefined ? targetPath : '동일 경로'})`, req, 'info'); // 레벨 변경: minimal -> info
 
     if (!newName) {
       errorLogWithIP('새 이름이 제공되지 않음', null, req);
@@ -1521,7 +1521,7 @@ app.put('/api/files/*', express.json(), async (req, res) => {
         }
         
         // stderr가 없거나 비어있으면 성공으로 간주
-        logWithIP(`이름 변경/이동 완료 (mv 사용): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
+        logWithIP(`이름 변경/이동 완료 (mv 사용): ${fullOldPath} -> ${fullNewPath}`, req, 'info'); // 레벨 변경: minimal -> info
         res.status(200).send('이름 변경/이동이 완료되었습니다.');
         
         // 디스크 사용량 갱신 (비동기)
@@ -1590,7 +1590,7 @@ app.put('/api/files/*', express.json(), async (req, res) => {
             logWithIP(`rm stderr: ${rmStderr}`, req, 'info');
           }
           
-          logWithIP(`이름 변경/이동 완료 (복사+삭제 명령어): ${fullOldPath} -> ${fullNewPath}`, req, 'minimal');
+          logWithIP(`이름 변경/이동 완료 (복사+삭제 명령어): ${fullOldPath} -> ${fullNewPath}`, req, 'info'); // 레벨 변경: minimal -> info
           res.status(200).send('이름 변경/이동이 완료되었습니다.');
           
           // 디스크 사용량 갱신 (비동기)
@@ -1618,7 +1618,7 @@ app.delete('/api/files/*', async (req, res) => {
     const itemPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, itemPath);
 
-    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청 (백그라운드 처리)`, req, 'minimal'); // 레벨 변경: info -> minimal
+    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청 (백그라운드 처리)`, req, 'info'); // 레벨 변경: minimal -> info (복원)
 
     // --- 기본 검사 (동기 또는 비동기 유지) ---
     try {
@@ -1700,7 +1700,7 @@ app.post('/api/folders', express.json(), async (req, res) => { // *** async 추�
   const relativeFolderPath = folderPath || ''; // 기본값은 루트
   const fullPath = path.join(ROOT_DIRECTORY, relativeFolderPath, folderName);
 
-  logWithIP(`[Folder Create] '${relativeFolderPath}/${folderName}' 생성 요청`, req, 'minimal');
+  logWithIP(`[Folder Create] '${relativeFolderPath}/${folderName}' 생성 요청`, req, 'info'); // 레벨 변경: minimal -> info
   log(`새 폴더 생성 요청: ${fullPath}`, 'info');
 
   try {
@@ -1760,9 +1760,31 @@ app.put('/api/log-level', express.json(), (req, res) => { // !!!! express.json()
   }
 });
 
+// === 추가: 클라이언트 액션 로깅 API ===
+app.post('/api/log-action', express.json(), (req, res) => {
+  const { message, level = 'minimal' } = req.body; // 기본 레벨은 minimal
+
+  if (!message) {
+    // 메시지가 없으면 오류 응답
+    return res.status(400).json({ success: false, error: 'Log message is required.' });
+  }
+
+  // 유효한 로그 레벨인지 확인 (선택적)
+  if (!LOG_LEVELS.hasOwnProperty(level)) {
+    errorLogWithIP(`Invalid log level received from client: ${level}`, null, req);
+    return res.status(400).json({ success: false, error: 'Invalid log level provided.' });
+  }
+
+  // 로그 기록
+  logWithIP(message, req, level);
+
+  // 성공 응답
+  res.status(200).json({ success: true });
+});
+
 // --- 서버 종료 처리 (SIGTERM 핸들러) ---
 process.on('SIGTERM', () => {
-  log('SIGTERM 신호 수신. 서버를 종료합니다.', 'minimal');
+  log('SIGTERM 신호 수신. 서버를 종료합니다.', 'info'); // 레벨 변경: minimal -> info
 
   // 활성 워커 프로세스들에게 종료 신호 보내기
   log(`활성 워커 ${activeWorkers.size}개에게 종료 신호를 보냅니다...`, 'info');
@@ -1782,7 +1804,7 @@ process.on('SIGTERM', () => {
 
   // 잠시 대기 후 프로세스 종료 (워커 종료 시간을 약간 확보)
   setTimeout(() => {
-    log('서버 프로세스 종료.', 'minimal');
+    log('서버 프로세스 종료.', 'info'); // 레벨 변경: minimal -> info
     process.exit(0); // 정상 종료
   }, 1000); // 1초 대기 (필요에 따라 조정)
 });

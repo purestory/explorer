@@ -64,7 +64,7 @@ function errorLog(message, error) {
 
 // --- SIGTERM 핸들러 추가 ---
 process.on('SIGTERM', () => {
-  log('SIGTERM 신호 수신. 워커 프로세스를 종료합니다.', 'minimal'); // minimal 레벨
+  log('SIGTERM 신호 수신. 워커 프로세스를 종료합니다.', 'info'); // 레벨 변경: minimal -> info
   process.exit(0); 
 });
 
