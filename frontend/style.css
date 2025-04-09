@@ -192,7 +192,7 @@ h1 {
     flex-wrap: wrap;
     justify-content: flex-start;
     width: 100%;
-    gap: 10px;
+    gap: 5px;
     padding: 10px;
 }
 
@@ -210,7 +210,7 @@ h1 {
     align-items: center;
     justify-content: center;
     padding: 10px;
-    margin: 8px;
+    margin: 4px;
     width: 120px;
     height: 120px;
     flex: 0 0 auto;
@@ -238,7 +238,7 @@ h1 {
     flex-direction: column;
     align-items: center;
     padding: 10px;
-    margin: 8px;
+    margin: 4px;
     width: 100px;
     height: 100px;
 }
@@ -257,7 +257,7 @@ h1 {
 .file-view.list-view .file-item {
     display: flex;
     align-items: center;
-    padding: 8px 10px;
+    padding: 4px 10px;
     border-bottom: 1px solid #eee;
     width: 100%;
     box-sizing: border-box;
@@ -372,18 +372,17 @@ h1 {
 
 .file-item:hover {
     background-color: #e3f2fd;
-    transform: translateY(-2px);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
-
+/*
 .file-item.selected {
     background-color: #e3f2fd;
-    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
-    border: 1px solid #007bff;
-    outline: 1px solid #007bff;
+    box-shadow: 0 0 5px rgba(188, 213, 240, 0.3);
+    border: 1px solid #cfebf5;
+    outline: 1px solid #add8e6;
     outline-offset: -1px;
 }
-
+*/
 .file-item.cut {
     opacity: 0.5;
 }
@@ -663,9 +662,9 @@ h1 {
 .file-item.selected {
     background-color: #e3f2fd;
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
-    border: 1px solid #007bff;
+/*    border: 1px solid #007bff;*/
     outline: 1px solid #007bff;
-    outline-offset: -1px;
+    outline-offset: 0px;
 }
 
 .file-item.cut {
