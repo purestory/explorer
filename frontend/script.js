@@ -2828,10 +2828,10 @@ function showRenameDialog() {
         newName.select();
     }
 }
-// 선택 항목 삭제 (백그라운드 처리 UX 개선)
-async function deleteSelectedItems() { // async 키워드 추가
+// 선택 항목 삭제 (백그라운드 처리 UX 개선 및 액션 로깅 추가)
+async function deleteSelectedItems() {
     if (selectedItems.size === 0) return;
-    
+
     const itemList = Array.from(selectedItems);
     const itemCount = itemList.length;
 
@@ -2842,12 +2842,31 @@ async function deleteSelectedItems() { // async 키워드 추가
     });
     if (hasRestrictedItems) {
         showToast('잠긴 폴더 또는 파일은 삭제할 수 없습니다.', 'warning');
-            return;
-        }
+        return;
+    }
 
     if (!confirm(`선택한 ${itemCount}개 항목을 삭제하시겠습니까?\n(대용량 폴더는 백그라운드에서 처리됩니다.)`)) {
-            return;
+        return;
+    }
+
+    // --- 추가: 서버에 액션 로그 전송 ---
+    if (itemCount > 0) {
+        let logMessage = `[Delete Action] `;
+        if (itemCount === 1) {
+            logMessage += `'${itemList[0]}' 삭제 요청`;
+        } else {
+            const firstItems = itemList.slice(0, 3).map(name => `'${name}'`).join(', ');
+            logMessage += `${firstItems}${itemCount > 3 ? ` 외 ${itemCount - 3}개` : ''} 항목 삭제 요청`;
         }
+        logMessage += ` (${currentPath || '루트'})`;
+
+        fetch(`${API_BASE_URL}/api/log-action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: logMessage, level: 'minimal' }) // minimal 레벨로 전송
+        }).catch(error => console.error('액션 로그 전송 실패:', error)); // 콘솔 에러 로깅 추가
+    }
+    // --- 로그 전송 끝 ---
 
     showLoading();
     statusInfo.textContent = `삭제 요청 중... (0/${itemCount})`;
@@ -2862,6 +2881,7 @@ async function deleteSelectedItems() { // async 키워드 추가
         const encodedPath = encodeURIComponent(itemPath);
 
         try {
+            // *** 중요: 개별 삭제 요청은 그대로 유지 ***
             const response = await fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
                 method: 'DELETE'
             });
@@ -2870,67 +2890,66 @@ async function deleteSelectedItems() { // async 키워드 추가
 
             // 202 (Accepted) 또는 200/204 (OK/No Content)면 성공으로 간주하고 UI에서 숨김
             if (response.status === 202 || response.status === 200 || response.status === 204) {
-                logLog(`'${itemName}' 삭제 요청 성공 (상태: ${response.status})`);
+                // console.log(`'${itemName}' 삭제 요청 성공 (상태: ${response.status})`); // 프론트엔드 콘솔 로그 (필요시 활성화)
                 successCount++;
                 // UI에서 숨길 항목 추가
-                const element = document.querySelector(`.file-item[data-name=\"${CSS.escape(itemName)}\"]`);
+                const element = document.querySelector(`.file-item[data-name=\\"${CSS.escape(itemName)}\\"]`);
                 if (element) itemsToDeleteUI.push(element);
-                } else {
+            } else {
                 // 기타 응답은 실패로 간주
                 failureCount++;
                 const errorText = await response.text();
-                logError(`'${itemName}' 삭제 요청 실패: ${response.status} ${errorText}`);
+                console.error(`'${itemName}' 삭제 요청 실패: ${response.status} ${errorText}`); // 프론트엔드 콘솔 에러 로깅
                 // 실패한 항목은 UI에 그대로 둠 (오류 메시지는 아래에서 한번에)
             }
         } catch (error) {
             failureCount++;
-            logError(`'${itemName}' 삭제 요청 오류:`, error);
+            console.error(`'${itemName}' 삭제 요청 오류:`, error); // 프론트엔드 콘솔 에러 로깅
         }
     });
 
     // 모든 요청이 완료될 때까지 기다림
     await Promise.all(deletePromises);
 
-        hideLoading();
+    hideLoading();
 
     // 성공한 항목들 UI에서 숨기기
     itemsToDeleteUI.forEach(element => {
         element.remove(); // 또는 element.style.display = 'none';
     });
-  
-      // *** 삭제 후 파일 목록 확인 및 빈 메시지 표시 로직 수정 (메시지 상단 표시) ***
-      const remainingItems = fileList.querySelectorAll('.file-item, .file-item-grid');
-      if (remainingItems.length === 0) {
-          const header = fileList.querySelector('.file-list-header');
-          const emptyMessageElement = document.createElement('p');
-          emptyMessageElement.className = 'empty-message';
-          emptyMessageElement.textContent = '파일이 없습니다';
 
-          // 기존 파일 아이템과 메시지 모두 제거 (중복 방지)
-          fileList.querySelectorAll('.file-item, .empty-message').forEach(el => el.remove());
+    // *** 삭제 후 파일 목록 확인 및 빈 메시지 표시 로직 수정 (메시지 상단 표시) ***
+    const remainingItems = fileList.querySelectorAll('.file-item, .file-item-grid');
+    if (remainingItems.length === 0) {
+        const header = fileList.querySelector('.file-list-header');
+        const emptyMessageElement = document.createElement('p');
+        emptyMessageElement.className = 'empty-message';
+        emptyMessageElement.textContent = '파일이 없습니다';
 
-          if (listView && header) { // 목록 보기 상태이고 헤더가 있으면
-              // 헤더 바로 다음에 메시지 삽입
-              header.insertAdjacentElement('afterend', emptyMessageElement);
-          } else { // 격자 보기 또는 헤더 없는 경우
-               // fileList의 가장 처음에 메시지 삽입
-              fileList.innerHTML = ''; // 일단 비우고
-              fileList.appendChild(emptyMessageElement); // 맨 위에 추가
-              if(header) fileList.insertBefore(header, emptyMessageElement); // 격자보기였다면 헤더가 없을수 있으므로 확인 후 헤더 복구(필요시) - 격자보기에선 헤더 필요없을듯
-          }
-          // 상태바 정보 업데이트
-          statusInfo.textContent = '0개 항목';
-      } else {
-          // 남은 항목 수 업데이트
-          statusInfo.textContent = `${remainingItems.length}개 항목`;
-          // 혹시 이전에 표시된 빈 메시지가 있다면 제거
-          const emptyMessageElement = fileList.querySelector('.empty-message');
-          if (emptyMessageElement) {
-              emptyMessageElement.remove();
-          }
-      }
-      // *** 로직 수정 끝 ***
+        // 기존 파일 아이템과 메시지 모두 제거 (중복 방지)
+        fileList.querySelectorAll('.file-item, .empty-message').forEach(el => el.remove());
 
+        if (listView && header) { // 목록 보기 상태이고 헤더가 있으면
+            // 헤더 바로 다음에 메시지 삽입
+            header.insertAdjacentElement('afterend', emptyMessageElement);
+        } else { // 격자 보기 또는 헤더 없는 경우
+            // fileList의 가장 처음에 메시지 삽입
+            fileList.innerHTML = ''; // 일단 비우고
+            fileList.appendChild(emptyMessageElement); // 맨 위에 추가
+            if(header) fileList.insertBefore(header, emptyMessageElement); // 격자보기였다면 헤더가 없을수 있으므로 확인 후 헤더 복구(필요시) - 격자보기에선 헤더 필요없을듯
+        }
+        // 상태바 정보 업데이트
+        statusInfo.textContent = '0개 항목';
+    } else {
+        // 남은 항목 수 업데이트
+        statusInfo.textContent = `${remainingItems.length}개 항목`;
+        // 혹시 이전에 표시된 빈 메시지가 있다면 제거
+        const emptyMessageElement = fileList.querySelector('.empty-message');
+        if (emptyMessageElement) {
+            emptyMessageElement.remove();
+        }
+    }
+    // *** 로직 수정 끝 ***
 
     // 선택 해제
     clearSelection();
@@ -2947,11 +2966,18 @@ async function deleteSelectedItems() { // async 키워드 추가
     }
     statusInfo.textContent = finalMessage;
 
-    // 중요: 여기서 loadFiles()를 호출하지 않음!
-    // 필요하다면 몇 초 후 새로고침하는 타이머 추가 가능
-    // setTimeout(() => loadFiles(currentPath), 15000); // 예: 15초 후 새로고침
+     let refreshDelay;
+    if (itemCount <= 100) {
+        refreshDelay = 300; // 0.5초
+    } else if (itemCount <= 1000) {
+        refreshDelay = 1000; // 1초
+    } else {
+        refreshDelay = 2000; // 2초
+    }
+    console.log(`[Delete Action] Scheduling refresh in ${refreshDelay}ms for ${itemCount} items.`); // 디버깅용 로그
+    setTimeout(() => loadFiles(currentPath), refreshDelay); // 동적 지연 시간 적용
+    // --- 수정 끝 ---
 }
-
   
 // 항목 붙여넣기
 
