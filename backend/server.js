@@ -14,14 +14,6 @@ const { promisify } = require('util');
 const fs_stream = require('fs');
 
 // 쉘 인자를 안전하게 이스케이프하는 함수 (추가)
-function escapeShellArg(arg) {
-    // 빈 문자열은 ''로 처리
-    if (arg === '') {
-        return "''";
-    }
-    // 작은따옴표(')를 포함하는 경우: ' -> '\'' 로 변환하고 전체를 작은따옴표로 감쌈
-    return "'" + arg.replace(/'/g, "'\\''") + "'";
-}
 
 // 특수문자를 완벽하게 이스케이프하는 전역 함수 정의
 // 이 함수는 코드 전체에서 재사용됩니다

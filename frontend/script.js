@@ -4975,7 +4975,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
             logWarn("[Internal Drop] clearAllDragOverClasses function not found. Manually removing drag-over classes.");
         }
         // 이동 후 목록 새로고침 (targetPath 기준)
-        loadFiles(targetPath); // <-- 이동 완료 후 타겟 폴더 새로고침
+ //       loadFiles(targetPath); // <-- 이동 완료 후 타겟 폴더 새로고침
         // 필요하다면 원래 폴더도 새로고침
         const sourceParent = itemsToMove[0]?.parentPath;
         if (sourceParent !== targetPath && sourceParent !== undefined) {
