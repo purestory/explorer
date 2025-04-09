@@ -14,15 +14,15 @@ def find_function_declarations(file_path):
     current_function = None
     start_line = None
     
-    # 정규식 패턴: 함수 선언 찾기
-    function_pattern = re.compile(r'^\s*function\s+([a-zA-Z0-9_]+)\s*\(')
+    # 정규식 패턴: 함수 선언 찾기 (async 포함)
+    function_pattern = re.compile(r'^\s*(async\s+)?function\s+([a-zA-Z0-9_]+)\s*\(')
     
     for i, line in enumerate(content, 1):
         # 함수 선언 시작 찾기
         if not in_function:
             match = function_pattern.search(line)
             if match:
-                current_function = match.group(1)
+                current_function = match.group(2)
                 start_line = i
                 in_function = True
                 brace_count = line.count('{') - line.count('}')

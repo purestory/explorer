@@ -1674,255 +1674,10 @@ function handleDragEnd() {
 
 // 내부 드래그인지 확인하는 함수 (파일 경로 기반 + 기본값은 내부)
 
-// 내부 파일 드롭 처리 함수 (실제 이동 로직 구현)
-async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
+// 최종 handleInternalFileDrop 함수 코드 (잠금 확인 수정 및 액션 로깅 추가)
 
-    // 타겟 폴더 경로 결정
-    let targetPath = currentPath;
-    let targetName = '현재 폴더';
-    
-    // targetFolderItem이 유효한 폴더 요소인지 확인 (null 아니고, getAttribute 함수 가지고 있는지)
-    if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
-        // 타겟 폴더가 주어진 경우 (파일 항목에 드롭된 경우)
-        const folderName = targetFolderItem.getAttribute('data-name');
-        if (folderName) { // 폴더 이름이 있는지 한번 더 확인
-             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-             targetName = folderName;
-        } else {
-             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
-             // 폴더 이름을 가져올 수 없으면 기본 경로 사용
-        }
-    } else if (targetFolderItem) {
-         // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
-         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
-         // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
-    }
-
-    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
-    
-    // 드래그된 데이터가 유효한지 확인
-    if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
-        logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
-        showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
-             return;
-        }
-
-    // 경로 처리 및 유효성 검사
-    const validItemPaths = draggedItemPaths.filter(path => {
-        // 경로가 유효한 문자열인지 확인
-        if (typeof path !== 'string' || !path.trim()) {
-            logWarn('[Internal Drop] 유효하지 않은 경로 제외:', path);
-            return false;
-        }
-        return true;
-    });
-    
-    if (validItemPaths.length === 0) {
-        logError('[Internal Drop] 유효한 경로가 없음');
-        showToast('이동할 유효한 항목이 없습니다.', 'error');
-        return;
-    }
-    
-    // 경로 처리 및 이름 추출
-    const itemsInfo = validItemPaths.map(path => {
-        // 경로에서 파일/폴더 이름 추출
-        const itemName = path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path;
-        // 경로에서 부모 경로 추출 (루트는 빈 문자열)
-        const parentPath = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
-        
-        // fileInfoMap에서 정보 가져오기 (이름으로 조회)
-        const itemInfo = fileInfoMap.get(itemName) || null;
-        
-        return {
-            fullPath: path,
-            name: itemName,
-            parentPath,
-            isFolder: itemInfo ? itemInfo.isFolder : false,
-            info: itemInfo
-        };
-    });
-    
-    logLog('[Internal Drop] 항목 정보:', itemsInfo);
-    
-    // --- 유효성 검사 시작 ---
-    
-    // 1. 타겟 폴더가 이동하려는 항목 중 하나인 경우 방지
-    if (targetFolderItem) {
-        const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
-        if (targetInDraggedItems) {
-            logWarn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
-             showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
-             return;
-        }
-    }
-    
-    // 2. 폴더를 자신의 하위 폴더로 이동하려는 경우 방지
-    for (const item of itemsInfo) {
-        if (item.isFolder && targetPath.startsWith(item.fullPath + '/')) {
-            logWarn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
-            showToast(`폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`, 'warning');
-            return;
-        }
-    }
-    
-    // 3. 이미 대상 폴더에 있는 항목 필터링
-    const itemsToMove = itemsInfo.filter(item => item.parentPath !== targetPath);
-    
-    if (itemsToMove.length === 0) {
-        logLog('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
-        showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
-        clearSelection();
-        return;
-    }
-
-    // --- 유효성 검사 끝 ---
-    
-    // 이동 시작
-    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
-                itemsToMove.map(item => item.name));
-    
-    showLoading();
-    try {
-        // 실제 항목 이동 (이동할 항목의 전체 경로 배열 전달)
-        await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
-        
-        logLog('[Internal Drop] 이동 작업 성공');
-        showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
-        
-        // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-        // loadFiles(currentPath);
-    } catch (error) {
-        logError('[Internal Drop] 이동 중 오류 발생:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        showToast(`항목 이동 중 오류: ${errorMessage}`, 'warning');
-        
-        // 오류 발생 시에도 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-        // loadFiles(currentPath);
-    } finally {
-        hideLoading();
-        clearSelection(); // 이동 후 선택 해제
-    }
-}
-
-// 외부 파일 드롭 처리 함수
-// 파일/폴더 이동 함수
-
-// 뷰 모드 전환
-
-// 폴더 생성 기능 초기화
-
-// 이름 변경 기능 초기화
-
-
-// 파일 업로드 기능 초기화
-
-// 잘라내기/붙여넣기 기능 초기화
-
-// 삭제 기능 초기화
-
-// 검색 기능 초기화
-
-// 선택된 파일 다운로드
-
-// 여러 파일/폴더를 압축하여 다운로드
-
-// 항목 이동
-
-// 상위 폴더로 이동
-
-// 브라우저 히스토리 상태 업데이트
-
-// 브라우저 뒤로가기/앞으로가기 이벤트 처리
-
-// 파일 다운로드 및 실행 함수
 
 // 애플리케이션 초기화
-function init() {
-    // 마우스 및 키보드 이벤트 핸들러 설정
-    setupGlobalDragCleanup();
-    
-    logLog('WebDAV 파일 탐색기 초기화 시작');
-    
-    // 모달 초기화
-    initModals();
-    
-    // 드래그 선택 초기화
-    initDragSelect();
-    
-    // 컨텍스트 메뉴 초기화
-    initContextMenu();
-    
-    // 뷰 모드 초기화
-    initViewModes();
-    
-    // 새 폴더 생성 초기화
-    initFolderCreation();
-    
-    // 이름 변경 초기화
-    initRenaming();
-    
-    // 파일 업로드 초기화 (upload.js 기능 사용)
-    // initFileUpload(); // 기존 코드 주석 처리
-    
-    // 대신 업로드 버튼에 클릭 이벤트 추가
-    const uploadButton = document.querySelector('.upload-form .btn-success');
-    if (uploadButton) {
-        uploadButton.addEventListener('click', () => {
-            const fileUploadInput = document.getElementById('fileUpload');
-            if (fileUploadInput) {
-                fileUploadInput.click(); // 파일 선택 창 열기
-                logLog('[Script] 업로드 버튼 클릭 - 파일 선택 대화상자 열기');
-            } else {
-                logError('[Script] 파일 업로드 입력 요소를 찾을 수 없습니다.');
-            }
-        });
-    } else {
-        logError('[Script] 업로드 버튼을 찾을 수 없습니다.');
-    }
-    
-    // upload.js의 초기화 함수 호출
-    if (typeof window.initializeUploader === 'function') {
-        logLog('[Script] upload.js 초기화 함수 호출');
-        window.initializeUploader();
-    } else {
-        logError('[Script] upload.js의 초기화 함수를 찾을 수 없습니다.');
-    }
-    
-    // 잘라내기/붙여넣기 초기화
-    initClipboardOperations();
-    
-    // 삭제 초기화
-    initDeletion();
-    
-    // 검색 초기화
-    initSearch();
-    
-    logLog('WebDAV 파일 탐색기 초기화됨');
-   
-   
-    // 다운로드 버튼 이벤트 추가
-    downloadBtn.addEventListener('click', downloadSelectedItems);
-    
-    // 새로고침 버튼 이벤트 추가
-    document.getElementById('refreshStorageBtn').addEventListener('click', () => {
-        loadDiskUsage();
-    });
-    
-    // 초기 파일 목록 로드
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-    loadFiles(currentPath);
-    
-    // 드롭존 초기화
-    initDropZone();
-    initShortcuts();
-    // 스토리지 정보 로드
-}
 
 // 페이지 로드 시 애플리케이션 초기화
 document.addEventListener('DOMContentLoaded', init);
@@ -1958,47 +1713,6 @@ window.dragSelectState = {
 
 
 // 선택 항목 잘라내기
-function cutSelectedItems() {
-    if (selectedItems.size === 0) return;
-    
-    // 이전에 잘라내기 표시된 항목 초기화
-    document.querySelectorAll('.file-item.cut').forEach(item => {
-        item.classList.remove('cut');
-    });
-    
-    clipboardItems = [];
-    
-    // 상위 폴더(..)는 제외
-    const itemsToProcess = new Set([...selectedItems].filter(itemId => itemId !== '..'));
-    
-    if (itemsToProcess.size === 0) {
-        alert('잘라낼 항목이 없습니다. 상위 폴더는 잘라낼 수 없습니다.');
-        return;
-    }
-    
-    // 현재 선택된 항목을 클립보드에 복사
-    itemsToProcess.forEach(itemId => {
-        const element = document.querySelector(`.file-item[data-id="${itemId}"]`);
-        clipboardItems.push({
-            name: itemId,
-            isFolder: element.getAttribute('data-is-folder') === 'true',
-            originalPath: currentPath
-        });
-        
-        // 잘라내기 표시
-        element.classList.add('cut');
-    });
-    
-    clipboardOperation = 'cut';
-    pasteBtn.disabled = false;
-    
-    document.getElementById('ctxPaste').style.display = 'flex';
-    
-    statusInfo.textContent = `${clipboardItems.length}개 항목 잘라내기`;
-    
-    // 디버그 로그
-    logLog('잘라내기 항목:', clipboardItems);
-}
 
 // 드래그 시작 처리
     
@@ -2007,139 +1721,6 @@ function cutSelectedItems() {
 // 내부 드래그인지 확인하는 함수 (파일 경로 기반 + 기본값은 내부)
 
 // 내부 파일 드롭 처리 함수 (실제 이동 로직 구현)
-async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
-
-    // 타겟 폴더 경로 결정
-    let targetPath = currentPath;
-    let targetName = '현재 폴더';
-    
-    // targetFolderItem이 유효한 폴더 요소인지 확인 (null 아니고, getAttribute 함수 가지고 있는지)
-    if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
-        // 타겟 폴더가 주어진 경우 (파일 항목에 드롭된 경우)
-        const folderName = targetFolderItem.getAttribute('data-name');
-        if (folderName) { // 폴더 이름이 있는지 한번 더 확인
-             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-             targetName = folderName;
-        } else {
-             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
-             // 폴더 이름을 가져올 수 없으면 기본 경로 사용
-        }
-    } else if (targetFolderItem) {
-         // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
-         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
-         // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
-    }
-
-    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
-    
-    // 드래그된 데이터가 유효한지 확인
-    if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
-        logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
-        showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
-             return;
-        }
-
-    // 경로 처리 및 유효성 검사
-    const validItemPaths = draggedItemPaths.filter(path => {
-        // 경로가 유효한 문자열인지 확인
-        if (typeof path !== 'string' || !path.trim()) {
-            logWarn('[Internal Drop] 유효하지 않은 경로 제외:', path);
-            return false;
-        }
-        return true;
-    });
-    
-    if (validItemPaths.length === 0) {
-        logError('[Internal Drop] 유효한 경로가 없음');
-        showToast('이동할 유효한 항목이 없습니다.', 'error');
-        return;
-    }
-    
-    // 경로 처리 및 이름 추출
-    const itemsInfo = validItemPaths.map(path => {
-        // 경로에서 파일/폴더 이름 추출
-        const itemName = path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path;
-        // 경로에서 부모 경로 추출 (루트는 빈 문자열)
-        const parentPath = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
-        
-        // fileInfoMap에서 정보 가져오기 (이름으로 조회)
-        const itemInfo = fileInfoMap.get(itemName) || null;
-        
-        return {
-            fullPath: path,
-            name: itemName,
-            parentPath,
-            isFolder: itemInfo ? itemInfo.isFolder : false,
-            info: itemInfo
-        };
-    });
-    
-    logLog('[Internal Drop] 항목 정보:', itemsInfo);
-    
-    // --- 유효성 검사 시작 ---
-    
-    // 1. 타겟 폴더가 이동하려는 항목 중 하나인 경우 방지
-    if (targetFolderItem) {
-        const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
-        if (targetInDraggedItems) {
-            logWarn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
-             showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
-             return;
-        }
-    }
-    
-    // 2. 폴더를 자신의 하위 폴더로 이동하려는 경우 방지
-    for (const item of itemsInfo) {
-        if (item.isFolder && targetPath.startsWith(item.fullPath + '/')) {
-            logWarn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
-            showToast(`폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`, 'warning');
-            return;
-        }
-    }
-    
-    // 3. 이미 대상 폴더에 있는 항목 필터링
-    const itemsToMove = itemsInfo.filter(item => item.parentPath !== targetPath);
-    
-    if (itemsToMove.length === 0) {
-        logLog('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
-        showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
-        clearSelection();
-        return;
-    }
-
-    // --- 유효성 검사 끝 ---
-    
-    // 이동 시작
-    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
-                itemsToMove.map(item => item.name));
-    
-    showLoading();
-    try {
-        // 실제 항목 이동 (이동할 항목의 전체 경로 배열 전달)
-        await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
-        
-        // logLog('[Internal Drop] 이동 작업 성공');
-        // showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
-        
-        // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-        // loadFiles(currentPath);
-    } catch (error) {
-        logError('[Internal Drop] 이동 중 오류 발생:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
-        
-        // 오류 발생 시에도 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-        // loadFiles(currentPath);
-    } finally {
-        hideLoading();
-        clearSelection(); // 이동 후 선택 해제
-    }
-}
 
 // 외부 파일 드롭 처리 함수
 
@@ -2344,139 +1925,6 @@ function cutSelectedItems() {
 // 내부 드래그인지 확인하는 함수 (파일 경로 기반 + 기본값은 내부)
 
 // 내부 파일 드롭 처리 함수 (실제 이동 로직 구현)
-async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
-
-    // 타겟 폴더 경로 결정
-    let targetPath = currentPath;
-    let targetName = '현재 폴더';
-    
-    // targetFolderItem이 유효한 폴더 요소인지 확인 (null 아니고, getAttribute 함수 가지고 있는지)
-    if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
-        // 타겟 폴더가 주어진 경우 (파일 항목에 드롭된 경우)
-        const folderName = targetFolderItem.getAttribute('data-name');
-        if (folderName) { // 폴더 이름이 있는지 한번 더 확인
-             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-             targetName = folderName;
-        } else {
-             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
-             // 폴더 이름을 가져올 수 없으면 기본 경로 사용
-        }
-    } else if (targetFolderItem) {
-         // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
-         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
-         // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
-    }
-
-    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
-    
-    // 드래그된 데이터가 유효한지 확인
-    if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
-        logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
-        showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
-             return;
-        }
-
-    // 경로 처리 및 유효성 검사
-    const validItemPaths = draggedItemPaths.filter(path => {
-        // 경로가 유효한 문자열인지 확인
-        if (typeof path !== 'string' || !path.trim()) {
-            logWarn('[Internal Drop] 유효하지 않은 경로 제외:', path);
-            return false;
-        }
-        return true;
-    });
-    
-    if (validItemPaths.length === 0) {
-        logError('[Internal Drop] 유효한 경로가 없음');
-        showToast('이동할 유효한 항목이 없습니다.', 'error');
-        return;
-    }
-    
-    // 경로 처리 및 이름 추출
-    const itemsInfo = validItemPaths.map(path => {
-        // 경로에서 파일/폴더 이름 추출
-        const itemName = path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path;
-        // 경로에서 부모 경로 추출 (루트는 빈 문자열)
-        const parentPath = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
-        
-        // fileInfoMap에서 정보 가져오기 (이름으로 조회)
-        const itemInfo = fileInfoMap.get(itemName) || null;
-        
-        return {
-            fullPath: path,
-            name: itemName,
-            parentPath,
-            isFolder: itemInfo ? itemInfo.isFolder : false,
-            info: itemInfo
-        };
-    });
-    
-    logLog('[Internal Drop] 항목 정보:', itemsInfo);
-    
-    // --- 유효성 검사 시작 ---
-    
-    // 1. 타겟 폴더가 이동하려는 항목 중 하나인 경우 방지
-    if (targetFolderItem) {
-        const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
-        if (targetInDraggedItems) {
-            logWarn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
-             showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
-             return;
-        }
-    }
-    
-    // 2. 폴더를 자신의 하위 폴더로 이동하려는 경우 방지
-    for (const item of itemsInfo) {
-        if (item.isFolder && targetPath.startsWith(item.fullPath + '/')) {
-            logWarn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
-            showToast(`폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`, 'warning');
-            return;
-        }
-    }
-    
-    // 3. 이미 대상 폴더에 있는 항목 필터링
-    const itemsToMove = itemsInfo.filter(item => item.parentPath !== targetPath);
-    
-    if (itemsToMove.length === 0) {
-        logLog('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
-        showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
-        clearSelection();
-        return;
-    }
-
-    // --- 유효성 검사 끝 ---
-    
-    // 이동 시작
-    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
-                itemsToMove.map(item => item.name));
-    
-    showLoading();
-    try {
-        // 실제 항목 이동 (이동할 항목의 전체 경로 배열 전달)
-        await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
-        
-        // logLog('[Internal Drop] 이동 작업 성공');
-        // showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
-        
-        // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-        // loadFiles(currentPath);
-    } catch (error) {
-        logError('[Internal Drop] 이동 중 오류 발생:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
-        
-        // 오류 발생 시에도 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-        // loadFiles(currentPath);
-    } finally {
-        hideLoading();
-        clearSelection(); // 이동 후 선택 해제
-    }
-}
 
 // 외부 파일 드롭 처리 함수
 
@@ -3416,49 +2864,6 @@ function traverseFileTree(entry, path, filesWithPaths) {
 // targetUploadPath 인자 추가
 
 // 파일/폴더 이동 함수
-function moveItem(sourcePath, targetPath, overwrite = false) {
-    return new Promise((resolve, reject) => {
-        // 파일명 추출
-        const fileName = sourcePath.split('/').pop();
-        
-        // 소스와 타겟이 같은 경로인지 확인
-        if (sourcePath === `${targetPath}/${fileName}`) {
-            logLog(`[${fileName}] 소스와 타겟이 동일합니다. 무시합니다.`);
-            resolve(); // 에러가 아닌 정상 처리로 간주
-            return;
-        }
-        
-        logLog(`[${fileName}] 이동 시작: ${sourcePath} -> ${targetPath}, overwrite=${overwrite}`);
-        
-        // API 요청 - 이미 충돌 확인이 완료되었으므로 바로 API 호출
-        return fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(sourcePath)}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                newName: fileName,
-                targetPath: targetPath,
-                overwrite: overwrite // 덮어쓰기 옵션
-            })
-        })
-        .then(response => {
-            if (response.ok) {
-                logLog(`[${fileName}] 이동 성공`);
-                resolve();
-            } else {
-                return response.text().then(text => {
-                    logError(`[${fileName}] 이동 실패:`, text);
-                    reject(text || '이동 실패');
-                });
-            }
-        })
-        .catch(error => {
-            logError(`[${fileName}] 이동 오류:`, error);
-            reject(error.message || '네트워크 오류');
-        });
-    });
-}
 
 // 뷰 모드 전환
 function initViewModes() {
@@ -3536,23 +2941,36 @@ function initFolderCreation() {
         }
     });
     
+
     // 폴더 생성 확인
     createFolderConfirmBtn.addEventListener('click', () => {
         const folderName = folderNameInput.value.trim();
-        
+
         if (!folderName) {
             alert('폴더 이름을 입력해주세요.');
             return;
         }
-        
+
+        // --- 추가: 서버에 액션 로그 전송 ---
+        const logMessage = `[Create Folder Action] '${folderName}' (폴더) 생성 요청 (${currentPath || '루트'})`;
+        fetch(`${API_BASE_URL}/api/log-action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: logMessage, level: 'minimal' })
+        }).catch(error => console.error('액션 로그 전송 실패:', error));
+        // --- 로그 전송 끝 ---
+
         const path = currentPath ? `${currentPath}/${folderName}` : folderName;
         // 경로에 한글이 포함된 경우를 위해 인코딩 처리
+        // !!! 수정: /api/folders 엔드포인트 사용하도록 변경 필요 가능성 !!!
+        // 현재 /api/files/:path 로 POST 요청 보내는 중. 서버 API 확인 필요.
+        // 일단 기존 로직 유지.
         const encodedPath = encodeURIComponent(path);
-        
+
         showLoading();
         statusInfo.textContent = '폴더 생성 중...';
-        
-        fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
+
+        fetch(`${API_BASE_URL}/api/files/${encodedPath}`, { // <-- 이 API 경로가 폴더 생성용인지 확인 필요
             method: 'POST'
         })
         .then(response => {
@@ -3560,20 +2978,24 @@ function initFolderCreation() {
                 if (response.status === 409) {
                     throw new Error('이미 존재하는 이름입니다.');
                 }
-                throw new Error('폴더 생성에 실패했습니다.');
+                return response.text().then(text => { throw new Error(text || '폴더 생성에 실패했습니다.') }); // 에러 메시지 포함
             }
             folderModal.style.display = 'none';
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
             loadFiles(currentPath); // 파일 목록 새로고침
             statusInfo.textContent = '폴더 생성 완료';
         })
         .catch(error => {
             showToast(error.message, 'warning');
-        hideLoading();
+            hideLoading();
             statusInfo.textContent = '폴더 생성 실패';
+        })
+        .finally(() => {
+            hideLoading(); // 성공/실패 여부와 관계없이 로딩 숨김
+            folderNameInput.value = ''; // 입력 필드 초기화
         });
     });
+
+   
 }
 
 // 이름 변경 기능 초기화
@@ -3601,50 +3023,68 @@ function initRenaming() {
         }
     });
     
-    // 이름 변경 확인
-    confirmRenameBtn.addEventListener('click', () => {
-        const newName = newNameInput.value.trim();
-        
-        if (!newName) {
-            alert('새 이름을 입력해주세요.');
-        return;
-    }
-        
-        const selectedItem = document.querySelector('.file-item.selected');
-        const oldName = selectedItem.getAttribute('data-name');
-        const oldPath = currentPath ? `${currentPath}/${oldName}` : oldName;
-        // 경로에 한글이 포함된 경우를 위해 인코딩 처리
-        const encodedPath = encodeURIComponent(oldPath);
-        
-        showLoading();
-        statusInfo.textContent = '이름 변경 중...';
-        
-        fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ newName: newName })
-        })
-        .then(response => {
-            if (!response.ok) {
-                if (response.status === 409) {
-                    throw new Error('이미 존재하는 이름입니다.');
-                }
-                throw new Error('이름 변경에 실패했습니다.');
+        // 이름 변경 확인
+        confirmRenameBtn.addEventListener('click', () => {
+            const newName = newNameInput.value.trim();
+    
+            if (!newName) {
+                alert('새 이름을 입력해주세요.');
+                return;
             }
-            renameModal.style.display = 'none';
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-            loadFiles(currentPath); // 파일 목록 새로고침
-            statusInfo.textContent = '이름 변경 완료';
-        })
-        .catch(error => {
-            showToast(error.message, 'warning');
-            hideLoading();
-            statusInfo.textContent = '이름 변경 실패';
+    
+            const selectedItem = document.querySelector('.file-item.selected, .file-item-grid.selected'); // 수정: 그리드 뷰에서도 선택되도록
+            if (!selectedItem) {
+                alert('이름을 변경할 항목을 선택해주세요.'); // 항목이 없는 경우 방지
+                return;
+            }
+            const oldName = selectedItem.getAttribute('data-name');
+            const isFolder = selectedItem.getAttribute('data-is-folder') === 'true'; // 폴더 여부 확인
+    
+            // --- 추가: 서버에 액션 로그 전송 ---
+            const itemType = isFolder ? '(폴더)' : '(파일)';
+            const logMessage = `[Rename Action] '${oldName}' ${itemType} -> '${newName}' 이름 변경 요청 (${currentPath || '루트'})`;
+            fetch(`${API_BASE_URL}/api/log-action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: logMessage, level: 'minimal' })
+            }).catch(error => console.error('액션 로그 전송 실패:', error));
+            // --- 로그 전송 끝 ---
+    
+            const oldPath = currentPath ? `${currentPath}/${oldName}` : oldName;
+            // 경로에 한글이 포함된 경우를 위해 인코딩 처리
+            const encodedPath = encodeURIComponent(oldPath);
+    
+            showLoading();
+            statusInfo.textContent = '이름 변경 중...';
+    
+            fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ newName: newName })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 409) {
+                        throw new Error('이미 존재하는 이름입니다.');
+                    }
+                    // 서버에서 전달된 에러 메시지 사용 시도
+                    return response.text().then(text => { throw new Error(text || '이름 변경에 실패했습니다.') });
+                }
+                renameModal.style.display = 'none';
+                loadFiles(currentPath); // 파일 목록 새로고침
+                statusInfo.textContent = '이름 변경 완료';
+            })
+            .catch(error => {
+                showToast(error.message, 'warning');
+                statusInfo.textContent = '이름 변경 실패';
+            })
+            .finally(() => {
+                 hideLoading();
+                 newNameInput.value = ''; // 입력 필드 초기화
+            });
         });
-    });
 }
 
 
@@ -5183,41 +4623,6 @@ if (modeToggleBtn) {
 // 만약 초기화 문제가 발생하면 아래 줄의 주석을 해제합니다.
 // document.addEventListener('DOMContentLoaded', init); // tmp/handleInternalFileDrop_modified.js
 
-async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
-
-    // 타겟 폴더 경로 결정
-    let targetPath = currentPath;
-    let targetName = '현재 폴더';
-
-    // targetFolderItem이 유효한 폴더 요소인지 확인 (null 아니고, getAttribute 함수 가지고 있는지)
-    if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function') {
-        const folderName = targetFolderItem.getAttribute('data-name');
-        if (folderName) {
-             targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-             targetName = folderName;
-        } else {
-             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
-        }
-    } else if (targetFolderItem) {
-         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
-    }
-
-    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
-
-    // 드래그된 데이터 유효성 검사
-    if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
-        logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
-        showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
-             return;
-    }
-    const validItemPaths = draggedItemPaths.filter(path => typeof path === 'string' && path.trim());
-    if (validItemPaths.length === 0) {
-        logError('[Internal Drop] 유효한 경로가 없음');
-        showToast('이동할 유효한 항목이 없습니다.', 'error');
-        return;
-    }
-}
 
 // moveToFolder 함수 최종 코드 (confirm -> showToast, 충돌 시 중단)
 function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
@@ -5334,9 +4739,9 @@ async function moveItem(sourcePath, targetPathBase, overwrite = false) {
 } 
 
 
-// 최종 handleInternalFileDrop 함수 코드 (잠금 확인 수정)
+// 최종 handleInternalFileDrop 함수 코드 (잠금 확인 수정 및 액션 로깅 추가)
 async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
+    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths); // 기존 debug 로그
 
     // 타겟 폴더 경로 결정
     let targetPath = currentPath;
@@ -5354,7 +4759,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
     }
 
-    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
+    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`); // 기존 debug 로그
 
     // 드래그된 데이터 유효성 검사
     if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
@@ -5369,17 +4774,60 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         return;
     }
 
-    // 항목 정보 추출
+    // 항목 정보 추출 및 파일/폴더 개수 세기
+    let fileCount = 0;
+    let folderCount = 0;
     const itemsInfo = validItemPaths.map(path => {
         const itemName = path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path;
         const parentPath = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
-        const itemInfo = fileInfoMap.get(itemName) || null;
+        const itemElement = document.querySelector(`.file-item[data-name="${CSS.escape(itemName)}"], .file-item-grid[data-name="${CSS.escape(itemName)}"]`); // UI 요소 찾기
+        const isFolder = itemElement ? itemElement.getAttribute('data-is-folder') === 'true' : false; // UI 요소에서 폴더 여부 확인
+
+        if (isFolder) {
+            folderCount++;
+        } else {
+            fileCount++;
+        }
+
         return {
             fullPath: path, name: itemName, parentPath,
-            isFolder: itemInfo ? itemInfo.isFolder : false, info: itemInfo
+            isFolder: isFolder
         };
     });
-    logLog('[Internal Drop] 항목 정보:', itemsInfo);
+    logLog('[Internal Drop] 항목 정보:', itemsInfo); // 기존 debug 로그
+
+    // --- 추가: 서버에 액션 로그 전송 ---
+    const totalCount = itemsInfo.length;
+    if (totalCount > 0) {
+        let logMessage = `[Move Action] `;
+        let sourceSummary = '';
+        if (totalCount === 1) {
+            sourceSummary = `'${itemsInfo[0].name}' ${itemsInfo[0].isFolder ? '(폴더)' : '(파일)'}`;
+        } else {
+            const firstItems = itemsInfo.slice(0, 2).map(item => `'${item.name}' ${item.isFolder ? '(폴더)' : '(파일)'}`).join(', ');
+            sourceSummary = `${firstItems}${totalCount > 2 ? ` 외 ${totalCount - 2}개` : ''}`;
+            // 파일/폴더 개수 요약 추가
+            if (folderCount > 0 && fileCount > 0) {
+                sourceSummary += ` (폴더 ${folderCount}개, 파일 ${fileCount}개)`;
+            } else if (folderCount > 0) {
+                sourceSummary += ` (폴더 ${folderCount}개)`;
+            } else if (fileCount > 0) {
+                sourceSummary += ` (파일 ${fileCount}개)`;
+            }
+        }
+        logMessage += `${sourceSummary} -> '${targetName}' (으)로 이동 요청`;
+        // 이동 전/후 경로 정보 추가 (간단하게)
+        const sourceParentPath = itemsInfo[0]?.parentPath || currentPath || '루트'; // 첫 항목의 부모 경로
+        logMessage += ` (From: ${sourceParentPath}, To: ${targetPath})`;
+
+        fetch(`${API_BASE_URL}/api/log-action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: logMessage, level: 'minimal' })
+        }).catch(error => console.error('액션 로그 전송 실패:', error));
+    }
+    // --- 로그 전송 끝 ---
+
 
     // --- 유효성 검사 시작 ---
     // 1. 타겟이 드래그 항목 중 하나인 경우
@@ -5434,13 +4882,16 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         clearSelection();
         return; // 이동 작업 중단
     }
-    // --- 추가된 부분 끝 ---
-    // --- 유효성 검사 끝 ---
+    // --- 추가된 부분 끝 ---\
+    // --- 유효성 검사 끝 ---\
 
     // 이동 시작
-    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, itemsToMove.map(item => item.name));
+    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, itemsToMove.map(item => item.name)); // 기존 debug 로그
     showLoading();
     try {
+        // *** 중요: 실제 이동 로직은 moveToFolder 함수 호출로 위임됨 ***
+        // moveToFolder 함수 내부에서 개별 API 호출이 발생할 것이므로,
+        // 여기서는 요약 로그만 남기고 실제 이동 API 호출은 하지 않음.
         await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
     } catch (error) {
         logError('[Internal Drop] 이동 중 오류 발생:', error);
@@ -5454,6 +4905,17 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         } else {
             document.querySelectorAll('.file-item.drag-over').forEach(item => item.classList.remove('drag-over'));
             logWarn("[Internal Drop] clearAllDragOverClasses function not found. Manually removing drag-over classes.");
+        }
+        // 이동 후 목록 새로고침 (targetPath 기준)
+        loadFiles(targetPath); // <-- 이동 완료 후 타겟 폴더 새로고침
+        // 필요하다면 원래 폴더도 새로고침
+        const sourceParent = itemsToMove[0]?.parentPath;
+        if (sourceParent !== targetPath && sourceParent !== undefined) {
+             // 약간의 시간차를 두고 원본 폴더 새로고침
+            setTimeout(() => loadFiles(sourceParent), 500);
+        } else if (sourceParent === undefined && currentPath !== targetPath) {
+             // 루트에서 다른 폴더로 이동한 경우 루트 새로고침
+            setTimeout(() => loadFiles(''), 500);
         }
     }
 }
