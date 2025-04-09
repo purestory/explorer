@@ -540,14 +540,12 @@ function updateSelectionBasedOnScroll(ctrlKeyPressed = false) { // ctrlKey 상�
                 selectedItems.add(itemName);
             }
         } else {
-            /*
              // Ctrl 키가 눌리지 않았을 때만 선택 해제 (mousemove에서만 정확)
              // 자동 스크롤 중에는 ctrlKeyPressed가 항상 false이므로, 겹치지 않으면 무조건 선택 해제됨.
              if (!ctrlKeyPressed && item.classList.contains('selected')) {
                  item.classList.remove('selected');
                  selectedItems.delete(itemName);
              }
-                 */
         }
     });
     
@@ -4021,8 +4019,7 @@ function showCompressModal(defaultName) {
         cancelBtn.addEventListener('click', cancelHandler);
         closeBtn.addEventListener('click', cancelHandler);
         input.addEventListener('keydown', keydownHandler);
-    });
- } // 선택한 파일 압축
+    }); // 선택한 파일 압축
 async function compressSelectedItems() {
     if (selectedItems.size === 0) return;
     
