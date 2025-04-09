@@ -2383,24 +2383,64 @@ function handleFileDblClick(e, fileItem) {
     
     logLog(`더블클릭 이벤트 발생: ${fileName}, 폴더: ${isFolder}, 상위폴더: ${isParentDir}`);
     
-    // 상위 폴더 처리
-    if (isParentDir) {
+    // 폴더 또는 상위 폴더인 경우 탐색 로직 통합
+    if (isFolder) {
         // 더블클릭 이벤트를 비활성화하고 탐색 진행
         window.doubleClickEnabled = false;
-        navigateToParentFolder();
-        return;
+
+        let newPath = '';
+        if (isParentDir) { // 상위 폴더('. .') 클릭
+            // 현재 경로에서 마지막 '/'를 찾아 그 앞부분까지를 새 경로로 설정
+            const lastSlashIndex = currentPath.lastIndexOf('/');
+            newPath = (lastSlashIndex > 0) ? currentPath.substring(0, lastSlashIndex) : ''; // 루트는 빈 문자열
+        } else { // 일반 폴더 클릭
+            newPath = currentPath ? `${currentPath}/${fileName}` : fileName;
+        }
+
+        // 경로 변경 및 파일 로드
+        syncCurrentPath(newPath); // currentPath 업데이트 및 window.currentPath 동기화
+        updateHistoryState(newPath); // 브라우저 히스토리 상태 업데이트
+
+        // 이전 이벤트 리스너 제거 (기존 로직 유지 - 필요성 검토 필요)
+        const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
+        oldFileItems.forEach(item => {
+            const clonedItem = item.cloneNode(true);
+            item.parentNode.replaceChild(clonedItem, item);
+        });
+        // 파일 목록 로드 전에 마우스 포인터 상태 리셋 (기존 로직 유지)
+        document.querySelectorAll('.file-item, .file-item-grid').forEach(item => {
+            if (item.classList) {
+                item.classList.remove('hover');
+            }
+        });
+        /*
+        // 마우스 이벤트 강제 발생 (기존 로직 유지 - 필요성 검토 필요)
+        setTimeout(() => {
+            try {
+                if (typeof window.mouseX === 'number' && typeof window.mouseY === 'number') {
+                    const mouseEvent = new MouseEvent('mousemove', {
+                        bubbles: true, cancelable: true, view: window,
+                        clientX: window.mouseX, clientY: window.mouseY
+                    });
+                    document.dispatchEvent(mouseEvent);
+                }
+            } catch (error) {
+                logError('마우스 이벤트 강제 발생 중 오류:', error);
+            }
+        }, 350); // 지연 시간 유지
+        */
+
+        // 파일 목록 로드
+        loadFiles(newPath);
+        clearSelection(); // 선택 초기화
+
+        return; // 폴더 탐색 후 함수 종료
     }
-    
-    if (isFolder) {
-        // 폴더로 이동 전에 더블클릭 비활성화
-        window.doubleClickEnabled = false;
-        // 폴더로 이동
-        navigateToFolder(fileName);
-    } else {
+    // 파일 처리 로직 (기존과 동일)
+    else {
         // 파일 확장자에 따라 처리
         const fileExt = fileName.split('.').pop().toLowerCase();
         const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        
         const encodedPath = encodeURIComponent(filePath);
         
         // 이미지, 비디오, PDF 등 브라우저에서 열 수 있는 파일 형식
@@ -2418,50 +2458,7 @@ function handleFileDblClick(e, fileItem) {
             downloadFile(fileName);
         }
     }
-}
 
-// 폴더 탐색
-function navigateToFolder(folderName) {
-    let newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-    syncCurrentPath(newPath);
-    
-    // 폴더 이동 히스토리 상태 업데이트
-    updateHistoryState(currentPath);
-    
-    // 이전 더블클릭 이벤트 리스너 제거를 위해 기존 파일 항목 캐시
-    const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
-    oldFileItems.forEach(item => {
-        const clonedItem = item.cloneNode(true);
-        item.parentNode.replaceChild(clonedItem, item);
-    });
-    
-    // 파일 목록 로드 전에 마우스 포인터 상태 리셋
-    document.querySelectorAll('.file-item, .file-item-grid').forEach(item => {
-        if (item.classList) {
-            item.classList.remove('hover');
-        }
-    });
-    
-    // 마우스 포인터 위치 재설정을 위한 강제 mousemove 이벤트 등록
-    // 파일 목록이 로드된 후 실행하기 위해 타이머 설정
-    setTimeout(() => {
-        try {
-            // 마우스 위치가 있을 경우에만 이벤트 발생
-            if (typeof window.mouseX === 'number' && typeof window.mouseY === 'number') {
-                // 마우스 이벤트 강제 발생 
-                const mouseEvent = new MouseEvent('mousemove', {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window,
-                    clientX: window.mouseX,
-                    clientY: window.mouseY
-                });
-                document.dispatchEvent(mouseEvent);
-            }
-        } catch (error) {
-            logError('마우스 이벤트 강제 발생 중 오류:', error);
-        }
-    }, 350);
     
     // 파일 목록 로드
     loadFiles(newPath);
@@ -3726,29 +3723,8 @@ function moveItems(itemIds) {
     
     clipboardOperation = 'cut';
     pasteBtn.disabled = false;
-}
 
-// 상위 폴더로 이동
-function navigateToParentFolder() {
-    if (!currentPath) return; // 이미 루트 폴더인 경우
-    
-    
-    // 마지막 슬래시 위치 찾기
-    const lastSlashIndex = currentPath.lastIndexOf('/');
-    
-    if (lastSlashIndex === -1) {
-        // 슬래시가 없으면 루트 폴더로 이동
-        currentPath = '';
-             } else {
-        // 슬래시가 있으면 상위 경로로 이동
-        currentPath = currentPath.substring(0, lastSlashIndex);
-    }
-    
-    // 폴더 이동 히스토리 상태 업데이트
-    updateHistoryState(currentPath);
-    
-    // 파일 목록 새로고침
-    // 초기화 시 window.currentPath 설정
+
     window.currentPath = currentPath || "";
     loadFiles(currentPath);
     
