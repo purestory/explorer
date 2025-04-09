@@ -2250,30 +2250,37 @@ function handleFileDblClick(e, fileItem) {
 function showRenameDialog() {
     if (selectedItems.size !== 1) return;
 
-    const selectedItem = document.querySelector('.file-item.selected');
+    const selectedItem = document.querySelector('.file-item.selected, .file-item-grid.selected');
     if (!selectedItem) return;
 
     const currentName = selectedItem.getAttribute('data-name');
+    const isFolder = selectedItem.getAttribute('data-is-folder') === 'true';
 
     const renameModal = document.getElementById('renameModal');
-    const newName = document.getElementById('newName');
+    const newNameInput = document.getElementById('newName');
 
-    if (!renameModal || !newName) {
-        logError('Rename modal or input element not found!');
+    if (!renameModal || !newNameInput) {
+        logError('[Rename] Rename modal or input element not found!');
         alert('이름 변경 요소를 찾을 수 없습니다.');
         return;
     }
 
-    newName.value = currentName;
-
+    newNameInput.value = currentName;
     renameModal.style.display = 'flex';
+    newNameInput.focus();
 
-    newName.focus();
-    const lastDotIndex = currentName.lastIndexOf('.');
-    if (lastDotIndex > 0) {
-        newName.setSelectionRange(0, lastDotIndex);
+    if (isFolder) {
+        newNameInput.select();
+        logLog('[Rename] Folder detected, selecting all text.');
     } else {
-        newName.select();
+        const lastDotIndex = currentName.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+            newNameInput.setSelectionRange(0, lastDotIndex);
+            logLog(`[Rename] File with extension detected, selecting name part: ${currentName.substring(0, lastDotIndex)}`);
+        } else {
+            newNameInput.select();
+            logLog('[Rename] File without extension or starting with dot detected, selecting all text.');
+        }
     }
 }
 // 선택 항목 삭제 (백그라운드 처리 UX 개선 및 액션 로깅 추가)
@@ -3181,7 +3188,7 @@ function compressAndDownload(itemList) {
     // API 요청 데이터
     const requestData = {
         files: itemList,
-        targetPath: '',  // 임시 압축 위치는 루트에 생성
+        targetPath: currentPath,  // 빈 문자열 대신 현재 경로 사용
         zipName: zipName
     };
 
