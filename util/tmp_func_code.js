@@ -1,103 +1,79 @@
-function toggleFolderLock(action = 'lock') {
-    // 잠금 기능을 사용할 수 없으면 경고 표시
-    if (!lockFeatureAvailable) {
-        logLog('폴더 잠금 기능을 사용할 수 없습니다.');
-        // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
-        return;
-    }
-    
-    // 선택된 폴더 항목들 확인
-    const selectedFolders = [];
-    
-    // 선택된 항목들 중에서 폴더만 필터링
-    selectedItems.forEach(itemName => {
-        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
-        if (element && element.getAttribute('data-is-folder') === 'true') {
-            const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-            
-            // 상위 폴더가 잠겨있는지 확인 (잠금 동작인 경우)
-            if (action === 'lock' && isPathAccessRestricted(folderPath) && !isPathLocked(folderPath)) {
-                statusInfo.textContent = `상위 폴더가 잠겨 있어 '${itemName}' 폴더는 잠글 수 없습니다.`;
-                return; // 이 폴더는 건너뜀
-            }
-            
-            selectedFolders.push({
-                name: itemName,
-                path: folderPath,
-                isLocked: isPathLocked(folderPath)
-            });
-        }
-    });
-    
-    if (selectedFolders.length === 0) {
-        // 폴더가 선택되지 않았으면 조용히 리턴
-                         return;
-                     }
-                     
-    // 처리할 폴더들을 필터링 (선택된 동작에 따라)
-    const foldersToProcess = action === 'lock' 
-        ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
-        : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
-    
-    if (foldersToProcess.length === 0) {
-        if (action === 'lock') {
-            statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
-        } else {
-            statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
-        }
-        return;
-    }
+function compressAndDownload(itemList) {
+    if (!itemList || itemList.length === 0) return;
     
     showLoading();
+    statusInfo.textContent = '압축 패키지 준비 중...';
     
-    // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
-    const processNextFolder = (index) => {
-        if (index >= foldersToProcess.length) {
-            // 모든 폴더 처리 완료
-            loadLockStatus().then(() => {
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-                loadFiles(currentPath); // 파일 목록 새로고침
-                const actionText = action === 'lock' ? '잠금' : '잠금 해제';
-                statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
-                hideLoading();
-            });
-            return;
-        }
-        
-        const folder = foldersToProcess[index];
-        const encodedPath = encodeURIComponent(folder.path);
-        
-        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ action: action })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // 서버에서 건너뛴 경우 처리
-            if (data.status === 'skipped') {
-                statusInfo.textContent = data.message;
-            }
-            // 다음 폴더 처리
-            processNextFolder(index + 1);
-        })
-        .catch(error => {
-            alert(`오류 발생: ${error.message}`);
-            hideLoading();
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-            loadFiles(currentPath);
-        });
+    // 기본 파일명 생성 (현재 폴더명 또는 기본명 + 날짜시간)
+    const now = new Date();
+    const dateTimeStr = now.getFullYear() +
+                        String(now.getMonth() + 1).padStart(2, '0') +
+                        String(now.getDate()).padStart(2, '0') + '_' +
+                        String(now.getHours()).padStart(2, '0') +
+                        String(now.getMinutes()).padStart(2, '0') +
+                        String(now.getSeconds()).padStart(2, '0');
+    
+    // 현재 폴더명 또는 기본명으로 압축파일명 생성
+    const currentFolderName = currentPath ? currentPath.split('/').pop() : 'files';
+    const zipName = `${currentFolderName}_${dateTimeStr}.zip`;
+    
+    // API 요청 데이터
+    const requestData = {
+        files: itemList,
+        targetPath: '',  // 임시 압축 위치는 루트에 생성
+        zipName: zipName
     };
     
-    // 첫 번째 폴더부터 처리 시작
-    processNextFolder(0);
+    // 압축 API 호출
+    fetch(`${API_BASE_URL}/api/compress`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || '압축 중 오류가 발생했습니다.');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        // 압축 성공 후 다운로드 시작
+        const zipPath = data.zipPath ? `${data.zipPath}/${data.zipFile}` : data.zipFile;
+        const encodedZipPath = encodeURIComponent(zipPath);
+        const zipUrl = `${API_BASE_URL}/api/files/${encodedZipPath}`;
+        
+        // 새 창에서 다운로드
+        window.open(zipUrl, '_blank');
+        
+        // 상태 업데이트
+        statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 중...`;
+        hideLoading();
+        
+        // 임시 압축 파일 삭제 (다운로드 시작 후 10초 후)
+        setTimeout(() => {
+            fetch(`${API_BASE_URL}/api/files/${encodedZipPath}`, {
+                method: 'DELETE'
+            })
+            .then(() => {
+                logLog(`임시 압축 파일 삭제됨: ${zipPath}`);
+            })
+            .catch(err => {
+                logError('임시 압축 파일 삭제 오류:', err);
+            });
+            
+            // 상태 메시지 업데이트
+            statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 완료`;
+        }, 10000); // 10초 후 삭제
+    })
+    .catch(error => {
+        // 오류 처리
+        logError('압축 및 다운로드 오류:', error);
+        alert(`압축 및 다운로드 중 오류가 발생했습니다: ${error.message}`);
+        hideLoading();
+        statusInfo.textContent = '다운로드 실패';
+    });
 }

@@ -3156,13 +3156,13 @@ function downloadSelectedItems() {
     compressAndDownload([...selectedItems]);
 }
 
-// 여러 파일/폴더를 압축하여 다운로드
+// (로그 기능 추가됨)
 function compressAndDownload(itemList) {
     if (!itemList || itemList.length === 0) return;
-    
+
     showLoading();
     statusInfo.textContent = '압축 패키지 준비 중...';
-    
+
     // 기본 파일명 생성 (현재 폴더명 또는 기본명 + 날짜시간)
     const now = new Date();
     const dateTimeStr = now.getFullYear() +
@@ -3171,18 +3171,46 @@ function compressAndDownload(itemList) {
                         String(now.getHours()).padStart(2, '0') +
                         String(now.getMinutes()).padStart(2, '0') +
                         String(now.getSeconds()).padStart(2, '0');
-    
+
     // 현재 폴더명 또는 기본명으로 압축파일명 생성
     const currentFolderName = currentPath ? currentPath.split('/').pop() : 'files';
-    const zipName = `${currentFolderName}_${dateTimeStr}.zip`;
-    
+    // 파일 이름에 부적절한 문자 제거 또는 교체 (선택 사항)
+    const safeFolderName = currentFolderName.replace(/[\\/:*?\"<>|]/g, '_');
+    const zipName = `${safeFolderName}_${dateTimeStr}.zip`;
+
     // API 요청 데이터
     const requestData = {
         files: itemList,
         targetPath: '',  // 임시 압축 위치는 루트에 생성
         zipName: zipName
     };
-    
+
+    // --- 추가: 압축 후 다운로드 액션 로그 전송 ---
+    const totalCount = itemList.length;
+    let logMessage = `[Compress & Download Action] `;
+    let itemSummary = '';
+    if (totalCount === 1) {
+        // 파일/폴더 정보 가져오기 (UI 요소 기반)
+        const itemName = itemList[0];
+        const element = document.querySelector(`.file-item[data-name=\"${CSS.escape(itemName)}\"], .file-item-grid[data-name=\"${CSS.escape(itemName)}\"]`);
+        const isFolder = element ? element.getAttribute('data-is-folder') === 'true' : false;
+        itemSummary = `'${itemName}' ${isFolder ? '(폴더)' : '(파일)'}`;
+    } else {
+        const firstItems = itemList.slice(0, 2).join(', ');
+        itemSummary = `'${firstItems}'${totalCount > 2 ? ` 외 ${totalCount - 2}개` : ''} (${totalCount}개)`;
+        // 필요 시 파일/폴더 개수 상세 정보 추가
+    }
+    logMessage += `${itemSummary} -> '${zipName}'(으)로 압축 후 다운로드 요청`;
+    const currentDir = currentPath || '루트';
+    logMessage += ` (원본 경로: ${currentDir})`; // 원본 항목들이 있던 경로 명시
+
+    fetch(`${API_BASE_URL}/api/log-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: logMessage, level: 'minimal' })
+    }).catch(error => console.error('압축 후 다운로드 액션 로그 전송 실패:', error));
+    // --- 로그 전송 끝 ---
+
     // 압축 API 호출
     fetch(`${API_BASE_URL}/api/compress`, {
         method: 'POST',
@@ -3191,11 +3219,17 @@ function compressAndDownload(itemList) {
         },
         body: JSON.stringify(requestData)
     })
-    .then(response => {
+    .then(async response => { // async 추가하여 오류 본문 읽기 용이하게
         if (!response.ok) {
-            return response.json().then(data => {
-                throw new Error(data.error || '압축 중 오류가 발생했습니다.');
-            });
+            let errorMsg = '압축 중 오류가 발생했습니다.';
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error || errorMsg;
+            } catch (e) {
+                 // JSON 파싱 실패 시 상태 텍스트 사용
+                 errorMsg += ` (서버 응답: ${response.statusText || response.status})`;
+            }
+            throw new Error(errorMsg);
         }
         return response.json();
     })
@@ -3204,34 +3238,47 @@ function compressAndDownload(itemList) {
         const zipPath = data.zipPath ? `${data.zipPath}/${data.zipFile}` : data.zipFile;
         const encodedZipPath = encodeURIComponent(zipPath);
         const zipUrl = `${API_BASE_URL}/api/files/${encodedZipPath}`;
-        
-        // 새 창에서 다운로드
-        window.open(zipUrl, '_blank');
-        
+
+        // a 태그를 이용한 다운로드 방식
+        const link = document.createElement('a');
+        link.href = zipUrl;
+        // download 속성은 서버 헤더에 의존하므로 여기서는 설정하지 않음
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
         // 상태 업데이트
-        statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 중...`;
+        statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 시작...`;
         hideLoading();
-        
+
         // 임시 압축 파일 삭제 (다운로드 시작 후 10초 후)
         setTimeout(() => {
             fetch(`${API_BASE_URL}/api/files/${encodedZipPath}`, {
                 method: 'DELETE'
             })
-            .then(() => {
-                logLog(`임시 압축 파일 삭제됨: ${zipPath}`);
+            .then(response => { // 응답 상태 확인
+                if (!response.ok) {
+                     logWarn(`임시 압축 파일 삭제 요청 실패 (${response.status}): ${zipPath}`);
+                } else {
+                     logLog(`임시 압축 파일 삭제됨: ${zipPath}`);
+                }
             })
             .catch(err => {
-                logError('임시 압축 파일 삭제 오류:', err);
+                logError('임시 압축 파일 삭제 중 네트워크 오류:', err);
             });
-            
-            // 상태 메시지 업데이트
-            statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 완료`;
+
+            // 상태 메시지 업데이트 (일정 시간 후 완료 메시지로)
+            // 완료 시점을 정확히 알 수 없으므로, 시작 메시지 유지 또는 일반 완료 메시지로 변경 고려
+            if (statusInfo.textContent === `${itemList.length}개 항목 압축 다운로드 시작...`) {
+                 statusInfo.textContent = `다운로드 완료`;
+            }
         }, 10000); // 10초 후 삭제
     })
     .catch(error => {
         // 오류 처리
         logError('압축 및 다운로드 오류:', error);
-        alert(`압축 및 다운로드 중 오류가 발생했습니다: ${error.message}`);
+        // alert 대신 showToast 사용 고려
+        showToast(`압축 및 다운로드 중 오류: ${error.message}`, 'error');
         hideLoading();
         statusInfo.textContent = '다운로드 실패';
     });
