@@ -1,120 +1,103 @@
-async function compressSelectedItems() {
-    if (selectedItems.size === 0) return;
-    
-    const selectedItemsArray = Array.from(selectedItems);
-    const firstItemName = selectedItemsArray[0];
-    
-    // 파일 크기 확인 (500MB 제한)
-    const MAX_FILE_SIZE = 500 * 1024 * 1024;
-    let hasLargeFile = false;
-    for (const item of selectedItemsArray) {
-        const fileInfo = fileInfoMap.get(item);
-        if (fileInfo && fileInfo.type === 'file' && fileInfo.size > MAX_FILE_SIZE) {
-            hasLargeFile = true;
-            break;
-        }
-    }
-    
-    if (hasLargeFile) {
-        showToast('500MB 이상의 파일이 포함되어 있어 압축할 수 없습니다.', 'error');
+function toggleFolderLock(action = 'lock') {
+    // 잠금 기능을 사용할 수 없으면 경고 표시
+    if (!lockFeatureAvailable) {
+        logLog('폴더 잠금 기능을 사용할 수 없습니다.');
+        // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
         return;
     }
     
-    // 기본 압축 파일 이름 설정 (첫 번째 선택 항목 + 날짜시간)
-    const now = new Date();
-    const dateTimeStr = now.getFullYear() +
-                        String(now.getMonth() + 1).padStart(2, '0') +
-                        String(now.getDate()).padStart(2, '0') + '_' +
-                        String(now.getHours()).padStart(2, '0') +
-                        String(now.getMinutes()).padStart(2, '0') +
-                        String(now.getSeconds()).padStart(2, '0');
-    const defaultZipName = `${firstItemName}_${dateTimeStr}`;
+    // 선택된 폴더 항목들 확인
+    const selectedFolders = [];
     
-    // 모달을 통해 압축 파일 이름 입력 받기
-    const zipNameWithoutExt = await showCompressModal(defaultZipName);
-    if (!zipNameWithoutExt) return; // 사용자가 취소한 경우
-
-    const zipName = `${zipNameWithoutExt}.zip`; // 확장자 추가
+    // 선택된 항목들 중에서 폴더만 필터링
+    selectedItems.forEach(itemName => {
+        const element = document.querySelector(`.file-item[data-name="${itemName}"]`);
+        if (element && element.getAttribute('data-is-folder') === 'true') {
+            const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
+            
+            // 상위 폴더가 잠겨있는지 확인 (잠금 동작인 경우)
+            if (action === 'lock' && isPathAccessRestricted(folderPath) && !isPathLocked(folderPath)) {
+                statusInfo.textContent = `상위 폴더가 잠겨 있어 '${itemName}' 폴더는 잠글 수 없습니다.`;
+                return; // 이 폴더는 건너뜀
+            }
+            
+            selectedFolders.push({
+                name: itemName,
+                path: folderPath,
+                isLocked: isPathLocked(folderPath)
+            });
+        }
+    });
+    
+    if (selectedFolders.length === 0) {
+        // 폴더가 선택되지 않았으면 조용히 리턴
+                         return;
+                     }
+                     
+    // 처리할 폴더들을 필터링 (선택된 동작에 따라)
+    const foldersToProcess = action === 'lock' 
+        ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
+        : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
+    
+    if (foldersToProcess.length === 0) {
+        if (action === 'lock') {
+            statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
+        } else {
+            statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
+        }
+        return;
+    }
     
     showLoading();
-    statusInfo.textContent = '압축 중...';
     
-    const filesToCompress = selectedItemsArray;
-    
-    const requestData = {
-        files: filesToCompress,
-        targetPath: currentPath,
-        zipName: zipName // 확장자가 포함된 이름 사용
-    };
-    
-    // --- 추가: 서버에 압축 액션 로그 전송 ---
-    const totalCount = filesToCompress.length;
-    let logMessage = `[Compress Action] `;
-    let sourceSummary = '';
-    if (totalCount === 1) {
-        // 파일/폴더 정보 가져오기 (UI 요소나 fileInfoMap 사용)
-        const itemElement = document.querySelector(`.file-item[data-name="${CSS.escape(filesToCompress[0])}"], .file-item-grid[data-name="${CSS.escape(filesToCompress[0])}"]`);
-        const isFolder = itemElement ? itemElement.getAttribute('data-is-folder') === 'true' : false; // UI 기반 추정
-        sourceSummary = `'${filesToCompress[0]}' ${isFolder ? '(폴더)' : '(파일)'}`;
-    } else {
-        // 여러 항목일 경우, 이름 요약 및 개수 표시
-        const firstItems = filesToCompress.slice(0, 2).join(', ');
-        sourceSummary = `'${firstItems}'${totalCount > 2 ? ` 외 ${totalCount - 2}개` : ''}`;
-        // 필요 시 파일/폴더 개수 상세 정보 추가 (아래 주석 참고)
-        // let fileCount = 0;
-        // let folderCount = 0;
-        // filesToCompress.forEach(name => {
-        //     const itemElement = document.querySelector(`.file-item[data-name="${CSS.escape(name)}"], .file-item-grid[data-name="${CSS.escape(name)}"]`);
-        //     if (itemElement && itemElement.getAttribute('data-is-folder') === 'true') folderCount++;
-        //     else fileCount++;
-        // });
-        // if (folderCount > 0 && fileCount > 0) sourceSummary += ` (폴더 ${folderCount}개, 파일 ${fileCount}개)`;
-        // else if (folderCount > 0) sourceSummary += ` (폴더 ${folderCount}개)`;
-        // else if (fileCount > 0) sourceSummary += ` (파일 ${fileCount}개)`;
-    }
-    const targetDir = currentPath || '루트'; // 현재 경로가 비어있으면 루트로 표시
-    logMessage += `${sourceSummary} -> '${zipName}'(으)로 압축 (대상 경로: ${targetDir})`;
-
-    fetch(`${API_BASE_URL}/api/log-action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: logMessage, level: 'minimal' })
-    }).catch(error => console.error('압축 액션 로그 전송 실패:', error));
-    // --- 로그 전송 끝 ---
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/compress`, {
+    // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
+    const processNextFolder = (index) => {
+        if (index >= foldersToProcess.length) {
+            // 모든 폴더 처리 완료
+            loadLockStatus().then(() => {
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
+                loadFiles(currentPath); // 파일 목록 새로고침
+                const actionText = action === 'lock' ? '잠금' : '잠금 해제';
+                statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
+                hideLoading();
+            });
+            return;
+        }
+        
+        const folder = foldersToProcess[index];
+        const encodedPath = encodeURIComponent(folder.path);
+        
+        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestData)
-        });
-
-        if (!response.ok) {
-            let errorData;
-            try {
-                errorData = await response.json();
-            } catch (e) {
-                // JSON 파싱 실패 시 텍스트로 에러 처리
-                 const errorText = await response.text();
-                 throw new Error(errorText || `HTTP error! status: ${response.status}`);
+            body: JSON.stringify({ action: action })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`'${folder.name}' 폴더 ${action === 'lock' ? '잠금' : '잠금 해제'} 처리 실패`);
             }
-             throw new Error(errorData.error || '압축 중 오류가 발생했습니다.');
-        }
-
-        const data = await response.json();
-        statusInfo.textContent = `${filesToCompress.length}개 항목이 ${data.zipFile}로 압축되었습니다.`;
-        showToast(`${filesToCompress.length}개 항목 압축 완료: ${data.zipFile}`, 'success');
-        // 압축 후 파일 목록 새로고침
-        window.currentPath = currentPath || "";
-        loadFiles(currentPath);
-
-    } catch (error) {
-        logError('압축 실패:', error);
-        showToast(`압축 실패: ${error.message}`, 'error');
-        statusInfo.textContent = '압축 실패';
-    } finally {
-        hideLoading();
-    }
+            return response.json();
+        })
+        .then(data => {
+            // 서버에서 건너뛴 경우 처리
+            if (data.status === 'skipped') {
+                statusInfo.textContent = data.message;
+            }
+            // 다음 폴더 처리
+            processNextFolder(index + 1);
+        })
+        .catch(error => {
+            alert(`오류 발생: ${error.message}`);
+            hideLoading();
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
+            loadFiles(currentPath);
+        });
+    };
+    
+    // 첫 번째 폴더부터 처리 시작
+    processNextFolder(0);
 }
