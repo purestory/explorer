@@ -101,7 +101,7 @@ async function initializeDirectories() {
 const LOG_LEVELS = { minimal: 0, info: 1, debug: 2 };
 const isDevelopment = process.env.NODE_ENV === 'development';
 // !!!! 로그 레벨을 debug로 직접 설정 !!!!
-let currentLogLevel = LOG_LEVELS.debug; 
+let currentLogLevel = LOG_LEVELS.minimal; 
 // let currentLogLevel = isDevelopment ? LOG_LEVELS.info : LOG_LEVELS.minimal;
 const requestLogLevel = isDevelopment ? 'info' : 'minimal'; // 요청 로그 레벨
 
@@ -243,21 +243,21 @@ const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로
 const TRUNCATE_MARKER = '...'; // *** 누락된 상수 정의 추가 ***
 
 async function getDiskUsage() {
-  const forceLogLevel = 'minimal'; // 로그 레벨 무시하고 항상 출력
+  // const forceLogLevel = 'minimal'; // 로그 레벨 무시하고 항상 출력 <- 제거
   let commandOutput = null; // exec 결과 저장 변수
 
   try {
     const command = `du -sb ${ROOT_DIRECTORY}`;
-    log(`[DiskUsage] Executing command: ${command}`, forceLogLevel);
+    log(`[DiskUsage] Executing command: ${command}`, 'debug'); // 레벨 변경
 
     // *** exec 결과 전체 로깅 ***
     commandOutput = await exec(command);
-    log(`[DiskUsage] exec result: ${JSON.stringify(commandOutput)}`, forceLogLevel); 
+    log(`[DiskUsage] exec result: ${JSON.stringify(commandOutput)}`, 'debug'); // 레벨 변경
 
     const { stdout, stderr } = commandOutput;
     const stdoutTrimmed = stdout ? stdout.trim() : ''; // stdout이 null/undefined일 경우 대비
 
-    log(`[DiskUsage] Raw stdout: [${stdoutTrimmed}]`, forceLogLevel);
+    log(`[DiskUsage] Raw stdout: [${stdoutTrimmed}]`, 'debug'); // 레벨 변경
     if (stderr) {
       // Optional chaining 추가
       errorLog(`[DiskUsage] du command stderr: [${stderr?.trim()}]`); 
@@ -267,17 +267,17 @@ async function getDiskUsage() {
     const outputString = stdoutTrimmed;
     const match = outputString.match(/^(\d+)/); 
     const parsedValue = match ? match[1] : null; // 파싱된 숫자 문자열
-    log(`[DiskUsage] Parsed value string: ${parsedValue}`, forceLogLevel);
+    log(`[DiskUsage] Parsed value string: ${parsedValue}`, 'debug'); // 레벨 변경
 
     const usedBytes = parsedValue ? parseInt(parsedValue, 10) : NaN;
-    log(`[DiskUsage] Parsed usedBytes (number): ${usedBytes}`, forceLogLevel);
+    log(`[DiskUsage] Parsed usedBytes (number): ${usedBytes}`, 'debug'); // 레벨 변경
 
     if (isNaN(usedBytes)) {
       errorLog('[DiskUsage] 디스크 사용량 파싱 오류: 숫자로 변환 실패', { stdout: outputString });
       throw new Error('Failed to parse disk usage output.');
     }
 
-    log(`[DiskUsage] 디스크 사용량 조회 (파싱 성공): ${usedBytes} bytes`, forceLogLevel);
+    log(`[DiskUsage] 디스크 사용량 조회 (파싱 성공): ${usedBytes} bytes`, 'info'); // 최종 결과는 info 레벨로 유지
 
     return {
       used: usedBytes,
@@ -790,7 +790,9 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
     const errorCount = results.length - successCount;
     const errorsDetails = results.filter(r => r.status === 'error');
 
-    logWithIP(`[Upload Result] 성공: ${successCount}, 실패: ${errorCount}`, req, 'minimal');
+    logWithIP(`[Upload Result] 성공: ${successCount}, 실패: ${errorCount}`, req, 'info'); // 레벨 변경: minimal -> info
+    // === 추가: 상세 처리 결과 로그 (info 레벨) ===
+    logWithIP(`[Upload Details] 처리 결과: ${JSON.stringify(results, null, 2)}`, req, 'info');
 
     if (errorCount > 0) {
       res.status(207).json({ // 207 Multi-Status 사용
@@ -1616,7 +1618,7 @@ app.delete('/api/files/*', async (req, res) => {
     const itemPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, itemPath);
 
-    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청 (백그라운드 처리)`, req, 'info');
+    logWithIP(`[Delete Request] '${itemPath}' 삭제 요청 (백그라운드 처리)`, req, 'minimal'); // 레벨 변경: info -> minimal
 
     // --- 기본 검사 (동기 또는 비동기 유지) ---
     try {
@@ -1624,11 +1626,17 @@ app.delete('/api/files/*', async (req, res) => {
       await fs.promises.access(fullPath, fs.constants.F_OK);
 
       // --- 백그라운드 작업 시작 ---
-      logWithIP(`백그라운드 삭제 작업 시작 요청: ${fullPath}`, req, 'info');
+      logWithIP(`백그라운드 삭제 작업 시작 요청: ${fullPath}`, req, 'info'); // 레벨 변경: minimal -> info
 
       const workerScript = path.join(__dirname, 'backgroundWorker.js');
+      // === fork 옵션에 env 추가하여 로그 레벨 전달 ===
       const worker = fork(workerScript, ['delete', fullPath], {
-        stdio: 'pipe'  // 변경: 워커 출력을 pipe로 연결 (필요시 로깅 가능)
+        stdio: 'pipe',  // 변경: 워커 출력을 pipe로 연결 (필요시 로깅 가능)
+        env: { 
+          ...process.env, // 기존 환경 변수 상속
+          // Object.keys...: 현재 숫자 레벨 값을 문자열 키(minimal, info, debug)로 변환
+          CURRENT_LOG_LEVEL: Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel) 
+        } 
       });
       activeWorkers.add(worker); // 활성 워커 Set에 추가
       log(`[Worker Management] 워커 생성됨 (PID: ${worker.pid}, 작업: delete). 활성 워커 수: ${activeWorkers.size}`, 'debug');
