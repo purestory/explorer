@@ -3538,6 +3538,41 @@ async function compressSelectedItems() {
         zipName: zipName // 확장자가 포함된 이름 사용
     };
     
+    // --- 추가: 서버에 압축 액션 로그 전송 ---
+    const totalCount = filesToCompress.length;
+    let logMessage = `[Compress Action] `;
+    let sourceSummary = '';
+    if (totalCount === 1) {
+        // 파일/폴더 정보 가져오기 (UI 요소나 fileInfoMap 사용)
+        const itemElement = document.querySelector(`.file-item[data-name="${CSS.escape(filesToCompress[0])}"], .file-item-grid[data-name="${CSS.escape(filesToCompress[0])}"]`);
+        const isFolder = itemElement ? itemElement.getAttribute('data-is-folder') === 'true' : false; // UI 기반 추정
+        sourceSummary = `'${filesToCompress[0]}' ${isFolder ? '(폴더)' : '(파일)'}`;
+    } else {
+        // 여러 항목일 경우, 이름 요약 및 개수 표시
+        const firstItems = filesToCompress.slice(0, 2).join(', ');
+        sourceSummary = `'${firstItems}'${totalCount > 2 ? ` 외 ${totalCount - 2}개` : ''}`;
+        // 필요 시 파일/폴더 개수 상세 정보 추가 (아래 주석 참고)
+        // let fileCount = 0;
+        // let folderCount = 0;
+        // filesToCompress.forEach(name => {
+        //     const itemElement = document.querySelector(`.file-item[data-name="${CSS.escape(name)}"], .file-item-grid[data-name="${CSS.escape(name)}"]`);
+        //     if (itemElement && itemElement.getAttribute('data-is-folder') === 'true') folderCount++;
+        //     else fileCount++;
+        // });
+        // if (folderCount > 0 && fileCount > 0) sourceSummary += ` (폴더 ${folderCount}개, 파일 ${fileCount}개)`;
+        // else if (folderCount > 0) sourceSummary += ` (폴더 ${folderCount}개)`;
+        // else if (fileCount > 0) sourceSummary += ` (파일 ${fileCount}개)`;
+    }
+    const targetDir = currentPath || '루트'; // 현재 경로가 비어있으면 루트로 표시
+    logMessage += `${sourceSummary} -> '${zipName}'(으)로 압축 (대상 경로: ${targetDir})`;
+
+    fetch(`${API_BASE_URL}/api/log-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: logMessage, level: 'minimal' })
+    }).catch(error => console.error('압축 액션 로그 전송 실패:', error));
+    // --- 로그 전송 끝 ---
+
     try {
         const response = await fetch(`${API_BASE_URL}/api/compress`, {
             method: 'POST',
