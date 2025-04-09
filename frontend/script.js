@@ -39,7 +39,7 @@ window.dragSelectState = {
 function syncCurrentPath(path) {
     currentPath = path;
     window.currentPath = path;
-    console.log(`[Path Updated] 현재 경로 업데이트: ${path || "루트"}`);
+    logLog(`[Path Updated] 현재 경로 업데이트: ${path || "루트"}`);
     return path;
 }
 
@@ -186,7 +186,7 @@ function showLoading() {
     if (loadingOverlay) {
         loadingOverlay.style.display = 'flex';
     } else {
-        console.error('[showLoading] loadingOverlay 요소를 찾을 수 없습니다!');
+        logError('[showLoading] loadingOverlay 요소를 찾을 수 없습니다!');
     }
 }
 
@@ -197,7 +197,7 @@ function hideLoading() {
     if (loadingOverlay) {
         loadingOverlay.style.display = 'none';
     } else {
-        console.error('[hideLoading] loadingOverlay 요소를 찾을 수 없습니다!');
+        logError('[hideLoading] loadingOverlay 요소를 찾을 수 없습니다!');
     }
 }
 
@@ -725,7 +725,7 @@ function setupGlobalDragCleanup() {
         if (window.isDraggingActive) return;
         
         window.isDraggingActive = true;
-        console.log(`드래그 시작: ${items.size}개 항목 드래그 중`);
+        logLog(`드래그 시작: ${items.size}개 항목 드래그 중`);
     };
     
     // 드래그 상태 정리 함수
@@ -735,7 +735,7 @@ function setupGlobalDragCleanup() {
         
         // 정리 시작 플래그 설정
         window._isCleaningDragState = true;
-        console.log('clearDragState: 정리 시작');
+        logLog('clearDragState: 정리 시작');
         
         // 드래그 상태 플래그 초기화 (파일 이동/업로드 관련)
         window.isDraggingActive = false;
@@ -745,7 +745,7 @@ function setupGlobalDragCleanup() {
         window.dragSelectState.dragStarted = false;
         window.dragSelectState.startedOnFileItem = false;
         window.dragSelectState.startedOnSelectedItem = false;
-        console.log('clearDragState: 드래그 선택 상태 변수 초기화 완료');
+        logLog('clearDragState: 드래그 선택 상태 변수 초기화 완료');
         
         // --- 추가된 코드: 드래그 *선택* 상태 관련 정리 ---
         const selectionBox = document.getElementById('selectionBox');
@@ -758,7 +758,7 @@ function setupGlobalDragCleanup() {
             delete selectionBox.dataset.startClientY;
             delete selectionBox.dataset.initialScrollTop;
             delete selectionBox.dataset.initialScrollLeft; // 수평 스크롤 정보도 제거
-            console.log('clearDragState: 드래그 선택 박스 상태 초기화');
+            logLog('clearDragState: 드래그 선택 박스 상태 초기화');
         }
         
         // 자동 스크롤 취소 (함수가 존재하는 경우)
@@ -771,18 +771,18 @@ function setupGlobalDragCleanup() {
         // 모든 dragging 클래스 제거 (파일 이동/업로드 관련)
         const draggingElements = document.querySelectorAll('.dragging');
         if (draggingElements.length > 0) {
-            console.log(`clearDragState: ${draggingElements.length}개의 dragging 클래스 제거`);
+            logLog(`clearDragState: ${draggingElements.length}개의 dragging 클래스 제거`);
             draggingElements.forEach(el => el.classList.remove('dragging'));
         }
         
         // 모든 drag-over 클래스 제거 (파일 이동/업로드 관련)
         const dragOverElements = document.querySelectorAll('.drag-over');
         if (dragOverElements.length > 0) {
-            console.log(`clearDragState: ${dragOverElements.length}개의 drag-over 클래스 제거`);
+            logLog(`clearDragState: ${dragOverElements.length}개의 drag-over 클래스 제거`);
             dragOverElements.forEach(el => el.classList.remove('drag-over'));
         }
         
-        console.log('clearDragState: 정리 완료');
+        logLog('clearDragState: 정리 완료');
         
         // 정리 완료 후 플래그 해제 (약간의 시간차를 두어 확실히 마무리)
         setTimeout(() => {
@@ -794,7 +794,7 @@ function setupGlobalDragCleanup() {
     document.addEventListener('mouseup', (e) => {
         // 드래그가 활성화된 상태에서 마우스 버튼이 놓이면 정리
         if (window.isDraggingActive) {
-            console.log('mouseup 이벤트 감지: 드래그 상태 정리 시도');
+            logLog('mouseup 이벤트 감지: 드래그 상태 정리 시도');
             window.clearDragState();
         }
     }, true);
@@ -803,7 +803,7 @@ function setupGlobalDragCleanup() {
     document.addEventListener('mouseleave', (e) => {
         // 문서 경계를 벗어나는 경우에만 처리
         if (e.target === document.documentElement && window.isDraggingActive) {
-            console.log('mouseleave 이벤트 감지: 문서를 벗어남, 드래그 상태 정리 시도');
+            logLog('mouseleave 이벤트 감지: 문서를 벗어남, 드래그 상태 정리 시도');
             window.clearDragState();
         }
     });
@@ -813,10 +813,10 @@ function setupGlobalDragCleanup() {
 function handleDragEnd() {
     // 전역 드래그 상태 정리 함수 호출
     if (window.clearDragState) {
-        console.log('handleDragEnd 호출: 전역 함수로 정리');
+        logLog('handleDragEnd 호출: 전역 함수로 정리');
         window.clearDragState();
     } else {
-        console.log('handleDragEnd 호출: 기본 정리 로직 수행');
+        logLog('handleDragEnd 호출: 기본 정리 로직 수행');
         // 모든 dragging 클래스 제거 (주석 처리)
         /*
         document.querySelectorAll('.dragging').forEach(item => {
@@ -837,7 +837,7 @@ function handleDragEnd() {
 function initShortcuts() {
     // 이미 초기화되었는지 확인
     if (window.shortcutsInitialized) {
-        console.log('단축키가 이미 초기화되어 있습니다. 중복 호출 방지.');
+        logLog('단축키가 이미 초기화되어 있습니다. 중복 호출 방지.');
         return;
     }
     
@@ -882,7 +882,7 @@ function initShortcuts() {
     
     // 초기화 완료 플래그 설정
     window.shortcutsInitialized = true;
-    console.log('단축키 초기화 완료');
+    logLog('단축키 초기화 완료');
 }
 
 // 디스크 사용량 가져오기
@@ -902,7 +902,7 @@ function loadDiskUsage() {
             hideLoading();
         })
         .catch(error => {
-            console.error('디스크 사용량 정보 로드 오류:', error);
+            logError('디스크 사용량 정보 로드 오류:', error);
             hideLoading();
         });
 }
@@ -1006,11 +1006,11 @@ function loadFiles(path = '') {
             // 로딩 완료 후 더블클릭 이벤트 활성화 (타이머 시간 증가)
             setTimeout(() => {
                 window.doubleClickEnabled = true;
-                console.log('더블클릭 이벤트 활성화됨');
+                logLog('더블클릭 이벤트 활성화됨');
             }, 300);
         })
         .catch(error => {
-            console.error('Error:', error);
+            logError('Error:', error);
             statusInfo.textContent = `오류: ${error.message}`;
             hideLoading();
             
@@ -1119,7 +1119,7 @@ function renderFiles(files) {
             const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
             
             // 잠금 상태 디버그 로깅
-            console.log('현재 잠금 폴더 목록:', lockedFolders);
+            logLog('현재 잠금 폴더 목록:', lockedFolders);
             
             // 상위 폴더로 이동 항목 추가 (루트 폴더가 아닌 경우)
             if (currentPath) {
@@ -1303,7 +1303,7 @@ function renderFiles(files) {
             hideLoading();
         })
         .catch(error => {
-            console.error('잠금 상태 로드 오류:', error);
+            logError('잠금 상태 로드 오류:', error);
             hideLoading();
             // 오류가 발생해도 파일 목록은 표시
             statusInfo.textContent = '파일 목록 로드 완료 (잠금 상태 오류)';
@@ -1372,11 +1372,11 @@ function initDragAndDrop() {
     const dropZone = document.getElementById('dropZone');
     
     if (!fileList || !fileView || !dropZone) {
-        console.error('드래그앤드롭 초기화 중 필수 DOM 요소를 찾을 수 없습니다.');
+        logError('드래그앤드롭 초기화 중 필수 DOM 요소를 찾을 수 없습니다.');
         return;
     }
     
-    console.log('초기화 시 드래그 클래스 정리');
+    logLog('초기화 시 드래그 클래스 정리');
     // 페이지 로드 시 이전에 남아있는 드래그 관련 클래스 모두 제거
     document.querySelectorAll('.dragging, .drag-over').forEach(element => {
         element.classList.remove('dragging', 'drag-over');
@@ -1398,7 +1398,7 @@ function initDragAndDrop() {
             return;
         }
         
-        console.log('드래그 시작 - 대상:', e.target.className);
+        logLog('드래그 시작 - 대상:', e.target.className);
         
         // 파일 항목 요소 찾기
         const fileItem = e.target.closest('.file-item');
@@ -1409,7 +1409,7 @@ function initDragAndDrop() {
         window.draggingStartTime = Date.now();
         
         const fileName = fileItem.getAttribute('data-name');
-        console.log('드래그 시작:', fileName);
+        logLog('드래그 시작:', fileName);
         
         // 선택되지 않은 항목을 드래그하는 경우, 선택 초기화 후 해당 항목만 선택
         if (!fileItem.classList.contains('selected')) {
@@ -1419,7 +1419,7 @@ function initDragAndDrop() {
 
         // 드래그 중인 항목 개수
         const dragCount = selectedItems.size;
-        console.log(`드래그 시작: ${dragCount}개 항목 드래그 중`);
+        logLog(`드래그 시작: ${dragCount}개 항목 드래그 중`);
         
         try {
             // 1. JSON 형식으로 드래그 데이터 설정 (파일 경로 포함)
@@ -1451,8 +1451,8 @@ function initDragAndDrop() {
             // effectAllowed 설정 (모든 경우에 적용)
             e.dataTransfer.effectAllowed = 'move';
 
-            console.log('[File Drag Start] 커스텀 투명 GIF 드래그 이미지 설정 완료');
-            console.log('[File Drag Start] dataTransfer types set:', Array.from(e.dataTransfer.types));
+            logLog('[File Drag Start] 커스텀 투명 GIF 드래그 이미지 설정 완료');
+            logLog('[File Drag Start] dataTransfer types set:', Array.from(e.dataTransfer.types));
 
             // 5. 드래그 중인 항목에 시각적 효과 적용 (클래스 추가 주석 처리)
             /*
@@ -1462,7 +1462,7 @@ function initDragAndDrop() {
             */
 
         } catch (error) {
-            console.error('드래그 시작 중 오류:', error);
+            logError('드래그 시작 중 오류:', error);
             // 기본 정보만이라도 설정
             if (fileItem) {
                 const fileName = fileItem.getAttribute('data-name');
@@ -1472,7 +1472,7 @@ function initDragAndDrop() {
     }
     
     function handleFileDragEnd(e) {
-        console.log('파일 리스트 dragend 이벤트 발생');
+        logLog('파일 리스트 dragend 이벤트 발생');
         
         // 2. 보편적인 드래그 상태 정리 함수 호출 (내부 클래스 제거 확인 필요)
         handleDragEnd(); // .dragging 클래스 제거 등 포함
@@ -1506,7 +1506,7 @@ function handleFileDragEnter(e) {
     if (fileItem.getAttribute('data-is-folder') === 'true') {
         // 선택된 폴더에 대한 드래그는 무시
         if (fileItem.classList.contains('selected')) {
-            console.log('자기 자신이나 하위 폴더에 드래그 불가: ', fileItem.getAttribute('data-name'));
+            logLog('자기 자신이나 하위 폴더에 드래그 불가: ', fileItem.getAttribute('data-name'));
             clearAllDragOverClasses();
             return;
         }
@@ -1514,7 +1514,7 @@ function handleFileDragEnter(e) {
         // 다른 폴더들의 강조 제거
         clearAllDragOverClasses();
         
-        console.log('드래그 진입:', fileItem.getAttribute('data-name'));
+        logLog('드래그 진입:', fileItem.getAttribute('data-name'));
         // 현재 폴더에만 드래그 오버 스타일 적용
         fileItem.classList.add('drag-over');
     } else {
@@ -1615,7 +1615,7 @@ function handleDropZoneDragLeave(e) {
 }
 
 function handleDropZoneDrop(e) {
-    console.log('드롭존에 파일 드롭됨');
+    logLog('드롭존에 파일 드롭됨');
     preventDefaults(e);
     
     // 드래그 상태 초기화
@@ -1626,18 +1626,18 @@ function handleDropZoneDrop(e) {
     
     // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리
     if (isExternalDrop) {
-        console.log('드롭존 드롭 - 외부 파일 드롭 처리');
+        logLog('드롭존 드롭 - 외부 파일 드롭 처리');
         handleExternalFileDrop(e, currentPath);
     } 
     // 내부 파일이라도 경로가 비어있으면 오류 처리
     else if (isInternalDrop && draggedPaths.length > 0) {
-        console.log('드롭존 드롭 - 내부 파일 이동 처리:', draggedPaths);
+        logLog('드롭존 드롭 - 내부 파일 이동 처리:', draggedPaths);
         // 현재 드롭존의 경로로 파일 이동
         handleInternalFileDrop(draggedPaths, { path: currentPath });
     }
     // 판단 불가능한 경우
     else {
-        console.log('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
+        logLog('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
         }
     }
@@ -1648,20 +1648,20 @@ function handleDropZoneDrop(e) {
     window.removeEventListener('dragleave', handleDropZoneDragLeave);
     dropZone.removeEventListener('drop', handleDropZoneDrop);
     
-    console.log('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
+    logLog('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
     
     // 개발 모드에서 폴더 항목 CSS 선택자 유효성 확인
-    console.log('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
+    logLog('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
 }
 
 // 전역 handleDragEnd 함수도 확인해야 함
 function handleDragEnd() {
     // 전역 드래그 상태 정리 함수 호출
     if (window.clearDragState) {
-        console.log('handleDragEnd 호출: 전역 함수로 정리');
+        logLog('handleDragEnd 호출: 전역 함수로 정리');
         window.clearDragState();
     } else {
-        console.log('handleDragEnd 호출: 기본 정리 로직 수행');
+        logLog('handleDragEnd 호출: 기본 정리 로직 수행');
         // 모든 dragging 클래스 제거 (주석 처리)
         /*
         document.querySelectorAll('.dragging').forEach(item => {
@@ -1682,7 +1682,7 @@ function handleDragEnd() {
 
 // 내부 파일 드롭 처리 함수 (실제 이동 로직 구현)
 async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    console.log('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
+    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
 
     // 타겟 폴더 경로 결정
     let targetPath = currentPath;
@@ -1696,20 +1696,20 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
              targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
              targetName = folderName;
         } else {
-             console.warn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
+             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
              // 폴더 이름을 가져올 수 없으면 기본 경로 사용
         }
     } else if (targetFolderItem) {
          // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
-         console.log('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
+         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
          // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
     }
 
-    console.log(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
+    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
     
     // 드래그된 데이터가 유효한지 확인
     if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
-        console.error('[Internal Drop] 유효하지 않은 파일 경로 정보');
+        logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
         showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
              return;
         }
@@ -1718,14 +1718,14 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     const validItemPaths = draggedItemPaths.filter(path => {
         // 경로가 유효한 문자열인지 확인
         if (typeof path !== 'string' || !path.trim()) {
-            console.warn('[Internal Drop] 유효하지 않은 경로 제외:', path);
+            logWarn('[Internal Drop] 유효하지 않은 경로 제외:', path);
             return false;
         }
         return true;
     });
     
     if (validItemPaths.length === 0) {
-        console.error('[Internal Drop] 유효한 경로가 없음');
+        logError('[Internal Drop] 유효한 경로가 없음');
         showToast('이동할 유효한 항목이 없습니다.', 'error');
         return;
     }
@@ -1749,7 +1749,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         };
     });
     
-    console.log('[Internal Drop] 항목 정보:', itemsInfo);
+    logLog('[Internal Drop] 항목 정보:', itemsInfo);
     
     // --- 유효성 검사 시작 ---
     
@@ -1757,7 +1757,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     if (targetFolderItem) {
         const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
         if (targetInDraggedItems) {
-            console.warn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
+            logWarn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
              showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
              return;
         }
@@ -1766,7 +1766,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     // 2. 폴더를 자신의 하위 폴더로 이동하려는 경우 방지
     for (const item of itemsInfo) {
         if (item.isFolder && targetPath.startsWith(item.fullPath + '/')) {
-            console.warn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
+            logWarn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
             showToast(`폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`, 'warning');
             return;
         }
@@ -1776,7 +1776,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     const itemsToMove = itemsInfo.filter(item => item.parentPath !== targetPath);
     
     if (itemsToMove.length === 0) {
-        console.log('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
+        logLog('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
         showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
         clearSelection();
         return;
@@ -1785,7 +1785,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     // --- 유효성 검사 끝 ---
     
     // 이동 시작
-    console.log(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
+    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
                 itemsToMove.map(item => item.name));
     
     showLoading();
@@ -1793,7 +1793,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         // 실제 항목 이동 (이동할 항목의 전체 경로 배열 전달)
         await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
         
-        console.log('[Internal Drop] 이동 작업 성공');
+        logLog('[Internal Drop] 이동 작업 성공');
         showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
         
         // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
@@ -1801,7 +1801,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } catch (error) {
-        console.error('[Internal Drop] 이동 중 오류 발생:', error);
+        logError('[Internal Drop] 이동 중 오류 발생:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
         
@@ -1852,7 +1852,7 @@ function init() {
     // 마우스 및 키보드 이벤트 핸들러 설정
     setupGlobalDragCleanup();
     
-    console.log('WebDAV 파일 탐색기 초기화 시작');
+    logLog('WebDAV 파일 탐색기 초기화 시작');
     
     // 모달 초기화
     initModals();
@@ -1882,21 +1882,21 @@ function init() {
             const fileUploadInput = document.getElementById('fileUpload');
             if (fileUploadInput) {
                 fileUploadInput.click(); // 파일 선택 창 열기
-                console.log('[Script] 업로드 버튼 클릭 - 파일 선택 대화상자 열기');
+                logLog('[Script] 업로드 버튼 클릭 - 파일 선택 대화상자 열기');
             } else {
-                console.error('[Script] 파일 업로드 입력 요소를 찾을 수 없습니다.');
+                logError('[Script] 파일 업로드 입력 요소를 찾을 수 없습니다.');
             }
         });
     } else {
-        console.error('[Script] 업로드 버튼을 찾을 수 없습니다.');
+        logError('[Script] 업로드 버튼을 찾을 수 없습니다.');
     }
     
     // upload.js의 초기화 함수 호출
     if (typeof window.initializeUploader === 'function') {
-        console.log('[Script] upload.js 초기화 함수 호출');
+        logLog('[Script] upload.js 초기화 함수 호출');
         window.initializeUploader();
     } else {
-        console.error('[Script] upload.js의 초기화 함수를 찾을 수 없습니다.');
+        logError('[Script] upload.js의 초기화 함수를 찾을 수 없습니다.');
     }
     
     // 잘라내기/붙여넣기 초기화
@@ -1908,7 +1908,7 @@ function init() {
     // 검색 초기화
     initSearch();
     
-    console.log('WebDAV 파일 탐색기 초기화됨');
+    logLog('WebDAV 파일 탐색기 초기화됨');
    
    
     // 다운로드 버튼 이벤트 추가
@@ -2003,7 +2003,7 @@ function cutSelectedItems() {
     statusInfo.textContent = `${clipboardItems.length}개 항목 잘라내기`;
     
     // 디버그 로그
-    console.log('잘라내기 항목:', clipboardItems);
+    logLog('잘라내기 항목:', clipboardItems);
 }
 
 // 드래그 시작 처리
@@ -2014,7 +2014,7 @@ function cutSelectedItems() {
 
 // 내부 파일 드롭 처리 함수 (실제 이동 로직 구현)
 async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    console.log('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
+    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
 
     // 타겟 폴더 경로 결정
     let targetPath = currentPath;
@@ -2028,20 +2028,20 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
              targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
              targetName = folderName;
         } else {
-             console.warn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
+             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
              // 폴더 이름을 가져올 수 없으면 기본 경로 사용
         }
     } else if (targetFolderItem) {
          // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
-         console.log('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
+         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
          // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
     }
 
-    console.log(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
+    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
     
     // 드래그된 데이터가 유효한지 확인
     if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
-        console.error('[Internal Drop] 유효하지 않은 파일 경로 정보');
+        logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
         showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
              return;
         }
@@ -2050,14 +2050,14 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     const validItemPaths = draggedItemPaths.filter(path => {
         // 경로가 유효한 문자열인지 확인
         if (typeof path !== 'string' || !path.trim()) {
-            console.warn('[Internal Drop] 유효하지 않은 경로 제외:', path);
+            logWarn('[Internal Drop] 유효하지 않은 경로 제외:', path);
             return false;
         }
         return true;
     });
     
     if (validItemPaths.length === 0) {
-        console.error('[Internal Drop] 유효한 경로가 없음');
+        logError('[Internal Drop] 유효한 경로가 없음');
         showToast('이동할 유효한 항목이 없습니다.', 'error');
         return;
     }
@@ -2081,7 +2081,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         };
     });
     
-    console.log('[Internal Drop] 항목 정보:', itemsInfo);
+    logLog('[Internal Drop] 항목 정보:', itemsInfo);
     
     // --- 유효성 검사 시작 ---
     
@@ -2089,7 +2089,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     if (targetFolderItem) {
         const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
         if (targetInDraggedItems) {
-            console.warn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
+            logWarn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
              showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
              return;
         }
@@ -2098,7 +2098,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     // 2. 폴더를 자신의 하위 폴더로 이동하려는 경우 방지
     for (const item of itemsInfo) {
         if (item.isFolder && targetPath.startsWith(item.fullPath + '/')) {
-            console.warn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
+            logWarn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
             showToast(`폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`, 'warning');
             return;
         }
@@ -2108,7 +2108,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     const itemsToMove = itemsInfo.filter(item => item.parentPath !== targetPath);
     
     if (itemsToMove.length === 0) {
-        console.log('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
+        logLog('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
         showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
         clearSelection();
         return;
@@ -2117,7 +2117,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     // --- 유효성 검사 끝 ---
     
     // 이동 시작
-    console.log(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
+    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
                 itemsToMove.map(item => item.name));
     
     showLoading();
@@ -2125,7 +2125,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         // 실제 항목 이동 (이동할 항목의 전체 경로 배열 전달)
         await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
         
-        // console.log('[Internal Drop] 이동 작업 성공');
+        // logLog('[Internal Drop] 이동 작업 성공');
         // showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
         
         // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
@@ -2133,7 +2133,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } catch (error) {
-        console.error('[Internal Drop] 이동 중 오류 발생:', error);
+        logError('[Internal Drop] 이동 중 오류 발생:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
         
@@ -2275,12 +2275,12 @@ function formatDate(dateString) {
             return `${year}-${month}-${day} ${ampm} ${hour}:${minute}`;
             } else {
             // 파싱 실패 시 기본 형식 사용 (이전 형식)
-            console.warn("날짜 형식 재조립 실패:", formatted);
+            logWarn("날짜 형식 재조립 실패:", formatted);
             return date.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\. /g, '.').replace(/ /g, ' ').replace(/,/g, '');
         }
 
     } catch (error) {
-        console.error("날짜 형식 변환 오류:", dateString, error);
+        logError("날짜 형식 변환 오류:", dateString, error);
         return '--'; // 오류 발생 시
     }
 }
@@ -2373,7 +2373,7 @@ function handleFileDblClick(e, fileItem) {
     
     // 더블클릭 이벤트가 비활성화된 상태이면 무시
     if (window.doubleClickEnabled === false) {
-        console.log('더블클릭 이벤트가 비활성화 상태입니다.');
+        logLog('더블클릭 이벤트가 비활성화 상태입니다.');
         return;
     }
     
@@ -2381,7 +2381,7 @@ function handleFileDblClick(e, fileItem) {
     const fileName = fileItem.getAttribute('data-name');
     const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
     
-    console.log(`더블클릭 이벤트 발생: ${fileName}, 폴더: ${isFolder}, 상위폴더: ${isParentDir}`);
+    logLog(`더블클릭 이벤트 발생: ${fileName}, 폴더: ${isFolder}, 상위폴더: ${isParentDir}`);
     
     // 상위 폴더 처리
     if (isParentDir) {
@@ -2459,7 +2459,7 @@ function navigateToFolder(folderName) {
                 document.dispatchEvent(mouseEvent);
             }
         } catch (error) {
-            console.error('마우스 이벤트 강제 발생 중 오류:', error);
+            logError('마우스 이벤트 강제 발생 중 오류:', error);
         }
     }, 350);
     
@@ -2483,7 +2483,7 @@ function showRenameDialog() {
     const newName = document.getElementById('newName');
 
     if (!renameModal || !newName) {
-        console.error('Rename modal or input element not found!');
+        logError('Rename modal or input element not found!');
         alert('이름 변경 요소를 찾을 수 없습니다.');
         return;
     }
@@ -2542,7 +2542,7 @@ async function deleteSelectedItems() { // async 키워드 추가
 
             // 202 (Accepted) 또는 200/204 (OK/No Content)면 성공으로 간주하고 UI에서 숨김
             if (response.status === 202 || response.status === 200 || response.status === 204) {
-                console.log(`'${itemName}' 삭제 요청 성공 (상태: ${response.status})`);
+                logLog(`'${itemName}' 삭제 요청 성공 (상태: ${response.status})`);
                 successCount++;
                 // UI에서 숨길 항목 추가
                 const element = document.querySelector(`.file-item[data-name=\"${CSS.escape(itemName)}\"]`);
@@ -2551,12 +2551,12 @@ async function deleteSelectedItems() { // async 키워드 추가
                 // 기타 응답은 실패로 간주
                 failureCount++;
                 const errorText = await response.text();
-                console.error(`'${itemName}' 삭제 요청 실패: ${response.status} ${errorText}`);
+                logError(`'${itemName}' 삭제 요청 실패: ${response.status} ${errorText}`);
                 // 실패한 항목은 UI에 그대로 둠 (오류 메시지는 아래에서 한번에)
             }
         } catch (error) {
             failureCount++;
-            console.error(`'${itemName}' 삭제 요청 오류:`, error);
+            logError(`'${itemName}' 삭제 요청 오류:`, error);
         }
     });
 
@@ -2644,7 +2644,7 @@ function pasteItems() {
         const encodedSourcePath = encodeURIComponent(sourcePath);
         
         if (clipboardOperation === 'cut') {
-            console.log(`이동 요청: 소스=${sourcePath}, 대상 경로=${targetPathBase}, 파일명=${item.name}, 현재경로=${currentPath}`);
+            logLog(`이동 요청: 소스=${sourcePath}, 대상 경로=${targetPathBase}, 파일명=${item.name}, 현재경로=${currentPath}`);
             
             // 잘라내기는 이름 변경(이동)으로 처리
             promises.push(
@@ -2704,7 +2704,7 @@ function pasteItems() {
 
 // 드래그 시작 처리
 function handleDragStart(e, fileItem) {
-    console.log('드래그 시작:', fileItem.getAttribute('data-name'));
+    logLog('드래그 시작:', fileItem.getAttribute('data-name'));
 
     // 선택되지 않은 항목을 드래그하면 해당 항목만 선택
     if (!fileItem.classList.contains('selected')) {
@@ -2849,7 +2849,7 @@ function handleDropZoneDragLeave(e) {
 }
 
 function handleDropZoneDrop(e) {
-    console.log('드롭존에 파일 드롭됨');
+    logLog('드롭존에 파일 드롭됨');
     preventDefaults(e);
     
     // 드래그 상태 초기화
@@ -2860,18 +2860,18 @@ function handleDropZoneDrop(e) {
     
     // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리
     if (isExternalDrop) {
-        console.log('드롭존 드롭 - 외부 파일 드롭 처리');
+        logLog('드롭존 드롭 - 외부 파일 드롭 처리');
         handleExternalFileDrop(e, currentPath);
     } 
     // 내부 파일이라도 경로가 비어있으면 오류 처리
     else if (isInternalDrop && draggedPaths.length > 0) {
-        console.log('드롭존 드롭 - 내부 파일 이동 처리:', draggedPaths);
+        logLog('드롭존 드롭 - 내부 파일 이동 처리:', draggedPaths);
         // 현재 드롭존의 경로로 파일 이동
         handleInternalFileDrop(draggedPaths, { path: currentPath });
     }
     // 판단 불가능한 경우
     else {
-        console.log('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
+        logLog('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
         
     }
@@ -2882,10 +2882,10 @@ function handleDropZoneDrop(e) {
     window.removeEventListener('dragleave', handleDropZoneDragLeave);
     dropZone.removeEventListener('drop', handleDropZoneDrop);
     
-    console.log('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
+    logLog('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
     
     // 개발 모드에서 폴더 항목 CSS 선택자 유효성 확인
-    console.log('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
+    logLog('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
 }
 
 // 내부 드래그인지 확인하는 함수 (파일 경로 기반 + 기본값은 내부)
@@ -2914,7 +2914,7 @@ function isInternalDrag(e) {
 
 // 내부 파일 드롭 처리 함수 (실제 이동 로직 구현)
 async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
-    console.log('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
+    logLog('[Internal Drop] 내부 파일 이동 처리 시작:', draggedItemPaths);
 
     // 타겟 폴더 경로 결정
     let targetPath = currentPath;
@@ -2928,20 +2928,20 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
              targetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
              targetName = folderName;
         } else {
-             console.warn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
+             logWarn('[Internal Drop] 타겟 요소에서 폴더 이름을 가져올 수 없습니다.', targetFolderItem);
              // 폴더 이름을 가져올 수 없으면 기본 경로 사용
         }
     } else if (targetFolderItem) {
          // targetFolderItem이 존재하지만 getAttribute 함수가 없는 경우 (예: 파일 목록 컨테이너)
-         console.log('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
+         logLog('[Internal Drop] 드롭 대상이 폴더가 아닙니다. 현재 폴더를 타겟으로 합니다.');
          // 이 경우 targetPath와 targetName은 기본값(currentPath, '현재 폴더')을 유지
     }
 
-    console.log(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
+    logLog(`[Internal Drop] 타겟 경로: ${targetPath}, 타겟 이름: ${targetName}`);
     
     // 드래그된 데이터가 유효한지 확인
     if (!Array.isArray(draggedItemPaths) || draggedItemPaths.length === 0) {
-        console.error('[Internal Drop] 유효하지 않은 파일 경로 정보');
+        logError('[Internal Drop] 유효하지 않은 파일 경로 정보');
         showToast('이동할 항목 정보가 유효하지 않습니다.', 'error');
              return;
         }
@@ -2950,14 +2950,14 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     const validItemPaths = draggedItemPaths.filter(path => {
         // 경로가 유효한 문자열인지 확인
         if (typeof path !== 'string' || !path.trim()) {
-            console.warn('[Internal Drop] 유효하지 않은 경로 제외:', path);
+            logWarn('[Internal Drop] 유효하지 않은 경로 제외:', path);
             return false;
         }
         return true;
     });
     
     if (validItemPaths.length === 0) {
-        console.error('[Internal Drop] 유효한 경로가 없음');
+        logError('[Internal Drop] 유효한 경로가 없음');
         showToast('이동할 유효한 항목이 없습니다.', 'error');
         return;
     }
@@ -2981,7 +2981,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         };
     });
     
-    console.log('[Internal Drop] 항목 정보:', itemsInfo);
+    logLog('[Internal Drop] 항목 정보:', itemsInfo);
     
     // --- 유효성 검사 시작 ---
     
@@ -2989,7 +2989,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     if (targetFolderItem) {
         const targetInDraggedItems = itemsInfo.some(item => item.fullPath === targetPath);
         if (targetInDraggedItems) {
-            console.warn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
+            logWarn(`[Internal Drop] 선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`);
              showToast(`선택된 항목 중 하나인 '${targetName}'(으)로는 이동할 수 없습니다.`, 'warning');
              return;
         }
@@ -2998,7 +2998,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     // 2. 폴더를 자신의 하위 폴더로 이동하려는 경우 방지
     for (const item of itemsInfo) {
         if (item.isFolder && targetPath.startsWith(item.fullPath + '/')) {
-            console.warn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
+            logWarn(`[Internal Drop] 폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`);
             showToast(`폴더 '${item.name}'를 자신의 하위 폴더 '${targetName}'(으)로 이동할 수 없습니다.`, 'warning');
             return;
         }
@@ -3008,7 +3008,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     const itemsToMove = itemsInfo.filter(item => item.parentPath !== targetPath);
     
     if (itemsToMove.length === 0) {
-        console.log('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
+        logLog('[Internal Drop] 이동할 필요가 있는 항목이 없습니다.');
         showToast('모든 항목이 이미 대상 폴더에 있습니다.', 'info');
         clearSelection();
         return;
@@ -3017,7 +3017,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     // --- 유효성 검사 끝 ---
     
     // 이동 시작
-    console.log(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
+    logLog(`[Internal Drop] ${itemsToMove.length}개 항목 이동 준비 완료:`, 
                 itemsToMove.map(item => item.name));
     
     showLoading();
@@ -3025,7 +3025,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         // 실제 항목 이동 (이동할 항목의 전체 경로 배열 전달)
         await moveToFolder(itemsToMove.map(item => item.fullPath), targetPath);
         
-        // console.log('[Internal Drop] 이동 작업 성공');
+        // logLog('[Internal Drop] 이동 작업 성공');
         // showToast(`${itemsToMove.length}개 항목을 '${targetName}'(으)로 이동했습니다.`, 'success');
         
         // 파일 목록 새로고침 (moveToFolder에서 처리하므로 제거)
@@ -3033,7 +3033,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     window.currentPath = currentPath || "";
         // loadFiles(currentPath);
     } catch (error) {
-        console.error('[Internal Drop] 이동 중 오류 발생:', error);
+        logError('[Internal Drop] 이동 중 오류 발생:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         showToast(`항목 이동 중 오류: ${errorMessage}`, 'error');
         
@@ -3079,7 +3079,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
                 }
                 
                 entryName = shortName + '...';
-                console.log(`폴더명이 너무 깁니다. 원본: ${originalEntryName}, 수정됨: ${entryName}`);
+                logLog(`폴더명이 너무 깁니다. 원본: ${originalEntryName}, 수정됨: ${entryName}`);
             }
             // 파일인 경우는 아래에서 별도 처리
         }
@@ -3090,7 +3090,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
         // 전체 경로가 너무 길어질 가능성이 있는지 확인 (바이트 단위로 정확히 계산)
         const pathBytes = new TextEncoder().encode(currentPath).length;
         if (pathBytes > maxFullPathLength / 2) {
-            console.warn(`경로가 길어질 가능성이 있습니다: ${currentPath} (${pathBytes} bytes)`);
+            logWarn(`경로가 길어질 가능성이 있습니다: ${currentPath} (${pathBytes} bytes)`);
         }
 
         if (entry.isFile) {
@@ -3135,7 +3135,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
                             relativePath = newFileName;
                         }
                         
-                        console.log(`파일명이 너무 깁니다. 원본: ${fileName}, 수정됨: ${newFileName}`);
+                        logLog(`파일명이 너무 깁니다. 원본: ${fileName}, 수정됨: ${newFileName}`);
                         
                         // 파일 객체를 새로운 이름으로 복제 (File 객체는 직접 수정할 수 없음)
                         const renamedFile = new File([file], newFileName, { type: file.type });
@@ -3146,11 +3146,11 @@ function traverseFileTree(entry, path, filesWithPaths) {
                         
                         if (fullPathBytes > maxFullPathLength) {
                             // 경로가 너무 길면 비상 처리 (파일만 남기고 경로 단축)
-                            console.warn(`전체 경로가 너무 깁니다(${fullPathBytes} bytes): ${relativePath}`);
+                            logWarn(`전체 경로가 너무 깁니다(${fullPathBytes} bytes): ${relativePath}`);
                             
                             // 파일명만 보존하고 경로는 압축
                             const shortenedPath = `긴경로/${fileName}`;
-                            console.log(`경로 단축됨: ${relativePath} → ${shortenedPath}`);
+                            logLog(`경로 단축됨: ${relativePath} → ${shortenedPath}`);
                             
                             // 중요: 원본 파일 이름은 유지하되 경로만 변경
                             filesWithPaths.push({ file: file, relativePath: shortenedPath });
@@ -3158,21 +3158,21 @@ function traverseFileTree(entry, path, filesWithPaths) {
                         } else {
                             // 정상 경로
                             filesWithPaths.push({ file: file, relativePath: relativePath });
-                            console.log(`파일 추가: ${relativePath}`);
+                            logLog(`파일 추가: ${relativePath}`);
                         }
                     }
                 } else {
-                    console.log(`숨김 파일 제외: ${currentPath}`);
+                    logLog(`숨김 파일 제외: ${currentPath}`);
                 }
                 resolve();
             }, err => {
-                console.error(`파일 읽기 오류 (${currentPath}):`, err);
+                logError(`파일 읽기 오류 (${currentPath}):`, err);
                 reject(err); // 오류 발생 시 reject 호출
             });
         } else if (entry.isDirectory) {
             // 숨김 폴더 (.으로 시작)는 제외
             if (entry.name.startsWith('.')) {
-                console.log(`숨김 폴더 제외: ${currentPath}`);
+                logLog(`숨김 폴더 제외: ${currentPath}`);
                 resolve(); // 숨김 폴더는 처리하지 않고 resolve
         return;
     }
@@ -3181,7 +3181,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
             const fullPathBytes = new TextEncoder().encode(currentPath).length;
             
             if (fullPathBytes > maxFullPathLength) {
-                console.warn(`폴더 경로가 너무 깁니다(${fullPathBytes} bytes). 접근 가능한 경로로 단축: ${currentPath}`);
+                logWarn(`폴더 경로가 너무 깁니다(${fullPathBytes} bytes). 접근 가능한 경로로 단축: ${currentPath}`);
                 statusInfo.textContent = `일부 폴더의 경로가 너무 길어 단축되었습니다.`;
                 
                 // 폴더명 단축 버전 생성 (폴더명 앞부분 + "..." 형태로)
@@ -3204,7 +3204,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
                 const shortenedDirName = shortName + "...";
                 const shortenedPath = path ? `${path}/${shortenedDirName}` : shortenedDirName;
                 
-                console.log(`폴더 경로 단축됨: ${currentPath} → ${shortenedPath}`);
+                logLog(`폴더 경로 단축됨: ${currentPath} → ${shortenedPath}`);
                 
                 // 단축된 경로로 계속 진행
                 const dirReader = entry.createReader();
@@ -3225,7 +3225,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
                             readEntries();
                         }
                     }, err => {
-                        console.error(`폴더 읽기 오류 (${shortenedPath}):`, err);
+                        logError(`폴더 읽기 오류 (${shortenedPath}):`, err);
                         reject(err);
                     });
                 };
@@ -3233,7 +3233,7 @@ function traverseFileTree(entry, path, filesWithPaths) {
              return;
         }
         
-        console.log(`폴더 탐색: ${currentPath}`);
+        logLog(`폴더 탐색: ${currentPath}`);
         const dirReader = entry.createReader();
         let allEntries = [];
 
@@ -3256,13 +3256,13 @@ function traverseFileTree(entry, path, filesWithPaths) {
                     readEntries(); // 재귀적으로 호출하여 모든 항목 읽기
                 }
             }, err => {
-                console.error(`폴더 읽기 오류 (${currentPath}):`, err);
+                logError(`폴더 읽기 오류 (${currentPath}):`, err);
                 reject(err); // 폴더 읽기 오류 시 reject
             });
         };
         readEntries();
     } else {
-        console.warn(`알 수 없는 항목 타입: ${entry.name}`);
+        logWarn(`알 수 없는 항목 타입: ${entry.name}`);
         resolve(); // 알 수 없는 타입은 무시하고 resolve
     }
 });
@@ -3280,12 +3280,12 @@ function moveItem(sourcePath, targetPath, overwrite = false) {
         
         // 소스와 타겟이 같은 경로인지 확인
         if (sourcePath === `${targetPath}/${fileName}`) {
-            console.log(`[${fileName}] 소스와 타겟이 동일합니다. 무시합니다.`);
+            logLog(`[${fileName}] 소스와 타겟이 동일합니다. 무시합니다.`);
             resolve(); // 에러가 아닌 정상 처리로 간주
             return;
         }
         
-        console.log(`[${fileName}] 이동 시작: ${sourcePath} -> ${targetPath}, overwrite=${overwrite}`);
+        logLog(`[${fileName}] 이동 시작: ${sourcePath} -> ${targetPath}, overwrite=${overwrite}`);
         
         // API 요청 - 이미 충돌 확인이 완료되었으므로 바로 API 호출
         return fetch(`${API_BASE_URL}/api/files/${encodeURIComponent(sourcePath)}`, {
@@ -3301,17 +3301,17 @@ function moveItem(sourcePath, targetPath, overwrite = false) {
         })
         .then(response => {
             if (response.ok) {
-                console.log(`[${fileName}] 이동 성공`);
+                logLog(`[${fileName}] 이동 성공`);
                 resolve();
             } else {
                 return response.text().then(text => {
-                    console.error(`[${fileName}] 이동 실패:`, text);
+                    logError(`[${fileName}] 이동 실패:`, text);
                     reject(text || '이동 실패');
                 });
             }
         })
         .catch(error => {
-            console.error(`[${fileName}] 이동 오류:`, error);
+            logError(`[${fileName}] 이동 오류:`, error);
             reject(error.message || '네트워크 오류');
         });
     });
@@ -3508,7 +3508,7 @@ function initRenaming() {
 // 파일 업로드 기능 초기화
 function initFileUpload() {
     // 이 함수는 더 이상 사용하지 않고 window.initializeUploader로 대체됨
-    console.log('[Script] initFileUpload 함수는 더 이상 사용되지 않음');
+    logLog('[Script] initFileUpload 함수는 더 이상 사용되지 않음');
     
     // 기존 코드 주석 처리
     /*
@@ -3680,10 +3680,10 @@ function compressAndDownload(itemList) {
                 method: 'DELETE'
             })
             .then(() => {
-                console.log(`임시 압축 파일 삭제됨: ${zipPath}`);
+                logLog(`임시 압축 파일 삭제됨: ${zipPath}`);
             })
             .catch(err => {
-                console.error('임시 압축 파일 삭제 오류:', err);
+                logError('임시 압축 파일 삭제 오류:', err);
             });
             
             // 상태 메시지 업데이트
@@ -3692,7 +3692,7 @@ function compressAndDownload(itemList) {
     })
     .catch(error => {
         // 오류 처리
-        console.error('압축 및 다운로드 오류:', error);
+        logError('압축 및 다운로드 오류:', error);
         alert(`압축 및 다운로드 중 오류가 발생했습니다: ${error.message}`);
         hideLoading();
         statusInfo.textContent = '다운로드 실패';
@@ -3956,7 +3956,7 @@ function compressSelectedItems() {
     })
     .catch(error => {
         // 오류 처리
-        console.error('압축 오류:', error);
+        logError('압축 오류:', error);
         statusInfo.textContent = `압축 실패: ${error.message}`;
         alert(`압축 실패: ${error.message}`);
         hideLoading();
@@ -3968,13 +3968,13 @@ function compressSelectedItems() {
 function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
     // 이동 중복 호출 방지 상태 확인
     if (window.isMovingFiles) {
-        console.log('이미 파일 이동 작업이 진행 중입니다.');
+        logLog('이미 파일 이동 작업이 진행 중입니다.');
         return Promise.reject('이미 파일 이동 작업이 진행 중입니다.');
     }
     
     // 이동할 항목이 없으면 무시
     if (!itemsToMove || itemsToMove.length === 0) {
-        console.log('이동할 항목이 없습니다.');
+        logLog('이동할 항목이 없습니다.');
         return Promise.reject('이동할 항목이 없습니다.');
     }
     
@@ -3990,7 +3990,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
     
     // 호출 카운터 증가 - 함수 호출 추적
     dragDropMoveCounter++;
-    console.log(`[moveToFolder] 파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`);
+    logLog(`[moveToFolder] 파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`);
     statusInfo.textContent = `파일 이동 함수 호출 횟수: ${dragDropMoveCounter}`;
     
     // 이동 중 상태 설정
@@ -4003,7 +4003,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
         
         // 소스와 타겟이 같은 경로인지 확인
         if (sourceFullPath === `${targetPath}/${fileName}`) {
-            console.log(`[${fileName}] 소스와 타겟이 동일합니다. 무시합니다.`);
+            logLog(`[${fileName}] 소스와 타겟이 동일합니다. 무시합니다.`);
             return { item, exists: false, skip: true };
         }
         
@@ -4021,7 +4021,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
             const nonConflictItems = results.filter(result => !result.exists && !result.skip);
             
             // 로그 정보
-            console.log(`충돌 항목: ${conflictItems.length}, 동일 경로 무시: ${skipItems.length}, 비충돌 항목: ${nonConflictItems.length}`);
+            logLog(`충돌 항목: ${conflictItems.length}, 동일 경로 무시: ${skipItems.length}, 비충돌 항목: ${nonConflictItems.length}`);
             
             // 자동 이동 모드일 경우, 또는 충돌이 없는 경우 확인 메시지 없이 진행
             let shouldOverwrite = autoMove;
@@ -4037,7 +4037,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
                 
                 // 덮어쓰기 거부시
                 if (!shouldOverwrite) {
-                    console.log('사용자가 덮어쓰기를 거부했습니다.');
+                    logLog('사용자가 덮어쓰기를 거부했습니다.');
                     
                     // 비충돌 항목만 이동하도록 필터링
                     itemsToMove = nonConflictItems.map(item => item.item);
@@ -4076,7 +4076,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
                 }
             
                 // 로그 추가: 이동 경로 확인 (이 부분은 유지하거나 필요에 따라 수정)
-                console.log(`[moveToFolder] 이동 호출: ${sourceFullPath} -> ${targetPath}`);
+                logLog(`[moveToFolder] 이동 호출: ${sourceFullPath} -> ${targetPath}`);
             
                 return moveItem(sourceFullPath, targetPath, shouldOverwrite);
             });
@@ -4110,7 +4110,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
                 .catch(error => {
                     // 이동 실패
                     statusInfo.textContent = `이동 중 오류가 발생했습니다: ${error}`;
-                    console.error('Move error:', error);
+                    logError('Move error:', error);
                     return Promise.reject(error);
                 })
                 .finally(() => {
@@ -4122,7 +4122,7 @@ function moveToFolder(itemsToMove, targetFolder, autoMove = false) {
         .catch(error => {
             window.isMovingFiles = false;
             statusInfo.textContent = `이동 준비 중 오류: ${error}`;
-            console.error('Move preparation error:', error);
+            logError('Move preparation error:', error);
             return Promise.reject(error);
     });
 }
@@ -4162,7 +4162,7 @@ function isPathAccessRestricted(path) {
 function loadLockStatus() {
     // 이미 잠금 기능을 사용할 수 없다고 판단되면 바로 빈 배열 반환
     if (!lockFeatureAvailable) {
-        console.log('잠금 기능을 사용할 수 없습니다.');
+        logLog('잠금 기능을 사용할 수 없습니다.');
         return Promise.resolve([]);
     }
     
@@ -4172,7 +4172,7 @@ function loadLockStatus() {
                 // 404 에러인 경우 기능을 사용할 수 없다고 표시
                 if (response.status === 404) {
                     lockFeatureAvailable = false;
-                    console.log('잠금 기능이 서버에 구현되어 있지 않습니다.');
+                    logLog('잠금 기능이 서버에 구현되어 있지 않습니다.');
                 }
                 // 오류이지만 처리는 계속하기 위해 빈 배열 반환
                 return { lockState: [] };
@@ -4186,13 +4186,13 @@ function loadLockStatus() {
          } else {
                 lockedFolders = data.lockState;
             }
-            console.log('잠금 폴더 목록:', lockedFolders);
+            logLog('잠금 폴더 목록:', lockedFolders);
             return lockedFolders;
         })
         .catch(error => {
             // 콘솔 에러 메시지를 한 번만 표시
             if (lockFeatureAvailable) {
-                console.error('잠금 상태 조회 오류:', error);
+                logError('잠금 상태 조회 오류:', error);
                 // 서버가 기능을 지원하지 않으므로 기능 비활성화
                 lockFeatureAvailable = false;
             }
@@ -4207,7 +4207,7 @@ function loadLockStatus() {
 function toggleFolderLock(action = 'lock') {
     // 잠금 기능을 사용할 수 없으면 경고 표시
     if (!lockFeatureAvailable) {
-        console.log('폴더 잠금 기능을 사용할 수 없습니다.');
+        logLog('폴더 잠금 기능을 사용할 수 없습니다.');
         // 기능이 없으므로 아무 메시지도 표시하지 않고 조용히 무시
         return;
     }
@@ -4327,7 +4327,7 @@ function initFileItem(fileItem) {
         
         // 다른 파일 항목으로의 더블클릭 중복 처리 방지
         if (!window.doubleClickEnabled) {
-            console.log('더블클릭 처리 무시: 이미 처리 중');
+            logLog('더블클릭 처리 무시: 이미 처리 중');
             return;
         }
         
@@ -4341,14 +4341,14 @@ function initFileItem(fileItem) {
                 
                 // 실제 마우스 위치의 항목과 이벤트 대상이 다른 경우
                 if (targetFileItem && targetFileItem !== fileItem) {
-                    console.log('마우스 위치와 이벤트 대상 불일치, 실제 대상으로 재지정');
+                    logLog('마우스 위치와 이벤트 대상 불일치, 실제 대상으로 재지정');
                     // 실제 마우스 위치의 대상으로 이벤트 처리
                     handleFileDblClick(e, targetFileItem);
                     return;
                 }
             }
         } catch (error) {
-            console.error('요소 검증 중 오류 발생:', error);
+            logError('요소 검증 중 오류 발생:', error);
             // 오류가 발생해도 계속 진행
         }
         
@@ -4444,7 +4444,7 @@ function initFileItem(fileItem) {
                 return currentPath ? `${currentPath}/${itemName}` : itemName;
             });
             
-            console.log('드래그 시작 - 항목:', draggedItems);
+            logLog('드래그 시작 - 항목:', draggedItems);
             
             // 1. 텍스트 데이터로 경로 정보 저장
             // 여러 항목은 줄바꿈으로 구분된 문자열로 저장
@@ -4477,25 +4477,25 @@ function initFileItem(fileItem) {
                 });
             }, 0);
             
-            console.log('[File Drag Start] 경로 기반 내부 드래그 설정 완료', draggedItems);
-            console.log('[File Drag Start] dataTransfer types:', Array.from(e.dataTransfer.types));
+            logLog('[File Drag Start] 경로 기반 내부 드래그 설정 완료', draggedItems);
+            logLog('[File Drag Start] dataTransfer types:', Array.from(e.dataTransfer.types));
 
         } catch (error) {
-            console.error('드래그 설정 중 오류 발생:', error);
+            logError('드래그 설정 중 오류 발생:', error);
             // 오류 발생 시 기본 정보만이라도 설정 (단일 파일명)
             try {
                 const singleItemPath = currentPath ? `${currentPath}/${fileItem.getAttribute('data-name')}` : fileItem.getAttribute('data-name');
                 e.dataTransfer.setData('text/plain', singleItemPath);
                 e.dataTransfer.setData('application/x-internal-drag', 'true');
             } catch (innerError) {
-                console.error('기본 드래그 설정도 실패:', innerError);
+                logError('기본 드래그 설정도 실패:', innerError);
             }
         }
     });
     
     // 드래그 종료 이벤트
     fileItem.addEventListener('dragend', (e) => {
-        console.log('파일 항목 dragend 이벤트 발생');
+        logLog('파일 항목 dragend 이벤트 발생');
         
         // 보편적인 드래그 상태 정리 함수 호출
         handleDragEnd();
@@ -4666,7 +4666,7 @@ function initDropZone() {
     
     // 이미 초기화 된 경우 중복 등록 방지
     if (window.dropZoneInitialized) {
-        console.log('드롭존 이미 초기화됨, 중복 등록 방지');
+        logLog('드롭존 이미 초기화됨, 중복 등록 방지');
         return;
     }
     
@@ -4768,14 +4768,14 @@ function initDropZone() {
         const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
         
         // 최종 판단 로그 출력
-        console.log(`[initDropZone - 드롭 처리] ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
+        logLog(`[initDropZone - 드롭 처리] ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
         
         // 폴더 항목에 드롭된 경우 해당 폴더를 타겟으로 지정
         const folderItem = findDropTarget(e);
         
         // 외부 파일 처리
         if (isExternalDrop) {
-            console.log('[initDropZone] 외부 파일 드롭 처리');
+            logLog('[initDropZone] 외부 파일 드롭 처리');
         if (folderItem) {
             handleExternalFileDrop(e, folderItem);
         } else {
@@ -4784,7 +4784,7 @@ function initDropZone() {
         }
         // 내부 파일 이동 처리
         else if (isInternalDrop && draggedPaths.length > 0) {
-            console.log('[initDropZone] 내부 파일 이동 처리:', draggedPaths);
+            logLog('[initDropZone] 내부 파일 이동 처리:', draggedPaths);
             
             // 폴더 항목에 드롭된 경우 해당 폴더를 타겟으로 처리
             if (folderItem) {
@@ -4796,7 +4796,7 @@ function initDropZone() {
         }
         // 판단 불가능한 경우
         else {
-            console.log('[initDropZone] 처리할 수 없는 드롭 데이터');
+            logLog('[initDropZone] 처리할 수 없는 드롭 데이터');
             showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
         }
     }
@@ -4816,7 +4816,7 @@ function initDropZone() {
     fileView.classList.remove('dragging');
     dropZone.style.display = 'none';
     
-    console.log('드롭존 초기화 완료, 중복 등록 방지 플래그 설정');
+    logLog('드롭존 초기화 완료, 중복 등록 방지 플래그 설정');
     window.dropZoneInitialized = true;  // 초기화 완료 플래그 설정
 }
 
@@ -4840,19 +4840,19 @@ function determineDropType(e) {
         result.isExternalDrop = true;
         result.isInternalDrop = false;
         result.reason = `외부 파일 객체 발견: ${e.dataTransfer.files.length}개`;
-        console.log(`[내외부 판단] 결과: 외부, 이유: ${result.reason}`);
+        logLog(`[내외부 판단] 결과: 외부, 이유: ${result.reason}`);
         return result;
     }
     
     // 데이터 유형 확인
     const dataTypes = Array.from(e.dataTransfer.types || []);
-    console.log('데이터 유형:', dataTypes);
+    logLog('데이터 유형:', dataTypes);
     
     // 내부 드래그 마커가 있으면 확실한 내부 파일
     if (dataTypes.includes('application/x-internal-drag')) {
         result.isInternalDrop = true;
         result.reason = '내부 드래그 마커(application/x-internal-drag) 발견';
-        console.log(`[내외부 판단] 결과: 내부, 이유: ${result.reason}`);
+        logLog(`[내외부 판단] 결과: 내부, 이유: ${result.reason}`);
     }
     
     // 텍스트 데이터에서 경로 정보 추출
@@ -4876,11 +4876,11 @@ function determineDropType(e) {
                 result.isExternalDrop = true;
                 result.isInternalDrop = false;
                 result.reason = `외부 경로 패턴 발견: ${externalPaths.join(', ')}`;
-                console.log(`[내외부 판단] 결과: 외부, 이유: ${result.reason}`);
+                logLog(`[내외부 판단] 결과: 외부, 이유: ${result.reason}`);
             } else {
                 // 내부 경로로 판단되고 경로가 채워짐
                 result.reason = `내부 경로 패턴 확인됨: ${paths.join(', ')}`;
-                console.log(`[내외부 판단] 결과: 내부, 이유: ${result.reason}`);
+                logLog(`[내외부 판단] 결과: 내부, 이유: ${result.reason}`);
             }
         }
     }
@@ -4897,10 +4897,10 @@ function determineDropType(e) {
                 result.isInternalDrop = true;
                 result.isExternalDrop = false;
                 result.reason = `JSON 메타데이터에서 내부 소스 확인: ${jsonData.source}`;
-                console.log(`[내외부 판단] 결과: 내부, 이유: ${result.reason}`);
+                logLog(`[내외부 판단] 결과: 내부, 이유: ${result.reason}`);
             }
         } catch (error) {
-            console.error('JSON 데이터 파싱 오류:', error);
+            logError('JSON 데이터 파싱 오류:', error);
         }
     }
     
@@ -4909,7 +4909,7 @@ function determineDropType(e) {
         result.draggedPaths = Array.from(selectedItems).map(name => 
             currentPath ? `${currentPath}/${name}` : name);
         result.reason = `선택된 항목에서 경로 추출: ${result.draggedPaths.join(', ')}`;
-        console.log(`[내외부 판단] 결과: 내부, 이유: ${result.reason}`);
+        logLog(`[내외부 판단] 결과: 내부, 이유: ${result.reason}`);
     }
     
     // 외부 파일이 있으면 내부 드롭을 덮어씀 (외부가 우선)
@@ -4918,7 +4918,7 @@ function determineDropType(e) {
     }
     
     // 최종 판단 로그
-    console.log(`[내외부 판단] 최종 결과: ${result.isInternalDrop ? '내부' : '외부'}, 이유: ${result.reason}`);
+    logLog(`[내외부 판단] 최종 결과: ${result.isInternalDrop ? '내부' : '외부'}, 이유: ${result.reason}`);
     
     return result;
 }
@@ -4942,47 +4942,47 @@ function handleFileDrop(e, targetFolderItem = null) {
     if (targetFolderItem) {
         const targetName = targetFolderItem.getAttribute('data-name');
         const targetPath = targetFolderItem.getAttribute('data-path') || currentPath;
-        console.log(`폴더에 파일 드롭됨 - 대상: ${targetName}, 경로: ${targetPath}`);
+        logLog(`폴더에 파일 드롭됨 - 대상: ${targetName}, 경로: ${targetPath}`);
         
         // 상위 디렉토리로 이동 처리는 무시
         if (targetName === '..' || targetFolderItem.hasAttribute('data-parent-dir')) {
-            console.log('상위 디렉토리로의 이동은 처리하지 않음');
+            logLog('상위 디렉토리로의 이동은 처리하지 않음');
         return;
     }
     
         // 드래그 오버 스타일 제거
         targetFolderItem.classList.remove('drag-over');
     } else {
-        console.log('빈 영역에 파일 드롭됨 - 현재 경로에 처리');
+        logLog('빈 영역에 파일 드롭됨 - 현재 경로에 처리');
     }
 
     // 내부/외부 파일 판단
     const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
     
     // 최종 판단 로그 출력
-    console.log(`파일 드롭 처리: ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
+    logLog(`파일 드롭 처리: ${isInternalDrop ? '내부' : '외부'} 파일, 이유: ${reason}`);
     
     // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리 (우선순위)
     if (isExternalDrop) {
-        console.log('외부 파일 드롭으로 최종 판단');
+        logLog('외부 파일 드롭으로 최종 판단');
         
         // 폴더가 아닌 항목 또는 빈 공간에 드롭된 경우 현재 경로에 업로드
         if (!targetFolderItem || targetFolderItem.getAttribute('data-is-folder') !== 'true') {
-            console.log('현재 디렉토리에 외부 파일 업로드');
+            logLog('현재 디렉토리에 외부 파일 업로드');
             handleExternalFileDrop(e); // 현재 경로에 업로드
         } else {
             // 폴더 항목에 드롭된 경우 해당 폴더를 타겟으로 지정
-            console.log(`'${targetFolderItem.getAttribute('data-name')}' 폴더에 외부 파일 업로드`);
+            logLog(`'${targetFolderItem.getAttribute('data-name')}' 폴더에 외부 파일 업로드`);
             handleExternalFileDrop(e, targetFolderItem);
         }
     } 
     // 내부 파일 이동 처리
     else if (isInternalDrop && draggedPaths.length > 0) {
-        console.log('내부 파일 이동으로 최종 판단');
+        logLog('내부 파일 이동으로 최종 판단');
         
         // 자기 자신에게 드롭하거나 선택된 항목에 드롭하는 경우 방지
         if (targetFolderItem && targetFolderItem.classList.contains('selected')) {
-            console.log('선택된 항목에는 드롭할 수 없음');
+            logLog('선택된 항목에는 드롭할 수 없음');
             return;
         }
         
@@ -4991,12 +4991,12 @@ function handleFileDrop(e, targetFolderItem = null) {
             // 내부 파일 이동 처리 (경로 배열과 타겟 폴더 정보 전달)
             handleInternalFileDrop(draggedPaths, targetFolderItem);
         } else {
-            console.log('파일에 드롭됨: 폴더가 아니므로 이동할 수 없습니다.');
+            logLog('파일에 드롭됨: 폴더가 아니므로 이동할 수 없습니다.');
         }
     } 
     // 처리할 수 없는 드롭
     else {
-        console.log('처리할 수 없는 드롭 형식 또는 데이터 없음');
+        logLog('처리할 수 없는 드롭 형식 또는 데이터 없음');
         showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
         
     }
@@ -5007,8 +5007,69 @@ function handleFileDrop(e, targetFolderItem = null) {
     window.removeEventListener('dragleave', handleDropZoneDragLeave);
     dropZone.removeEventListener('drop', handleDropZoneDrop);
     
-    console.log('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
+    logLog('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
     
     // 개발 모드에서 폴더 항목 CSS 선택자 유효성 확인
-    console.log('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
+    logLog('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
+}// --- Mode Toggle Button Logic ---
+
+const modeToggleBtn = document.getElementById('modeToggleBtn');
+
+// 이 함수는 mode_logger.js에서 모드가 변경되거나 로드될 때 호출됩니다.
+// mode_logger.js가 호출하기 전에 전역적으로 접근 가능하거나 정의되어야 합니다.
+// mode_logger.js는 이미 플레이스홀더가 존재하도록 보장하므로 여기서 정의할 수 있습니다.
+window.updateToggleButtonState = function() {
+    // mode_logger.js에서 현재 모드를 가져옵니다.
+    const currentMode = window.getAppMode ? window.getAppMode() : 'operating'; // 안전 호출
+    const icon = modeToggleBtn ? modeToggleBtn.querySelector('i') : null;
+
+    if (!modeToggleBtn || !icon) {
+        logError('[UI] Mode toggle button or icon not found during state update.');
+        return;
+    }
+
+    if (currentMode === 'development') {
+        modeToggleBtn.title = '모드 전환 (현재: 개발)';
+        icon.className = 'fas fa-bug'; // 개발 모드 아이콘 (예: 버그)
+        modeToggleBtn.classList.add('development-mode');
+        modeToggleBtn.classList.remove('operating-mode');
+        // logInfo는 개발 모드에서만 출력됩니다.
+        window.logInfo && window.logInfo('[UI] Mode Toggle Button updated to Development.');
+    } else {
+        modeToggleBtn.title = '모드 전환 (현재: 운영)';
+        icon.className = 'fas fa-cog'; // 운영 모드 아이콘 (예: 톱니바퀴)
+        modeToggleBtn.classList.add('operating-mode');
+        modeToggleBtn.classList.remove('development-mode');
+        // 운영 모드에서는 로그를 남기지 않습니다.
+        // logLog('[UI] Mode Toggle Button updated to Operating.');
+    }
+};
+
+if (modeToggleBtn) {
+    modeToggleBtn.addEventListener('click', () => {
+        // mode_logger.js의 토글 함수를 호출합니다.
+        window.toggleAppMode && window.toggleAppMode();
+    });
+
+    // mode_logger.js의 DOMContentLoaded 리스너를 보완하여 스크립트 로드 시 초기 상태 업데이트
+    // 사용자와 상호작용하기 전에 버튼 상태가 올바른지 확인합니다.
+    // setTimeout을 사용하여 다른 초기화 로직 후에 실행되도록 약간 지연시킬 수 있습니다.
+    setTimeout(() => {
+       window.updateToggleButtonState && window.updateToggleButtonState();
+    }, 0);
+
+} else {
+    // logError는 항상 출력됩니다.
+    window.logError && window.logError('[UI] Mode toggle button element (#modeToggleBtn) not found!');
 }
+
+// --- End of Mode Toggle Button Logic ---
+
+// 기존 init 함수 호출이 이미 있을 수 있으므로, DOMContentLoaded 이벤트 리스너를 직접 추가하지 않고,
+// 기존 로직에 통합되거나 마지막에 init이 호출되는지 확인합니다.
+// 파일 끝에 있으므로, 이전 코드에서 document.addEventListener('DOMContentLoaded', init); 가 있다면
+// 이 코드는 그 이후에 실행됩니다. 만약 없다면 추가해야 할 수 있습니다.
+// 파일 끝부분 확인 결과, init() 호출은 handleFileDrop 함수 내부에만 존재하는 것으로 보이며,
+// 전역적인 DOMContentLoaded 리스너는 보이지 않습니다. 하지만 다른 곳에서 호출될 수 있으므로 일단 그대로 둡니다.
+// 만약 초기화 문제가 발생하면 아래 줄의 주석을 해제합니다.
+// document.addEventListener('DOMContentLoaded', init); 

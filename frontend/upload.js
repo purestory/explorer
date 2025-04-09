@@ -36,7 +36,7 @@ function showUploadModal() {
     
     // 필수 요소 확인 (totalUploadSizeEl 추가)
     if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining || !totalUploadSizeEl) {
-        console.error('[Upload] 필수 모달 요소(#upload-progress-modal, ...)를 찾을 수 없습니다.');
+        logError('[Upload] 필수 모달 요소(#upload-progress-modal, ...)를 찾을 수 없습니다.');
         return;
     }
 
@@ -64,7 +64,7 @@ function hideUploadModal() {
     if (uploadProgressModal) {
         uploadProgressModal.style.display = 'none';
     }
-    console.log('[Upload] 업로드 모달 숨김');
+    logLog('[Upload] 업로드 모달 숨김');
     currentUploadXHRs = []; 
 }
 
@@ -147,7 +147,7 @@ function updateUploadProgress(uploadedFileCount, totalFiles, currentFileName, cu
     // DOM 요소가 아직 할당되지 않았을 수 있으므로 확인
     if (!overallProgressBar || !overallProgressText || !currentFileInfo) {
         // 모달 표시 함수에서 DOM 요소를 가져오므로, 여기서는 로그만 남김
-        // console.warn('[Upload] Progress UI elements not ready for update.');
+        // logWarn('[Upload] Progress UI elements not ready for update.');
         return;
     }
     
@@ -170,7 +170,7 @@ function updateUploadProgress(uploadedFileCount, totalFiles, currentFileName, cu
 async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uploadedFileCounter) { // fileIndex 대신 uploadedFileCounter 사용
     return new Promise((resolve, reject) => {
         if (isCancelled) {
-            console.log(`[Upload] 시작 전 취소됨: ${relativePath}`);
+            logLog(`[Upload] 시작 전 취소됨: ${relativePath}`);
             return resolve({ status: 'cancelled', file: relativePath });
         }
 
@@ -218,11 +218,11 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
             currentUploadXHRs = currentUploadXHRs.filter(x => x !== xhr);
             
             if (isCancelled) {
-                console.log(`[Upload] 완료되었지만 취소됨: ${relativePath}`);
+                logLog(`[Upload] 완료되었지만 취소됨: ${relativePath}`);
                  return resolve({ status: 'cancelled', file: relativePath });
             }
             if (xhr.status >= 200 && xhr.status < 300) {
-                console.log(`[Upload] 파일 업로드 성공: ${relativePath}`);
+                logLog(`[Upload] 파일 업로드 성공: ${relativePath}`);
                 // 성공 시 누락된 바이트가 있으면 전체 업로드 바이트에 추가
                 const deltaBytes = file.size - fileBytesUploaded;
                 if (deltaBytes > 0) {
@@ -230,7 +230,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
                 }
                 resolve({ status: 'success', file: relativePath });
             } else {
-                console.error(`[Upload] 파일 업로드 실패: ${relativePath}, 상태: ${xhr.status}`);
+                logError(`[Upload] 파일 업로드 실패: ${relativePath}, 상태: ${xhr.status}`);
                 let errorMessage = `파일 업로드 실패: ${relativePath}`;
                 try {
                     const errorResponse = JSON.parse(xhr.responseText);
@@ -245,20 +245,20 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
         xhr.onerror = () => {
             currentUploadXHRs = currentUploadXHRs.filter(x => x !== xhr); // XHR 목록에서 제거
             if (isCancelled) {
-                console.log(`[Upload] 네트워크 오류 발생했으나 취소됨: ${relativePath}`);
+                logLog(`[Upload] 네트워크 오류 발생했으나 취소됨: ${relativePath}`);
                 return resolve({ status: 'cancelled', file: relativePath });
             }
-            console.error(`[Upload] 네트워크 오류 발생: ${relativePath}`);
+            logError(`[Upload] 네트워크 오류 발생: ${relativePath}`);
             reject({ status: 'failed', file: relativePath, error: new Error(`네트워크 오류 발생: ${relativePath}`) });
         };
 
         xhr.onabort = () => {
             currentUploadXHRs = currentUploadXHRs.filter(x => x !== xhr); // XHR 목록에서 제거
-            console.log(`[Upload] 업로드 중단됨 (onabort): ${relativePath}`);
+            logLog(`[Upload] 업로드 중단됨 (onabort): ${relativePath}`);
             resolve({ status: 'cancelled', file: relativePath });
         };
 
-        console.log(`[Upload] 업로드 시작: ${relativePath} -> ${targetPath}`);
+        logLog(`[Upload] 업로드 시작: ${relativePath} -> ${targetPath}`);
         xhr.send(formData);
     });
 }
@@ -269,7 +269,7 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
     
     const totalFiles = filesWithPaths.length;
     if (totalFiles === 0) {
-        console.log('[Upload] 업로드할 파일 없음.');
+        logLog('[Upload] 업로드할 파일 없음.');
         hideUploadModal();
         if (typeof showToast === 'function') showToast('업로드할 파일이 없습니다.', 'info');
         return;
@@ -290,7 +290,7 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         totalUploadSizeEl.textContent = `업로드: 0 B / ${formatFileSize(totalBytesToUpload)}`; 
     }
 
-    console.log(`[Upload Parallel] 총 ${totalFiles}개 파일 병렬 업로드 시작. 대상 경로: ${targetPath}`);
+    logLog(`[Upload Parallel] 총 ${totalFiles}개 파일 병렬 업로드 시작. 대상 경로: ${targetPath}`);
 
     const CONCURRENT_UPLOADS = 5; // 동시 업로드 수 제한
     const queue = [...filesWithPaths]; // 업로드 대기열
@@ -362,7 +362,7 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         } else if (result.status === 'failed') {
             failedCount++;
             failedFiles.push(result.file || '알 수 없는 파일');
-            console.error(`[Upload Parallel] 파일 업로드 실패: ${result.file}`, result.error);
+            logError(`[Upload Parallel] 파일 업로드 실패: ${result.file}`, result.error);
         } else if (result.status === 'cancelled') {
             cancelledCount++;
         }
@@ -398,7 +398,7 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
              messageType = 'info';
         } else {
             // 예외 케이스 로깅
-             console.warn('[Upload] 예상치 못한 최종 상태:', {totalFiles, successCount, failedCount, cancelledCount});
+             logWarn('[Upload] 예상치 못한 최종 상태:', {totalFiles, successCount, failedCount, cancelledCount});
              finalMessage = '업로드 작업 상태 불일치';
              messageType = 'error';
         }
@@ -421,7 +421,7 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         }
 
         setTimeout(() => {
-            console.log(`[Upload] 업로드 완료/실패 후 파일 목록 새로고침 시작 (파일 수: ${totalFiles}, 대기 시간: ${refreshDelay}ms)`);
+            logLog(`[Upload] 업로드 완료/실패 후 파일 목록 새로고침 시작 (파일 수: ${totalFiles}, 대기 시간: ${refreshDelay}ms)`);
             loadFiles(currentPath);
         }, refreshDelay);
     }
@@ -441,7 +441,7 @@ async function traverseFileTree(entry, path, filesWithPaths) {
                 filesWithPaths.push({ file: file, relativePath: normalizedPath });
                 resolve();
             }, err => {
-                console.error("파일 접근 오류:", path + entry.name, err);
+                logError("파일 접근 오류:", path + entry.name, err);
                 reject(err); 
             });
         });
@@ -461,11 +461,11 @@ async function traverseFileTree(entry, path, filesWithPaths) {
                     await Promise.all(promises);
                     resolve();
                 } catch (err) {
-                    console.error("하위 디렉토리 처리 오류:", currentDirPath, err);
+                    logError("하위 디렉토리 처리 오류:", currentDirPath, err);
                     reject(err); 
                 }
             }, err => {
-                console.error("디렉토리 읽기 오류:", path + entry.name, err);
+                logError("디렉토리 읽기 오류:", path + entry.name, err);
                 reject(err);
             });
         });
@@ -475,11 +475,11 @@ async function traverseFileTree(entry, path, filesWithPaths) {
 // --- 외부 파일 드롭 처리 함수 (handleExternalFileDrop) ---
 // (내부 로직은 변경 없음, uploadFilesSequentially 호출)
 window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
-    console.log('[Upload] handleExternalFileDrop 시작');
+    logLog('[Upload] handleExternalFileDrop 시작');
     try {
         const items = e.dataTransfer.items;
         if (!items || items.length === 0) {
-            console.log('[Upload] 드롭된 항목이 없습니다.');
+            logLog('[Upload] 드롭된 항목이 없습니다.');
             return;
         }
 
@@ -496,28 +496,28 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
             const folderName = targetFolderItem.getAttribute('data-name');
             const potentialTargetPath = currentPath ? `${currentPath}/${folderName}` : folderName;
             if (isPathLocked && isPathLocked(potentialTargetPath)) {
-                console.warn(`[Upload] 잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`);
+                logWarn(`[Upload] 잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`);
                 if (showToast) showToast(`잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`, 'warning');
                 return; 
             } else if (!isPathLocked) {
-                console.warn('[Upload] isPathLocked 함수 없음. 잠금 확인 없이 진행.');
+                logWarn('[Upload] isPathLocked 함수 없음. 잠금 확인 없이 진행.');
             }
             targetPath = potentialTargetPath;
             targetName = folderName;
-            console.log('[Upload] 외부 파일 드래그 감지: 대상 폴더:', targetName);
+            logLog('[Upload] 외부 파일 드래그 감지: 대상 폴더:', targetName);
         } else {
             if (isPathLocked && isPathLocked(currentPath)) {
-                console.warn(`[Upload] 현재 폴더 '${currentPath || '루트'}'가 잠겨 있어 업로드할 수 없습니다.`);
+                logWarn(`[Upload] 현재 폴더 '${currentPath || '루트'}'가 잠겨 있어 업로드할 수 없습니다.`);
                 if (showToast) showToast('현재 폴더가 잠겨 있어 업로드할 수 없습니다.', 'warning');
                 return; 
             } else if (!isPathLocked){
-                console.warn('[Upload] isPathLocked 함수 없음. 현재 폴더 잠금 확인 없이 진행.');
+                logWarn('[Upload] isPathLocked 함수 없음. 현재 폴더 잠금 확인 없이 진행.');
             }
-            console.log('[Upload] 외부 파일 드래그 감지: 현재 경로(', targetPath || '루트' ,')에 업로드');
+            logLog('[Upload] 외부 파일 드래그 감지: 현재 경로(', targetPath || '루트' ,')에 업로드');
         }
 
         if (showLoading) showLoading(); 
-        else console.warn('[Upload] showLoading 함수를 찾을 수 없습니다.');
+        else logWarn('[Upload] showLoading 함수를 찾을 수 없습니다.');
 
         const filesWithPaths = [];
         const promises = [];
@@ -544,7 +544,7 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
             try {
                 await Promise.all(promises); 
             } catch (treeError) {
-                console.error('[Upload] 파일 트리 순회 중 최종 오류:', treeError);
+                logError('[Upload] 파일 트리 순회 중 최종 오류:', treeError);
                 if (showToast) showToast('폴더 구조를 읽는 중 오류가 발생했습니다.', 'error');
                 if (hideLoading) hideLoading();
                 return; 
@@ -552,19 +552,19 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
         }
 
         if (hideLoading) hideLoading(); 
-        else console.warn('[Upload] hideLoading 함수를 찾을 수 없습니다.');
+        else logWarn('[Upload] hideLoading 함수를 찾을 수 없습니다.');
 
         if (filesWithPaths.length === 0) {
-            console.log('[Upload] 업로드할 파일을 찾을 수 없습니다.');
+            logLog('[Upload] 업로드할 파일을 찾을 수 없습니다.');
             if (showToast) showToast('업로드할 파일을 찾을 수 없습니다.', 'warning');
             return;
         }
 
-        console.log(`[Upload] 총 ${filesWithPaths.length}개의 파일 수집 완료. 병렬 업로드 시작.`);
+        logLog(`[Upload] 총 ${filesWithPaths.length}개의 파일 수집 완료. 병렬 업로드 시작.`);
         await uploadFilesSequentially(filesWithPaths, targetPath); // 변경된 함수 호출
 
     } catch (error) {
-        console.error('[Upload] 외부 파일 드롭 처리 중 예상치 못한 오류:', error);
+        logError('[Upload] 외부 파일 드롭 처리 중 예상치 못한 오류:', error);
         const hideLoading = typeof window.hideLoading === 'function' ? window.hideLoading : null;
         const showToast = typeof window.showToast === 'function' ? window.showToast : null;
         if (showToast) showToast(`파일 드롭 처리 중 오류 발생: ${error.message}`, 'error');
@@ -575,13 +575,13 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
 // --- 업로드 취소 함수 --- 
 function cancelUpload() {
     isCancelled = true;
-    console.log('[Upload] 업로드 취소 요청됨.');
+    logLog('[Upload] 업로드 취소 요청됨.');
 
     // 현재 진행 중인 모든 XHR 요청 취소
     currentUploadXHRs.forEach(xhr => {
         if (xhr && xhr.readyState !== XMLHttpRequest.DONE) {
             xhr.abort();
-            console.log('[Upload] 진행 중인 XHR 요청 취소됨.');
+            logLog('[Upload] 진행 중인 XHR 요청 취소됨.');
         }
     });
     currentUploadXHRs = []; // 배열 비우기
@@ -593,7 +593,7 @@ function cancelUpload() {
 
 // --- 초기화 함수 (initializeUploader) ---
 window.initializeUploader = function() {
-    console.log('[Upload Init] 업로더 초기화 시작...');
+    logLog('[Upload Init] 업로더 초기화 시작...');
     
     // 파일 선택 이벤트 리스너
     const localFileUploadInput = document.getElementById('fileUpload'); 
@@ -605,13 +605,13 @@ window.initializeUploader = function() {
             const currentPath = typeof window.currentPath !== 'undefined' ? window.currentPath : '';
             const isPathLockedDefined = typeof isPathLocked === 'function';
             if (isPathLockedDefined && isPathLocked(currentPath)) {
-                console.warn(`[Upload] 현재 폴더 '${currentPath || '루트'}'가 잠겨 업로드 불가.`);
+                logWarn(`[Upload] 현재 폴더 '${currentPath || '루트'}'가 잠겨 업로드 불가.`);
                 if (typeof showToast === 'function') showToast('현재 폴더가 잠겨 있어 업로드할 수 없습니다.', 'warning');
                 event.target.value = null; 
                 return; 
             }
 
-            console.log(`[Upload] ${files.length}개 파일 선택됨.`);
+            logLog(`[Upload] ${files.length}개 파일 선택됨.`);
             const filesWithPaths = Array.from(files).map(file => {
                 const normalizedName = file.name.normalize ? file.name.normalize('NFC') : file.name;
                 const relativePath = file.webkitRelativePath 
@@ -624,15 +624,15 @@ window.initializeUploader = function() {
             event.target.value = null; 
         });
     } else {
-        console.warn('[Upload Init] 파일 업로드 입력(#fileUpload)을 찾을 수 없습니다.');
+        logWarn('[Upload Init] 파일 업로드 입력(#fileUpload)을 찾을 수 없습니다.');
     }
     
-    console.log('[Upload Init] 업로더 초기화 완료.');
+    logLog('[Upload Init] 업로더 초기화 완료.');
     return true;
 };
 
 // DOMContentLoaded 이벤트 리스너 내부 코드
 document.addEventListener('DOMContentLoaded', () => {
     // 기타 초기화 로직은 여기서 실행 (필요한 경우)
-    console.log('[Upload] DOMContentLoaded 이벤트 발생. 페이지 로드 완료.');
+    logLog('[Upload] DOMContentLoaded 이벤트 발생. 페이지 로드 완료.');
 }); 

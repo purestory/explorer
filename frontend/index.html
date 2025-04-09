@@ -12,6 +12,9 @@
     <header>
         <h1><i class="fas fa-cloud"></i> WebDAV 파일 서버</h1>
         <div class="header-right">
+            <button id="modeToggleBtn" title="모드 전환 (현재: 운영)">
+                <i class="fas fa-cog"></i>
+            </button>
             <div class="storage-info">
                 <i class="fas fa-database"></i>
                 <div id="storageInfoText">
@@ -133,7 +136,8 @@
         <div class="spinner"></div>
     </div>
     
-    <!-- 스크립트 로딩 (upload.js를 먼저 로드) -->
+    <!-- 스크립트 로딩 (mode_logger.js를 먼저 로드) -->
+    <script src="mode_logger.js"></script>
     <script src="upload.js?v=20250405_upload2"></script>
     <script src="script.js?v=20250405"></script>
 
