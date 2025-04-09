@@ -1,91 +1,100 @@
-function handleFileDblClick(e, fileItem) {
-    // 이벤트 버블링 방지
-    e.preventDefault();
-    e.stopPropagation();
+function pasteItems() {
+    if (clipboardItems.length === 0) return;
     
-    // 더블클릭 이벤트가 비활성화된 상태이면 무시
-    if (window.doubleClickEnabled === false) {
-        logLog('더블클릭 이벤트가 비활성화 상태입니다.');
-        return;
-    }
-    
-    const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
-    const fileName = fileItem.getAttribute('data-name');
-    const isParentDir = fileItem.getAttribute('data-parent-dir') === 'true';
-    
-    logLog(`더블클릭 이벤트 발생: ${fileName}, 폴더: ${isFolder}, 상위폴더: ${isParentDir}`);
-    
-    // 폴더 또는 상위 폴더인 경우 탐색 로직 통합
-    if (isFolder) {
-        // 더블클릭 이벤트를 비활성화하고 탐색 진행
-        window.doubleClickEnabled = false;
-
-        let newPath = '';
-        if (isParentDir) { // 상위 폴더('. .') 클릭
-            // 현재 경로에서 마지막 '/'를 찾아 그 앞부분까지를 새 경로로 설정
-            const lastSlashIndex = currentPath.lastIndexOf('/');
-            newPath = (lastSlashIndex > 0) ? currentPath.substring(0, lastSlashIndex) : ''; // 루트는 빈 문자열
-        } else { // 일반 폴더 클릭
-            newPath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        }
-
-        // 경로 변경 및 파일 로드
-        syncCurrentPath(newPath); // currentPath 업데이트 및 window.currentPath 동기화
-        updateHistoryState(newPath); // 브라우저 히스토리 상태 업데이트
-
-        // 이전 이벤트 리스너 제거 (기존 로직 유지 - 필요성 검토 필요)
-        const oldFileItems = document.querySelectorAll('.file-item, .file-item-grid');
-        oldFileItems.forEach(item => {
-            const clonedItem = item.cloneNode(true);
-            item.parentNode.replaceChild(clonedItem, item);
-        });
-        // 파일 목록 로드 전에 마우스 포인터 상태 리셋 (기존 로직 유지)
-        document.querySelectorAll('.file-item, .file-item-grid').forEach(item => {
-            if (item.classList) {
-                item.classList.remove('hover');
+    // --- 추가된 부분: 'cut' 작업 시 원본 항목 잠금 확인 ---
+    if (clipboardOperation === 'cut') {
+        const lockedItems = clipboardItems.filter(item => {
+            const sourcePath = item.originalPath ? `${item.originalPath}/${item.name}` : item.name;
+            // isPathAccessRestricted 함수가 정의되어 있는지 확인
+            if (typeof isPathAccessRestricted === 'function') {
+                return isPathAccessRestricted(sourcePath);
+            } else {
+                logWarn("[pasteItems] isPathAccessRestricted function not found. Cannot check lock status.");
+                return false; // 함수가 없으면 확인 불가
             }
         });
-        // 마우스 이벤트 강제 발생 (기존 로직 유지 - 필요성 검토 필요)
-        setTimeout(() => {
-            try {
-                if (typeof window.mouseX === 'number' && typeof window.mouseY === 'number') {
-                    const mouseEvent = new MouseEvent('mousemove', {
-                        bubbles: true, cancelable: true, view: window,
-                        clientX: window.mouseX, clientY: window.mouseY
+
+        if (lockedItems.length > 0) {
+            const lockedNames = lockedItems.map(item => item.name).join(', ');
+            alert(`다음 잠긴 항목은 이동할 수 없습니다: ${lockedNames}`);
+            // 클립보드 상태는 유지하여 사용자가 다른 작업을 시도할 수 있도록 함
+            // clipboardItems = []; // 클립보드 비우지 않음
+            // clipboardOperation = '';
+            // pasteBtn.disabled = true;
+            return; // 이동 작업 중단
+        }
+    }
+    // --- 추가된 부분 끝 ---
+
+    const promises = [];
+    showLoading();
+    statusInfo.textContent = '붙여넣기 중...';
+    
+    clipboardItems.forEach(item => {
+        // 소스 경로 (원본 파일 경로)
+        const sourcePath = item.originalPath ? `${item.originalPath}/${item.name}` : item.name;
+        // 대상 경로 (현재 경로)
+        // 현재 경로가 비어있으면 루트('/') 경로로 처리
+        const targetPathBase = (currentPath === '') ? '' : currentPath;
+        
+        // 경로에 한글이 포함된 경우를 위해 인코딩 처리
+        const encodedSourcePath = encodeURIComponent(sourcePath);
+        
+        if (clipboardOperation === 'cut') {
+            logLog(`이동 요청: 소스=${sourcePath}, 대상 경로=${targetPathBase}, 파일명=${item.name}, 현재경로=${currentPath}`);
+            
+            // 잘라내기는 이름 변경(이동)으로 처리
+            promises.push(
+                fetch(`${API_BASE_URL}/api/files/${encodedSourcePath}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        newName: item.name,
+                        targetPath: targetPathBase
+                    })
+                })
+                .then(response => {
+                    // 응답이 정상적이지 않으면 에러 텍스트 추출
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            throw new Error(text || `${item.name} 이동 실패 (${response.status})`);
+                        });
+                    }
+                    
+                    // 이동된 항목 표시에서 'cut' 클래스 제거
+                    document.querySelectorAll('.file-item.cut').forEach(el => {
+                        el.classList.remove('cut');
                     });
-                    document.dispatchEvent(mouseEvent);
-                }
-            } catch (error) {
-                logError('마우스 이벤트 강제 발생 중 오류:', error);
-            }
-        }, 350); // 지연 시간 유지
-
-        // 파일 목록 로드
-        loadFiles(newPath);
-        clearSelection(); // 선택 초기화
-
-        return; // 폴더 탐색 후 함수 종료
-    }
-    // 파일 처리 로직 (기존과 동일)
-    else {
-        // 파일 확장자에 따라 처리
-        const fileExt = fileName.split('.').pop().toLowerCase();
-        const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        const encodedPath = encodeURIComponent(filePath);
-        
-        // 이미지, 비디오, PDF 등 브라우저에서 열 수 있는 파일 형식
-        const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
-                              'mp4', 'webm', 'ogg', 'mp3', 'wav', 
-                              'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
-        
-        if (viewableTypes.includes(fileExt)) {
-            // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
-            const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
-            // 새 창에서 파일 열기
-            window.open(fileUrl, '_blank');
-        } else {
-            // 다운로드
-            downloadFile(fileName);
+                    
+                    return item.name;
+                })
+            );
         }
-    }
+    });
+    
+    Promise.all(promises)
+        .then(() => {
+            // 클립보드 초기화
+            clipboardItems = [];
+            clipboardOperation = '';
+            pasteBtn.disabled = true;
+            document.getElementById('ctxPaste').style.display = 'none';
+            
+            // 파일 목록 새로고침
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
+    loadFiles(currentPath);
+            statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
+            hideLoading();
+        })
+
+        .catch(error => {
+            alert(`오류 발생: ${error.message}`);
+            hideLoading();
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
+            loadFiles(currentPath);
+        });
 }
