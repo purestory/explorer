@@ -87,6 +87,8 @@ h1 {
     cursor: pointer;
     font-size: 0.9rem;
     transition: background-color 0.2s;
+    position: relative;
+    z-index: 0;
 }
 
 .btn-primary {
@@ -258,14 +260,14 @@ h1 {
     display: flex;
     align-items: center;
     padding: 4px 10px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 0px solid #eee;
     width: 100%;
     box-sizing: border-box;
-    min-height: 36px;
+    min-height: 24px;
 }
 
 .file-view.list-view .file-list-header {
-    background-color: #f8f9fa;
+    background-color: #f8f8fa;
     font-weight: bold;
     color: #495057;
     cursor: pointer;
@@ -468,18 +470,29 @@ h1 {
 
 .upload-form {
     position: relative;
-    overflow: hidden;
     display: inline-block;
+    overflow: hidden;
+    vertical-align: middle;
 }
 
 .upload-form input[type=file] {
     position: absolute;
-    left: 0;
     top: 0;
+    right: 0;
+    margin: 0;
+    padding: 0;
+    font-size: 20px;
+    cursor: pointer;
     opacity: 0;
+    filter: alpha(opacity=0);
     width: 100%;
     height: 100%;
-    cursor: pointer;
+    z-index: 1;
+}
+
+.upload-form:hover .btn-success {
+    background-color: #218838;
+    border-color: #1e7e34;
 }
 
 .progress-container {

@@ -3434,16 +3434,28 @@ document.addEventListener('click', (event) => {
     // 클릭된 요소가 파일 아이템 또는 그 하위 요소가 아니고,
     // 파일 작업을 위한 컨텍스트 메뉴 관련 요소도 아닌 경우
     if (!event.target.closest('.file-item') && !event.target.closest('#contextMenu') && !event.target.closest('.action-button')) {
-        // 현재 선택된 모든 파일 아이템 가져오기
-        const selectedItems = document.querySelectorAll('.file-item.selected');
-        // 각 선택된 아이템에서 'selected' 클래스 제거
-        selectedItems.forEach(item => {
-            item.classList.remove('selected');
+        // 현재 선택된 모든 파일 아이템 가져오기 (UI 업데이트용)
+        const selectedUIItems = document.querySelectorAll('.file-item.selected, .file-item-grid.selected'); // 그리드 뷰 고려
+        // 실제로 선택 해제가 필요한 경우에만 처리
+        if (selectedUIItems.length > 0) {
+            logLog('[Clear Selection] Background clicked, clearing selection.');
+            // 각 선택된 아이템에서 'selected' 클래스 제거
+            selectedUIItems.forEach(item => {
+                item.classList.remove('selected');
+            });
+            // 전역 선택 상태 클리어 및 버튼 업데이트
+            selectedItems.clear();
+            updateButtonStates();
+        }
+    }
+});
+/*
+item.classList.remove('selected');
         });
 
     }
 });
-
+*/
 
 // 압축 이름 지정 모달 표시 및 처리
 function showCompressModal(defaultName) {
