@@ -963,7 +963,7 @@ function loadFiles(path = '') {
     syncCurrentPath(path);
     
     // URL 인코딩 처리
-    const encodedPath = path ? encodeURIComponent(path) : '';
+    const encodedPath = encodeURIComponent(path);
     
     // 더블클릭이 가능한지 여부를 나타내는 전역 플래그
     window.doubleClickEnabled = false;
