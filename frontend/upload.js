@@ -204,7 +204,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
                 totalBytesUploaded += deltaBytes;
                 fileBytesUploaded = event.loaded;
                 
-                updateUploadProgress(uploadedFileCounter.count, totalFiles, relativePath, currentFilePercent);
+                updateUploadProgress(uploadedFileCounter.count+1, totalFiles, relativePath, currentFilePercent);
                 
                 updateSpeedAndTime(event.loaded, event.total);
             }
