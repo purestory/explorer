@@ -2,8 +2,9 @@
 // --- 전역 변수 선언 ---
 
 let isCancelled = false;
-let cancelledFiles = []; // 취소된 파일 목록
-let targetPath = ''; // 업로드 대상 경로 저장
+let isPaused = false;
+let cancelledFiles = [];
+let targetPath = '';
 
 // --- 업로드 상태 관리 ---
 let currentUploadXHRs = [];
@@ -17,15 +18,16 @@ let lastLoadTime = 0;
 const speedHistory = [];
 const SPEED_HISTORY_COUNT = 10;
 
-// DOM 요소 변수 선언 (초기값 null)
+// DOM 요소 변수 선언
 let uploadProgressModal = null;
 let overallProgressBar = null;
 let overallProgressText = null;
 let currentFileInfo = null;
 let uploadSpeed = null;
 let uploadTimeRemaining = null;
-let totalUploadSizeEl = null; // 총 용량 표시 요소
-let resumeUploadBtn = null; // 재개 버튼
+let totalUploadSizeEl = null;
+let resumeUploadBtn = null;
+let cancelUploadBtn = null;
 
 // --- 업로드 모달 표시/숨김 ---
 function showUploadModal() {
@@ -37,30 +39,33 @@ function showUploadModal() {
     if (!uploadTimeRemaining) uploadTimeRemaining = document.getElementById('upload-time-remaining');
     if (!totalUploadSizeEl) totalUploadSizeEl = document.getElementById('total-upload-size');
     if (!resumeUploadBtn) resumeUploadBtn = document.getElementById('resumeUploadBtn');
+    if (!cancelUploadBtn) cancelUploadBtn = document.getElementById('cancelUploadBtn');
     
-    // 필수 요소 확인
-    if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining || !totalUploadSizeEl || !resumeUploadBtn) {
+    if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining || !totalUploadSizeEl || !resumeUploadBtn || !cancelUploadBtn) {
         logError('[Upload] 필수 모달 요소(#upload-progress-modal, ...)를 찾을 수 없습니다.');
         return;
     }
 
     isCancelled = false;
+    isPaused = false;
+    cancelledFiles = [];
     totalBytesToUpload = 0;
     totalBytesUploaded = 0;
     startTime = Date.now();
     lastLoaded = 0;
     lastLoadTime = startTime;
-    speedHistory.length = 0; 
-    currentUploadXHRs = []; 
+    speedHistory.length = 0;
+    currentUploadXHRs = [];
 
-    // 초기 상태 설정
     overallProgressBar.style.width = '0%';
     overallProgressText.textContent = '0% (0/0)';
     totalUploadSizeEl.textContent = '업로드: 0 B / 0 B';
     currentFileInfo.textContent = '대기 중...';
     uploadSpeed.textContent = '속도: 0 KB/s';
     uploadTimeRemaining.textContent = '남은 시간: 계산 중...';
-    resumeUploadBtn.disabled = true; // 재개 버튼 비활성화
+    resumeUploadBtn.textContent = '중지';
+    resumeUploadBtn.classList.remove('btn-success');
+    resumeUploadBtn.classList.add('btn-warning');
 
     uploadProgressModal.style.display = 'flex';
 }
@@ -70,12 +75,12 @@ function hideUploadModal() {
         uploadProgressModal.style.display = 'none';
     }
     logLog('[Upload] 업로드 모달 숨김');
-    currentUploadXHRs = []; 
+    currentUploadXHRs = [];
 }
 
 // --- 업로드 속도 및 남은 시간 업데이트 함수 ---
-let cachedAverageSpeed = 0;
 function updateSpeedAndTime(currentFileLoaded, currentFileTotal) {
+    if (isPaused || isCancelled) return;
     const now = Date.now();
     const elapsed = (now - lastLoadTime) / 1000;
 
@@ -162,8 +167,8 @@ function updateUploadProgress(uploadedFileCount, totalFiles, currentFileRelative
 // --- 개별 파일 업로드 함수 ---
 async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uploadedFileCounter) {
     return new Promise((resolve, reject) => {
-        if (isCancelled) {
-            logLog(`[Upload] 시작 전 취소됨: ${relativePath}`);
+        if (isCancelled || isPaused) {
+            logLog(`[Upload] 시작 전 ${isPaused ? '중지' : '취소'}됨: ${relativePath}`);
             return resolve({ status: 'cancelled', file: relativePath });
         }
 
@@ -182,14 +187,14 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
         }];
         formData.append('fileInfo', JSON.stringify(fileInfo));
         
-        const uploadUrl = `${API_BASE_URL}/api/upload`; 
+        const uploadUrl = `${API_BASE_URL}/api/upload`;
 
         let fileBytesUploaded = 0;
 
         xhr.open('POST', uploadUrl, true);
 
         xhr.upload.onprogress = (event) => {
-            if (isCancelled) return;
+            if (isCancelled || isPaused) return;
             if (event.lengthComputable) {
                 const currentFilePercent = Math.round((event.loaded / event.total) * 100);
                 
@@ -205,7 +210,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
 
         xhr.onload = () => {
             currentUploadXHRs = currentUploadXHRs.filter(x => x !== xhr);
-            if (isCancelled) {
+            if (isCancelled || isPaused) {
                 return resolve({ status: 'cancelled', file: relativePath });
             }
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -228,7 +233,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
 
         xhr.onerror = () => {
             currentUploadXHRs = currentUploadXHRs.filter(x => x !== xhr);
-            if (isCancelled) {
+            if (isCancelled || isPaused) {
                 return resolve({ status: 'cancelled', file: relativePath });
             }
             const errorMessage = navigator.onLine
@@ -251,7 +256,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
 
 // --- 병렬 파일 업로드 관리 함수 ---
 async function uploadFilesSequentially(filesWithPaths, uploadTargetPath) {
-    targetPath = uploadTargetPath; // 전역 targetPath 설정
+    targetPath = uploadTargetPath;
     showUploadModal();
 
     const totalFiles = filesWithPaths.length;
@@ -293,8 +298,23 @@ async function uploadFilesSequentially(filesWithPaths, uploadTargetPath) {
         }
     }
 
-    function runNextUpload() {
-        if (isCancelled || queue.length === 0) {
+    async function runNextUpload() {
+        if (isCancelled || isPaused || queue.length === 0) {
+            if (isPaused) {
+                // 중지 시 대기열과 진행 중인 파일을 cancelledFiles에 저장
+                cancelledFiles = [...queue];
+                // activeUploads의 파일을 추가 (완료되지 않은 파일)
+                for (const uploadPromise of activeUploads) {
+                    const result = await uploadPromise;
+                    if (result.status === 'cancelled' && result.file) {
+                        const originalFile = filesWithPaths.find(f => f.relativePath === result.file);
+                        if (originalFile) {
+                            cancelledFiles.push(originalFile);
+                        }
+                    }
+                }
+                logLog(`[Upload] 중지됨. cancelledFiles에 ${cancelledFiles.length}개 파일 저장: ${cancelledFiles.map(f => f.relativePath).join(', ')}`);
+            }
             checkCompletion();
             return;
         }
@@ -327,7 +347,7 @@ async function uploadFilesSequentially(filesWithPaths, uploadTargetPath) {
         setTimeout(runNextUpload, 0);
     }
 
-    for (let i = 0; i < CONCURRENT_UPLOADS && queue.length > 0; i++) {
+    for (let i = 0; i < Math.min(CONCURRENT_UPLOADS, queue.length); i++) {
         runNextUpload();
     }
 
@@ -345,15 +365,18 @@ async function uploadFilesSequentially(filesWithPaths, uploadTargetPath) {
         }
     });
 
-    if (isCancelled) {
+    if (isPaused) {
+        // cancelledFiles는 runNextUpload에서 이미 설정됨
+        return; // 모달 유지
+    } else if (isCancelled) {
         cancelledCount += queue.length;
-        cancelledFiles = [...queue]; // 대기열에 남은 파일 저장
+        cancelledFiles = [];
         queue.length = 0;
+        hideUploadModal();
     } else {
-        cancelledFiles = []; // 업로드 완료 시 취소된 파일 목록 초기화
+        cancelledFiles = [];
+        hideUploadModal();
     }
-
-    hideUploadModal();
 
     if (typeof showToast === 'function') {
         let finalMessage = '';
@@ -364,10 +387,9 @@ async function uploadFilesSequentially(filesWithPaths, uploadTargetPath) {
             if (cancelledCount > 0) finalMessage += ` ${cancelledCount}개 취소.`;
             finalMessage += ` 실패 목록: ${failedFiles.join(', ')}`.substring(0, 200);
             messageType = 'warning';
-        } else if (cancelledCount > 0) {
+        } else if (cancelledCount > 0 && !isPaused) {
             finalMessage = `업로드가 취소되었습니다. (${successCount}/${totalFiles} 완료)`;
             messageType = 'warning';
-            if (resumeUploadBtn) resumeUploadBtn.disabled = false; // 재개 버튼 활성화
         } else if (successCount === totalFiles && totalFiles > 0) {
             finalMessage = `${totalFiles}개 파일 업로드를 완료했습니다.`;
             messageType = 'success';
@@ -399,7 +421,7 @@ async function traverseFileTree(entry, path, filesWithPaths) {
         return new Promise((resolve, reject) => {
             entry.file(file => {
                 const normalizedName = file.name.normalize ? file.name.normalize('NFC') : file.name;
-                const separator = path && !path.endsWith('/') ? '/' : ''; 
+                const separator = path && !path.endsWith('/') ? '/' : '';
                 const relativeFilePath = path + separator + normalizedName;
                 const normalizedPath = relativeFilePath.normalize ? relativeFilePath.normalize('NFC') : relativeFilePath;
                 
@@ -407,14 +429,14 @@ async function traverseFileTree(entry, path, filesWithPaths) {
                 resolve();
             }, err => {
                 logError("파일 접근 오류:", path + entry.name, err);
-                reject(err); 
+                reject(err);
             });
         });
     } else if (entry.isDirectory) {
         const dirReader = entry.createReader();
         const normalizedDirName = entry.name.normalize ? entry.name.normalize('NFC') : entry.name;
         const separator = path && !path.endsWith('/') && path !== '' ? '/' : '';
-        const currentDirPath = path + separator + normalizedDirName + "/"; 
+        const currentDirPath = path + separator + normalizedDirName + "/";
         
         return new Promise((resolve, reject) => {
             dirReader.readEntries(async (entries) => {
@@ -427,7 +449,7 @@ async function traverseFileTree(entry, path, filesWithPaths) {
                     resolve();
                 } catch (err) {
                     logError("하위 디렉토리 처리 오류:", currentDirPath, err);
-                    reject(err); 
+                    reject(err);
                 }
             }, err => {
                 logError("디렉토리 읽기 오류:", path + entry.name, err);
@@ -453,7 +475,7 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
         const showToast = typeof window.showToast === 'function' ? window.showToast : null;
         const isPathLocked = typeof window.isPathLocked === 'function' ? window.isPathLocked : null;
 
-        let targetPathLocal = currentPath; 
+        let targetPathLocal = currentPath;
 
         if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function' && targetFolderItem.hasAttribute('data-name')) {
             const folderName = targetFolderItem.getAttribute('data-name');
@@ -461,7 +483,7 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
             if (isPathLocked && isPathLocked(potentialTargetPath)) {
                 logWarn(`[Upload] 잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`);
                 if (showToast) showToast(`잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`, 'warning');
-                return; 
+                return;
             }
             targetPathLocal = potentialTargetPath;
         }
@@ -496,7 +518,7 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
                 logError('[Upload] 파일 트리 순회 중 최종 오류:', treeError);
                 if (showToast) showToast('폴더 구조를 읽는 중 오류가 발생했습니다.', 'error');
                 if (hideLoading) hideLoading();
-                return; 
+                return;
             }
         }
 
@@ -516,13 +538,14 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
         const hideLoading = typeof window.hideLoading === 'function' ? window.hideLoading : null;
         const showToast = typeof window.showToast === 'function' ? window.showToast : null;
         if (showToast) showToast(`파일 드롭 처리 중 오류 발생: ${error.message}`, 'error');
-        if (hideLoading) hideLoading(); 
-    } 
+        if (hideLoading) hideLoading();
+    }
 };
 
 // --- 업로드 취소 함수 ---
 function cancelUpload() {
     isCancelled = true;
+    isPaused = false;
     logLog('[Upload] 업로드 취소 요청됨.');
 
     currentUploadXHRs.forEach(xhr => {
@@ -532,39 +555,67 @@ function cancelUpload() {
         }
     });
     currentUploadXHRs = [];
+    cancelledFiles = [];
 
     totalBytesToUpload = 0;
     totalBytesUploaded = 0;
     speedHistory.length = 0;
 
-    if (resumeUploadBtn) {
-        resumeUploadBtn.disabled = false; // 재개 버튼 활성화
+    hideUploadModal();
+    if (typeof showToast === 'function') {
+        showToast('업로드가 취소되었습니다.', 'info');
     }
 }
 
-// --- 업로드 재개 함수 ---
-async function resumeUpload() {
-    if (cancelledFiles.length === 0) {
-        if (typeof showToast === 'function') {
-            showToast('재개할 파일이 없습니다.', 'info');
-        }
-        return;
-    }
+// --- 업로드 중지/재개 함수 ---
+function toggleUpload() {
+    if (!isPaused) {
+        // 중지 로직
+        isPaused = true;
+        logLog('[Upload] 업로드 중지 요청됨.');
 
-    isCancelled = false;
-    const filesToResume = [...cancelledFiles];
-    cancelledFiles = []; // 재개 후 초기화
-    if (resumeUploadBtn) {
-        resumeUploadBtn.disabled = true; // 재개 버튼 비활성화
+        currentUploadXHRs.forEach(xhr => {
+            if (xhr && xhr.readyState !== XMLHttpRequest.DONE) {
+                xhr.abort();
+                logLog('[Upload] 진행 중인 XHR 요청 중지됨.');
+            }
+        });
+        currentUploadXHRs = [];
+
+        if (resumeUploadBtn) {
+            resumeUploadBtn.textContent = '재개';
+            resumeUploadBtn.classList.remove('btn-warning');
+            resumeUploadBtn.classList.add('btn-success');
+        }
+    } else {
+        // 재개 로직
+        if (cancelledFiles.length === 0) {
+            logError('[Upload] 재개 시도: cancelledFiles가 비어 있음.');
+            if (typeof showToast === 'function') {
+                showToast('재개할 파일이 없습니다.', 'info');
+            }
+            return;
+        }
+
+        logLog(`[Upload] 업로드 재개. ${cancelledFiles.length}개 파일 재개: ${cancelledFiles.map(f => f.relativePath).join(', ')}`);
+        isPaused = false;
+        const filesToResume = [...cancelledFiles];
+
+        if (resumeUploadBtn) {
+            resumeUploadBtn.textContent = '중지';
+            resumeUploadBtn.classList.remove('btn-success');
+            resumeUploadBtn.classList.add('btn-warning');
+        }
+
+        uploadFilesSequentially(filesToResume, targetPath);
     }
-    await uploadFilesSequentially(filesToResume, targetPath);
 }
 
 // --- 초기화 함수 ---
 window.initializeUploader = function() {
     logLog('[Upload Init] 업로더 초기화 시작...');
     
-    const localFileUploadInput = document.getElementById('fileUpload'); 
+    const localFileUploadInput = document.getElementById('fileUpload');
     if (localFileUploadInput) {
         localFileUploadInput.addEventListener('change', async (event) => {
             const files = event.target.files;
@@ -584,21 +635,17 @@ window.initializeUploader = function() {
             });
 
             await uploadFilesSequentially(filesWithPaths, currentPath);
-            event.target.value = null; 
+            event.target.value = null;
         });
     } else {
         logWarn('[Upload Init] 파일 업로드 입력(#fileUpload)을 찾을 수 없습니다.');
     }
     
-    const cancelUploadBtn = document.getElementById('cancelUploadBtn');
-    if (cancelUploadBtn) {
-        cancelUploadBtn.addEventListener('click', () => {
+    const cancelUploadBtnLocal = document.getElementById('cancelUploadBtn');
+    if (cancelUploadBtnLocal) {
+        cancelUploadBtnLocal.addEventListener('click', () => {
+            logLog('[Upload] 취소 버튼 클릭.');
             cancelUpload();
-            logLog('[Upload] 취소 버튼 클릭으로 업로드 중단.');
-            hideUploadModal();
-            if (typeof showToast === 'function') {
-                showToast('업로드가 취소되었습니다.', 'info');
-            }
         });
     } else {
         logWarn('[Upload Init] 취소 버튼(#cancelUploadBtn)을 찾을 수 없습니다.');
@@ -606,12 +653,12 @@ window.initializeUploader = function() {
     
     const resumeUploadBtnLocal = document.getElementById('resumeUploadBtn');
     if (resumeUploadBtnLocal) {
-        resumeUploadBtnLocal.addEventListener('click', async () => {
-            logLog('[Upload] 재개 버튼 클릭.');
-            await resumeUpload();
+        resumeUploadBtnLocal.addEventListener('click', () => {
+            logLog('[Upload] 중지/재개 버튼 클릭.');
+            toggleUpload();
         });
     } else {
-        logWarn('[Upload Init] 재개 버튼(#resumeUploadBtn)을 찾을 수 없습니다.');
+        logWarn('[Upload Init] 중지/재개 버튼(#resumeUploadBtn)을 찾을 수 없습니다.');
     }
     
     logLog('[Upload Init] 업로더 초기화 완료.');

@@ -1383,7 +1383,7 @@ h1 {
     word-break: break-all;
 }
 
-/* 취소 버튼 스타일 */
+/* 취(recipe소 버튼 스타일 */
 #cancelUploadBtn {
     background-color: #dc3545;
     color: white;
@@ -1408,16 +1408,8 @@ h1 {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-#cancelUploadBtn:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
-    box-shadow: none;
-    transform: none;
-}
-/* 재개 버튼 스타일 */
+/* 중지/재개 버튼 스타일 */
 #resumeUploadBtn {
-    background-color: #28a745;
-    color: white;
     padding: 10px 20px;
     border: none;
     border-radius: 6px;
@@ -1428,7 +1420,23 @@ h1 {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-#resumeUploadBtn:hover:not(:disabled) {
+#resumeUploadBtn.btn-warning {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+#resumeUploadBtn.btn-warning:hover {
+    background-color: #e0a800;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+#resumeUploadBtn.btn-success {
+    background-color: #28a745;
+    color: white;
+}
+
+#resumeUploadBtn.btn-success:hover {
     background-color: #218838;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     transform: translateY(-1px);
@@ -1444,6 +1452,7 @@ h1 {
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
+    color: white;
 }
 /* 모달 footer 스타일 재정의 */
 #upload-progress-modal .modal-footer {
