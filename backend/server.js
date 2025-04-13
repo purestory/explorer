@@ -498,7 +498,7 @@ app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
     }
 
     // !!!! 추가: 프론트엔드에서 받은 경로 및 파일 정보 로깅 !!!!
-    const baseUploadPath = req.body.path || '';
+    const baseUploadPath = req.body.path ? decodeURIComponent(req.body.path) : '';
     logWithIP(`[Frontend Data] Received base path: '${baseUploadPath}'`, req, 'debug');
     logWithIP(`[Frontend Data] Received fileInfo (raw): ${req.body.fileInfo}`, req, 'debug');
 
