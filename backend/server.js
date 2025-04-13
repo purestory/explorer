@@ -892,9 +892,10 @@ app.get('/api/disk-usage', async (req, res) => { // *** async 추가 ***
 });
 
 // 파일 압축 API (비동기화)
+// 파일 압축 API (비동기화)
 app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 추가 ***
   try {
-    const { files, targetPath, zipName } = req.body;
+    const { files, targetPath, zipName, forDownload } = req.body;
     
     logWithIP(`[Compress Request] ${files.length}개 파일 '${zipName}'으로 압축 요청 (${targetPath || '루트'})`, req, 'info'); // 레벨 변경: minimal -> info
 
@@ -908,7 +909,23 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
     
     log(`압축 요청: ${files.length}개 파일, 대상 경로: ${targetPath || '루트'}, 압축파일명: ${zipName}`, 'info');
     
-    const basePath = targetPath ? path.join(ROOT_DIRECTORY, targetPath) : ROOT_DIRECTORY;
+    // 다운로드용 압축인 경우 임시 폴더에 생성, 그렇지 않으면 기존 방식대로 현재 경로에 생성
+    const basePath = forDownload 
+      ? path.join(ROOT_DIRECTORY, 'tmp') 
+      : (targetPath ? path.join(ROOT_DIRECTORY, targetPath) : ROOT_DIRECTORY);
+    
+    // 임시 폴더가 없으면 생성
+    if (forDownload) {
+      try {
+        await fs.promises.mkdir(path.join(ROOT_DIRECTORY, 'tmp'), { recursive: true, mode: 0o777 });
+      } catch (error) {
+        if (error.code !== 'EEXIST') {
+          errorLog('임시 폴더 생성 오류:', error);
+          return res.status(500).json({ error: '임시 폴더 생성 중 오류가 발생했습니다.', message: error.message });
+        }
+      }
+    }
+    
     const zipFilePath = path.join(basePath, zipName.endsWith('.zip') ? zipName : `${zipName}.zip`);
     
     // *** 중복 확인 (비동기) ***
@@ -943,7 +960,8 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
           success: true, 
           message: '압축이 완료되었습니다.',
           zipFile: path.basename(zipFilePath),
-          zipPath: targetPath || ''
+          zipPath: forDownload ? 'tmp' : (targetPath || ''),
+          forDownload: forDownload || false
         });
       } catch (error) {
         errorLog('압축 완료 후 처리 오류:', error);
@@ -993,9 +1011,7 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
     
   } catch (error) {
     errorLog('압축 API 오류:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: '파일 압축 중 오류가 발생했습니다.', message: error.message });
-    }
+    res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
   }
 });
 

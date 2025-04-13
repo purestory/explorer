@@ -3064,6 +3064,7 @@ function downloadSelectedItems() {
 }
 
 // (로그 기능 추가됨)
+// (로그 기능 추가됨)
 function compressAndDownload(itemList) {
     if (!itemList || itemList.length === 0) return;
 
@@ -3089,7 +3090,8 @@ function compressAndDownload(itemList) {
     const requestData = {
         files: itemList,
         targetPath: currentPath,  // 빈 문자열 대신 현재 경로 사용
-        zipName: zipName
+        zipName: zipName,
+        forDownload: true  // 다운로드용 압축임을 표시
     };
 
     // --- 추가: 압축 후 다운로드 액션 로그 전송 ---
@@ -3182,12 +3184,10 @@ function compressAndDownload(itemList) {
         }, 10000); // 10초 후 삭제
     })
     .catch(error => {
-        // 오류 처리
-        logError('압축 및 다운로드 오류:', error);
-        // alert 대신 showToast 사용 고려
-        showToast(`압축 및 다운로드 중 오류: ${error.message}`, 'error');
         hideLoading();
-        statusInfo.textContent = '다운로드 실패';
+        showToast(`압축 오류: ${error.message}`, 'error');
+        statusInfo.textContent = '압축 실패';
+        logError('압축 후 다운로드 오류:', error);
     });
 }
 
