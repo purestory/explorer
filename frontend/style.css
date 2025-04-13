@@ -1289,28 +1289,141 @@ h1 {
 }
 
 /* === Upload Progress Modal Styling === */
+/* === Upload Progress Modal Styling === */
 
+/* 기존 스타일 유지 및 보완 */
 #upload-progress-modal {
     background-color: rgba(0, 0, 0, 0.6); /* 어두운 반투명 배경 */
+    z-index: 1001; /* 다른 모달과 겹치지 않도록 약간 높임 */
+}
+#upload-progress-modal {
+    animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 #upload-progress-modal .modal-content {
     background: linear-gradient(145deg, #ffffff, #e6e6e6); /* 밝은 그라데이션 배경 */
     border-radius: 12px; /* 둥근 모서리 */
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); /* 부드러운 그림자 */
-    padding: 25px 30px; /* 내부 여백 증가 */
+    padding: 25px 30px; /* 내부 여백 */
     width: 90%;
-    max-width: 500px; /* 최대 너비 설정 */
+    max-width: 500px; /* 최대 너비 */
     text-align: center; /* 텍스트 중앙 정렬 */
+    position: relative; /* 취소 버튼 위치 조정을 위해 */
 }
 
 #upload-progress-modal h4 {
     margin-top: 0;
     margin-bottom: 20px;
-    color: #333; /* 제목 색상 */
+    color: #333;
     font-size: 1.4em;
     font-weight: 600;
 }
+
+/* 진행률 바 스타일 */
+#overall-progress-bar-container {
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    margin: 20px 0;
+    height: 16px;
+    overflow: hidden;
+}
+
+#overall-progress-bar {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #4e8cff, #0052d4);
+    border-radius: 10px;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 텍스트 스타일 */
+#overall-progress-text,
+#total-upload-size,
+#current-file-info {
+    margin: 12px 0;
+    font-size: 0.95em;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+#total-upload-size {
+    font-weight: 500;
+    color: #444;
+}
+
+/* 속도 및 남은 시간 그룹 */
+#upload-progress-modal .progress-time-group,
+#upload-progress-modal .speed-size-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 10px 0;
+}
+
+#upload-progress-modal .progress-time-group p,
+#upload-progress-modal .speed-size-group p {
+    flex: 1;
+    margin: 0 10px;
+    font-size: 0.9em;
+    color: #555;
+}
+
+/* 현재 파일 정보 */
+#upload-progress-modal #current-file-info {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #555;
+    word-break: break-all;
+}
+
+/* 취소 버튼 스타일 */
+#cancelUploadBtn {
+    background-color: #dc3545;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#cancelUploadBtn:hover {
+    background-color: #c82333;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+#cancelUploadBtn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#cancelUploadBtn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* 모달 footer 스타일 재정의 */
+#upload-progress-modal .modal-footer {
+    display: flex;
+    justify-content: center; /* 버튼 중앙 정렬 */
+    margin-top: 20px;
+    gap: 10px;
+}
+
+/* === End of Upload Progress Modal Styling === */
 
 #overall-progress-bar-container {
     background-color: #e0e0e0; /* 진행률 바 배경 */
