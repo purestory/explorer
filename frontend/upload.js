@@ -2,6 +2,8 @@
 // --- 전역 변수 선언 ---
 
 let isCancelled = false;
+let cancelledFiles = []; // 취소된 파일 목록
+let targetPath = ''; // 업로드 대상 경로 저장
 
 // --- 업로드 상태 관리 ---
 let currentUploadXHRs = [];
@@ -23,6 +25,7 @@ let currentFileInfo = null;
 let uploadSpeed = null;
 let uploadTimeRemaining = null;
 let totalUploadSizeEl = null; // 총 용량 표시 요소
+let resumeUploadBtn = null; // 재개 버튼
 
 // --- 업로드 모달 표시/숨김 ---
 function showUploadModal() {
@@ -33,9 +36,10 @@ function showUploadModal() {
     if (!uploadSpeed) uploadSpeed = document.getElementById('upload-speed');
     if (!uploadTimeRemaining) uploadTimeRemaining = document.getElementById('upload-time-remaining');
     if (!totalUploadSizeEl) totalUploadSizeEl = document.getElementById('total-upload-size');
+    if (!resumeUploadBtn) resumeUploadBtn = document.getElementById('resumeUploadBtn');
     
-    // 필수 요소 확인 (totalUploadSizeEl 추가)
-    if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining || !totalUploadSizeEl) {
+    // 필수 요소 확인
+    if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining || !totalUploadSizeEl || !resumeUploadBtn) {
         logError('[Upload] 필수 모달 요소(#upload-progress-modal, ...)를 찾을 수 없습니다.');
         return;
     }
@@ -49,13 +53,14 @@ function showUploadModal() {
     speedHistory.length = 0; 
     currentUploadXHRs = []; 
 
-    // 초기 상태 설정 (총 용량 추가)
-    if (overallProgressBar) overallProgressBar.style.width = '0%';
-    if (overallProgressText) overallProgressText.textContent = '0% (0/0)';
-    if (totalUploadSizeEl) totalUploadSizeEl.textContent = '업로드: 0 B / 0 B'; // 초기 텍스트 설정
-    if (currentFileInfo) currentFileInfo.textContent = '대기 중...';
-    if (uploadSpeed) uploadSpeed.textContent = '속도: 0 KB/s';
-    if (uploadTimeRemaining) uploadTimeRemaining.textContent = '남은 시간: 계산 중...';
+    // 초기 상태 설정
+    overallProgressBar.style.width = '0%';
+    overallProgressText.textContent = '0% (0/0)';
+    totalUploadSizeEl.textContent = '업로드: 0 B / 0 B';
+    currentFileInfo.textContent = '대기 중...';
+    uploadSpeed.textContent = '속도: 0 KB/s';
+    uploadTimeRemaining.textContent = '남은 시간: 계산 중...';
+    resumeUploadBtn.disabled = true; // 재개 버튼 비활성화
 
     uploadProgressModal.style.display = 'flex';
 }
@@ -69,16 +74,14 @@ function hideUploadModal() {
 }
 
 // --- 업로드 속도 및 남은 시간 업데이트 함수 ---
-// (파일 인덱스 관련 파라미터 제거, totalBytesUploaded 직접 사용하도록 수정)
 let cachedAverageSpeed = 0;
 function updateSpeedAndTime(currentFileLoaded, currentFileTotal) {
     const now = Date.now();
-    const elapsed = (now - lastLoadTime) / 1000; // 초 단위 경과 시간
+    const elapsed = (now - lastLoadTime) / 1000;
 
-    if (elapsed > 0.5) { // 0.5초마다 업데이트
-        const currentSpeed = (currentFileLoaded - lastLoaded) / elapsed; // 현재 파일의 순간 속도
+    if (elapsed > 0.5) {
+        const currentSpeed = (currentFileLoaded - lastLoaded) / elapsed;
         
-        // 속도 기록 업데이트
         if (currentSpeed > 0 && isFinite(currentSpeed)) {
             speedHistory.push(currentSpeed);
             if (speedHistory.length > SPEED_HISTORY_COUNT) {
@@ -86,18 +89,16 @@ function updateSpeedAndTime(currentFileLoaded, currentFileTotal) {
             }
         }
 
-        // 가중 평균 속도 계산
         let weightedSpeed = 0;
         let totalWeight = 0;
         for (let i = 0; i < speedHistory.length; i++) {
-            const weight = i + 1; // 최근 값에 더 큰 가중치
+            const weight = i + 1;
             weightedSpeed += speedHistory[i] * weight;
             totalWeight += weight;
         }
         
-        const averageSpeed = totalWeight > 0 ? weightedSpeed / totalWeight : 0; // 안전한 분모 체크
+        const averageSpeed = totalWeight > 0 ? weightedSpeed / totalWeight : 0;
 
-        // 남은 바이트 및 시간 계산
         const remainingBytes = Math.max(0, totalBytesToUpload - totalBytesUploaded);
         let remainingTime = '';
         if (averageSpeed > 0 && remainingBytes > 0) {
@@ -115,7 +116,6 @@ function updateSpeedAndTime(currentFileLoaded, currentFileTotal) {
             remainingTime = '계산 중...';
         }
 
-        // UI 업데이트
         if (uploadSpeed && averageSpeed > 0) {
             uploadSpeed.textContent = `속도: ${formatFileSize(averageSpeed)}/s`;
         } else if (uploadSpeed) {
@@ -126,7 +126,6 @@ function updateSpeedAndTime(currentFileLoaded, currentFileTotal) {
             uploadTimeRemaining.textContent = `남은 시간: ${remainingTime}`;
         }
 
-        // 마지막 측정 값 업데이트
         lastLoaded = currentFileLoaded;
         lastLoadTime = now;
     }
@@ -142,12 +141,8 @@ function formatFileSize(bytes) {
 }
 
 // --- 전체 업로드 진행률 업데이트 ---
-// (파일 인덱스 대신 업로드된 파일 수와 바이트 기반으로 수정)
 function updateUploadProgress(uploadedFileCount, totalFiles, currentFileRelativePath, currentFilePercent) {
-    // DOM 요소가 아직 할당되지 않았을 수 있으므로 확인
     if (!overallProgressBar || !overallProgressText || !currentFileInfo) {
-        // 모달 표시 함수에서 DOM 요소를 가져오므로, 여기서는 로그만 남김
-        // logWarn('[Upload] Progress UI elements not ready for update.');
         return;
     }
     
@@ -155,28 +150,17 @@ function updateUploadProgress(uploadedFileCount, totalFiles, currentFileRelative
     
     overallProgressBar.style.width = `${overallPercent}%`;
     overallProgressText.textContent = `전체 진행률: ${overallPercent}% (${uploadedFileCount}/${totalFiles} 파일)`; 
- 
     
-    // 현재 파일 정보 업데이트 (폴더 경로 포함)
-    // currentFileRelativePath가 빈 문자열일 경우 처리
     const displayPath = currentFileRelativePath ? currentFileRelativePath.replace(/\\/g, '/') : '...'; 
     currentFileInfo.textContent = `현재 파일: ${displayPath}`;
 
-    // 업로드된 용량 / 총 용량 업데이트
     if (totalUploadSizeEl) {
         totalUploadSizeEl.textContent = `업로드: ${formatFileSize(totalBytesUploaded)} / ${formatFileSize(totalBytesToUpload)}`;
     }
-    const fileList = document.getElementById('upload-file-list');
-    if (fileList) {
-        const li = document.createElement('li');
-        li.textContent = `${currentFileRelativePath}: ${currentFilePercent}%`;
-        fileList.appendChild(li);
-    }    
 }
 
-// --- 개별 파일 업로드 함수 (XMLHttpRequest 사용) ---
-// (fileIndex 파라미터 제거, totalBytesUploaded 업데이트 로직 추가)
-async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uploadedFileCounter) { // fileIndex 대신 uploadedFileCounter 사용
+// --- 개별 파일 업로드 함수 ---
+async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uploadedFileCounter) {
     return new Promise((resolve, reject) => {
         if (isCancelled) {
             logLog(`[Upload] 시작 전 취소됨: ${relativePath}`);
@@ -184,7 +168,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
         }
 
         const xhr = new XMLHttpRequest();
-        currentUploadXHRs.push(xhr); // 진행 중인 XHR 목록에 추가
+        currentUploadXHRs.push(xhr);
         const formData = new FormData();
         
         formData.append('file_0', file, encodeURIComponent(relativePath));
@@ -194,13 +178,13 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
             originalName: file.name,
             relativePath: relativePath,
             size: file.size,
-            index: 0 // 단일 파일 처리 시 index는 0으로 고정될 수 있음
+            index: 0
         }];
         formData.append('fileInfo', JSON.stringify(fileInfo));
         
         const uploadUrl = `${API_BASE_URL}/api/upload`; 
 
-        let fileBytesUploaded = 0; // 이 파일로 인해 업로드된 바이트 추적
+        let fileBytesUploaded = 0;
 
         xhr.open('POST', uploadUrl, true);
 
@@ -209,15 +193,12 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
             if (event.lengthComputable) {
                 const currentFilePercent = Math.round((event.loaded / event.total) * 100);
                 
-                // 전체 업로드된 바이트 업데이트
                 const deltaBytes = event.loaded - fileBytesUploaded;
                 totalBytesUploaded += deltaBytes;
                 fileBytesUploaded = event.loaded;
                 
-                // 전체 진행률 업데이트 (업로드 완료된 파일 수 전달)
                 updateUploadProgress(uploadedFileCounter.count, totalFiles, relativePath, currentFilePercent);
                 
-                // 속도 및 남은 시간 업데이트 (현재 파일 기준)
                 updateSpeedAndTime(event.loaded, event.total);
             }
         };
@@ -258,7 +239,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
         };
 
         xhr.onabort = () => {
-            currentUploadXHRs = currentUploadXHRs.filter(x => x !== xhr); // XHR 목록에서 제거
+            currentUploadXHRs = currentUploadXHRs.filter(x => x !== xhr);
             logLog(`[Upload] 업로드 중단됨 (onabort): ${relativePath}`);
             resolve({ status: 'cancelled', file: relativePath });
         };
@@ -268,9 +249,10 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
     });
 }
 
-// --- 병렬 파일 업로드 관리 함수 (파일 목록 요약 로그 추가) ---
-async function uploadFilesSequentially(filesWithPaths, targetPath) {
-    showUploadModal(); // 모달 표시 및 변수 초기화
+// --- 병렬 파일 업로드 관리 함수 ---
+async function uploadFilesSequentially(filesWithPaths, uploadTargetPath) {
+    targetPath = uploadTargetPath; // 전역 targetPath 설정
+    showUploadModal();
 
     const totalFiles = filesWithPaths.length;
     if (totalFiles === 0) {
@@ -280,11 +262,8 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         return;
     }
 
-    // 전체 업로드할 바이트 계산 및 초기화
     totalBytesToUpload = filesWithPaths.reduce((sum, { file }) => sum + file.size, 0);
     totalBytesUploaded = 0;
-
-    // ... (로그 전송 로직은 유지)
 
     let successCount = 0;
     let failedCount = 0;
@@ -299,7 +278,7 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
     logLog(`[Upload Parallel] 총 ${totalFiles}개 파일 병렬 업로드 시작. 대상 경로: ${targetPath}`);
 
     const CONCURRENT_UPLOADS = 5;
-    const queue = [...filesWithPaths]; // 업로드 대기열
+    const queue = [...filesWithPaths];
     const activeUploads = [];
     const results = [];
 
@@ -354,7 +333,6 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
 
     await allUploadsFinishedPromise;
 
-    // 결과 처리
     results.forEach(result => {
         if (result.status === 'success') {
             successCount++;
@@ -367,15 +345,16 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         }
     });
 
-    // 취소 시 대기열에 남은 파일 처리
     if (isCancelled) {
-        cancelledCount += queue.length; // 대기열에 남은 파일을 취소된 것으로 간주
-        queue.length = 0; // 대기열 비우기
+        cancelledCount += queue.length;
+        cancelledFiles = [...queue]; // 대기열에 남은 파일 저장
+        queue.length = 0;
+    } else {
+        cancelledFiles = []; // 업로드 완료 시 취소된 파일 목록 초기화
     }
 
     hideUploadModal();
 
-    // 최종 결과 알림
     if (typeof showToast === 'function') {
         let finalMessage = '';
         let messageType = 'info';
@@ -388,6 +367,7 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         } else if (cancelledCount > 0) {
             finalMessage = `업로드가 취소되었습니다. (${successCount}/${totalFiles} 완료)`;
             messageType = 'warning';
+            if (resumeUploadBtn) resumeUploadBtn.disabled = false; // 재개 버튼 활성화
         } else if (successCount === totalFiles && totalFiles > 0) {
             finalMessage = `${totalFiles}개 파일 업로드를 완료했습니다.`;
             messageType = 'success';
@@ -401,7 +381,6 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
         }
     }
 
-    // 파일 목록 새로고침
     if (typeof loadFiles === 'function' && (successCount > 0 || failedCount > 0)) {
         let refreshDelay = totalFiles <= 100 ? 300 : totalFiles <= 1000 ? 1000 : 2000;
         setTimeout(() => {
@@ -413,7 +392,7 @@ async function uploadFilesSequentially(filesWithPaths, targetPath) {
     }
 }
 
-// --- 폴더 구조 순회 함수 --- 
+// --- 폴더 구조 순회 함수 ---
 async function traverseFileTree(entry, path, filesWithPaths) {
     path = path || "";
     if (entry.isFile) {
@@ -458,8 +437,7 @@ async function traverseFileTree(entry, path, filesWithPaths) {
     }
 }
 
-// --- 외부 파일 드롭 처리 함수 (handleExternalFileDrop) ---
-// (내부 로직은 변경 없음, uploadFilesSequentially 호출)
+// --- 외부 파일 드롭 처리 함수 ---
 window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
     logLog('[Upload] handleExternalFileDrop 시작');
     try {
@@ -475,8 +453,7 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
         const showToast = typeof window.showToast === 'function' ? window.showToast : null;
         const isPathLocked = typeof window.isPathLocked === 'function' ? window.isPathLocked : null;
 
-        let targetPath = currentPath; 
-        let targetName = '현재 폴더';
+        let targetPathLocal = currentPath; 
 
         if (targetFolderItem && typeof targetFolderItem.getAttribute === 'function' && targetFolderItem.hasAttribute('data-name')) {
             const folderName = targetFolderItem.getAttribute('data-name');
@@ -485,15 +462,11 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
                 logWarn(`[Upload] 잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`);
                 if (showToast) showToast(`잠긴 폴더 '${folderName}'(으)로는 업로드할 수 없습니다.`, 'warning');
                 return; 
-            
-            } else if (!isPathLocked){
-                logWarn('[Upload] isPathLocked 함수 없음. 현재 폴더 잠금 확인 없이 진행.');
             }
-            logLog('[Upload] 외부 파일 드래그 감지: 현재 경로(', targetPath || '루트' ,')에 업로드');
+            targetPathLocal = potentialTargetPath;
         }
 
-        if (showLoading) showLoading(); 
-        else logWarn('[Upload] showLoading 함수를 찾을 수 없습니다.');
+        if (showLoading) showLoading();
 
         const filesWithPaths = [];
         const promises = [];
@@ -518,17 +491,16 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
         
         if (hasEntries) {
             try {
-                await Promise.all(promises); 
+                await Promise.all(promises);
             } catch (treeError) {
                 logError('[Upload] 파일 트리 순회 중 최종 오류:', treeError);
-                if (showToast) showToast('폴더 구조를 읽는 중 오류가 발생했습니다. 구조가 너무 긴 경우 읽을 수 없습니다.', 'error');
+                if (showToast) showToast('폴더 구조를 읽는 중 오류가 발생했습니다.', 'error');
                 if (hideLoading) hideLoading();
                 return; 
             }
         }
 
-        if (hideLoading) hideLoading(); 
-        else logWarn('[Upload] hideLoading 함수를 찾을 수 없습니다.');
+        if (hideLoading) hideLoading();
 
         if (filesWithPaths.length === 0) {
             logLog('[Upload] 업로드할 파일을 찾을 수 없습니다.');
@@ -537,7 +509,7 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
         }
 
         logLog(`[Upload] 총 ${filesWithPaths.length}개의 파일 수집 완료. 병렬 업로드 시작.`);
-        await uploadFilesSequentially(filesWithPaths, targetPath); // 변경된 함수 호출
+        await uploadFilesSequentially(filesWithPaths, targetPathLocal);
 
     } catch (error) {
         logError('[Upload] 외부 파일 드롭 처리 중 예상치 못한 오류:', error);
@@ -548,39 +520,50 @@ window.handleExternalFileDrop = async (e, targetFolderItem = null) => {
     } 
 };
 
-// --- 업로드 취소 함수 --- 
-let cancelledFiles = [];
+// --- 업로드 취소 함수 ---
 function cancelUpload() {
     isCancelled = true;
     logLog('[Upload] 업로드 취소 요청됨.');
 
-    // 현재 진행 중인 모든 XHR 요청 취소
     currentUploadXHRs.forEach(xhr => {
         if (xhr && xhr.readyState !== XMLHttpRequest.DONE) {
             xhr.abort();
             logLog('[Upload] 진행 중인 XHR 요청 취소됨.');
         }
     });
-    currentUploadXHRs = []; // 배열 비우기
+    currentUploadXHRs = [];
 
-    // 상태 초기화
     totalBytesToUpload = 0;
     totalBytesUploaded = 0;
     speedHistory.length = 0;
+
+    if (resumeUploadBtn) {
+        resumeUploadBtn.disabled = false; // 재개 버튼 활성화
+    }
 }
 
+// --- 업로드 재개 함수 ---
 async function resumeUpload() {
-    if (cancelledFiles.length === 0) return;
+    if (cancelledFiles.length === 0) {
+        if (typeof showToast === 'function') {
+            showToast('재개할 파일이 없습니다.', 'info');
+        }
+        return;
+    }
+
     isCancelled = false;
-    await uploadFilesSequentially(cancelledFiles, targetPath);
-    cancelledFiles = [];
+    const filesToResume = [...cancelledFiles];
+    cancelledFiles = []; // 재개 후 초기화
+    if (resumeUploadBtn) {
+        resumeUploadBtn.disabled = true; // 재개 버튼 비활성화
+    }
+    await uploadFilesSequentially(filesToResume, targetPath);
 }
 
-// --- 초기화 함수 (initializeUploader) ---
+// --- 초기화 함수 ---
 window.initializeUploader = function() {
     logLog('[Upload Init] 업로더 초기화 시작...');
     
-    // 파일 선택 이벤트 리스너
     const localFileUploadInput = document.getElementById('fileUpload'); 
     if (localFileUploadInput) {
         localFileUploadInput.addEventListener('change', async (event) => {
@@ -607,7 +590,6 @@ window.initializeUploader = function() {
         logWarn('[Upload Init] 파일 업로드 입력(#fileUpload)을 찾을 수 없습니다.');
     }
     
-    // 취소 버튼 이벤트 리스너
     const cancelUploadBtn = document.getElementById('cancelUploadBtn');
     if (cancelUploadBtn) {
         cancelUploadBtn.addEventListener('click', () => {
@@ -622,12 +604,21 @@ window.initializeUploader = function() {
         logWarn('[Upload Init] 취소 버튼(#cancelUploadBtn)을 찾을 수 없습니다.');
     }
     
+    const resumeUploadBtnLocal = document.getElementById('resumeUploadBtn');
+    if (resumeUploadBtnLocal) {
+        resumeUploadBtnLocal.addEventListener('click', async () => {
+            logLog('[Upload] 재개 버튼 클릭.');
+            await resumeUpload();
+        });
+    } else {
+        logWarn('[Upload Init] 재개 버튼(#resumeUploadBtn)을 찾을 수 없습니다.');
+    }
+    
     logLog('[Upload Init] 업로더 초기화 완료.');
     return true;
 };
 
-// DOMContentLoaded 이벤트 리스너 내부 코드
+// DOMContentLoaded 이벤트 리스너
 document.addEventListener('DOMContentLoaded', () => {
-    // 기타 초기화 로직은 여기서 실행 (필요한 경우)
     logLog('[Upload] DOMContentLoaded 이벤트 발생. 페이지 로드 완료.');
-}); 
+});

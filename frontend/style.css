@@ -1414,7 +1414,37 @@ h1 {
     box-shadow: none;
     transform: none;
 }
+/* 재개 버튼 스타일 */
+#resumeUploadBtn {
+    background-color: #28a745;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
 
+#resumeUploadBtn:hover:not(:disabled) {
+    background-color: #218838;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+#resumeUploadBtn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#resumeUploadBtn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
 /* 모달 footer 스타일 재정의 */
 #upload-progress-modal .modal-footer {
     display: flex;
