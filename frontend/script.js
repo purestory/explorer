@@ -1241,13 +1241,7 @@ function renderFiles(files) {
                         fileItem.appendChild(lockIcon);
                     }
                     
-                    // 접근 제한된 폴더에 표시 추가
-                    if (file.isFolder && isRestricted) {
-                        const restrictedIcon = document.createElement('div');
-                        restrictedIcon.className = 'restricted-icon';
-                        restrictedIcon.innerHTML = '<i class="fas fa-shield-alt"></i>';
-                        fileItem.appendChild(restrictedIcon);
-                    }
+
                     
                     // 이벤트 리스너 설정
                     fileItem.addEventListener('click', (e) => {
@@ -3536,11 +3530,13 @@ function pasteItems() {
     
     // --- 추가된 부분: 'cut' 작업 시 원본 항목 잠금 확인 ---
     if (clipboardOperation === 'cut') {
+
+       
         const lockedItems = clipboardItems.filter(item => {
             const sourcePath = item.originalPath ? `${item.originalPath}/${item.name}` : item.name;
             // isPathAccessRestricted 함수가 정의되어 있는지 확인
-            if (typeof isPathAccessRestricted === 'function') {
-                return isPathAccessRestricted(sourcePath);
+            if (typeof isPathLocked === 'function') {
+                return isPathLocked(sourcePath);
             } else {
                 logWarn("[pasteItems] isPathAccessRestricted function not found. Cannot check lock status.");
                 return false; // 함수가 없으면 확인 불가
@@ -3552,6 +3548,7 @@ function pasteItems() {
             showToast(`다음 잠긴 항목은 이동할 수 없습니다: ${lockedNames}`, 'warning');
             return; // 이동 작업 중단
         }
+          
     }
     // --- 추가된 부분 끝 ---
 
@@ -3612,10 +3609,12 @@ function pasteItems() {
             document.getElementById('ctxPaste').style.display = 'none';
             
             // 파일 목록 새로고침
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-    loadFiles(currentPath);
+            // 초기화 시 window.currentPath 설정
+            window.currentPath = currentPath || "";
+            loadFiles(currentPath);
             statusInfo.textContent = `${promises.length}개 항목 붙여넣기 완료`;
+            showToast(`${promises.length}개 항목 붙여넣기 완료`, 'warning'); // 수정된 메시지와 타입으로 호출
+
         hideLoading();
         })
 
@@ -3632,8 +3631,8 @@ function pasteItems() {
 
             showToast(message, type); // 수정된 메시지와 타입으로 호출
             hideLoading();
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
+            // 초기화 시 window.currentPath 설정
+            window.currentPath = currentPath || "";
             loadFiles(currentPath); // 실패 시에도 목록 새로고침
         });
 }
@@ -3746,16 +3745,7 @@ function toggleFolderLock(action = 'lock') {
             const isLockedFuncDefined = typeof isPathLocked === 'function';
             const isRestrictedFuncDefined = typeof isPathAccessRestricted === 'function';
 
-            // 상위 폴더 잠금 확인 (잠금 시) - isPathAccessRestricted 사용
-            if (action === 'lock' && isRestrictedFuncDefined && isPathAccessRestricted(folderPath)) {
-                 // 현재 폴더 자체가 잠긴 경우는 제외 (하위 폴더 잠금 가능해야 함)
-                 if (!isLockedFuncDefined || !isPathLocked(folderPath)) {
-                    statusInfo.textContent = `상위 폴더가 잠겨 있어 '${itemName}' 폴더는 잠글 수 없습니다.`;
-                    showToast(`상위 폴더가 잠겨 있어 '${itemName}' 폴더는 잠글 수 없습니다.`, 'warning');
-                    // continue 대신 forEach 내에서는 return 사용 (다음 반복으로 넘어감)
-                    return;
-                 }
-            }
+
 
             selectedFolders.push({
                 name: itemName,
@@ -4946,10 +4936,10 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         const sourceParent = itemsToMove[0]?.parentPath;
         if (sourceParent !== targetPath && sourceParent !== undefined) {
              // 약간의 시간차를 두고 원본 폴더 새로고침
-            setTimeout(() => loadFiles(sourceParent), 500);
+            //setTimeout(() => loadFiles(sourceParent), 500);
         } else if (sourceParent === undefined && currentPath !== targetPath) {
              // 루트에서 다른 폴더로 이동한 경우 루트 새로고침
-            setTimeout(() => loadFiles(''), 500);
+            //setTimeout(() => loadFiles(''), 500);
         }
     }
 }

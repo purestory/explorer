@@ -227,7 +227,7 @@ function errorLogWithIP(message, error, req) { // 오류 로그는 항상 기록
 
 
 // 최대 저장 용량 설정 (100GB)
-const MAX_STORAGE_SIZE = 100 * 1024 * 1024 * 1024; // 100GB in bytes
+const MAX_STORAGE_SIZE = 500 * 1024 * 1024 * 1024; // 100GB in bytes
 
 // 최대 파일명/경로 길이 제한 설정 (전역으로 이동)
 const MAX_FILENAME_BYTES = 229;
@@ -1107,27 +1107,12 @@ app.post('/api/lock/:path(*)', express.json(), async (req, res) => { // *** asyn
       if (!lockedFolders.lockState.includes(folderPath)) {
         const isParentLocked = lockedFolders.lockState.some(lockedPath => 
           folderPath.startsWith(lockedPath + '/'));
-        
-        if (isParentLocked) {
-          log(`상위 폴더가 이미 잠겨 있어 ${folderPath} 폴더는 잠그지 않습니다.`, 'info');
-          // 상태 변경 없이 성공 응답 (클라이언트 혼란 방지)
-          return res.status(200).json({
-            success: true,
-            message: "상위 폴더가 이미 잠겨 있습니다.",
-            path: folderPath,
-            action: action,
-            status: 'skipped'
-          });
-        }
+
         
         const subLockedFolders = lockedFolders.lockState.filter(lockedPath => 
           lockedPath.startsWith(folderPath + '/'));
         
-        if (subLockedFolders.length > 0) {
-          log(`${folderPath} 폴더 잠금으로 인해 ${subLockedFolders.length}개의 하위 폴더 잠금이 해제됩니다.`, 'info');
-          lockedFolders.lockState = lockedFolders.lockState.filter(path => 
-            !path.startsWith(folderPath + '/'));
-        }
+
         
         lockedFolders.lockState.push(folderPath);
         changed = true;
@@ -1336,11 +1321,7 @@ app.post('/api/files/:folderPath(*)', async (req, res) => {
     return res.status(400).json({ success: false, message: `경로가 너무 깁니다. (최대 ${MAX_PATH_BYTES} 바이트)` });
   }
 
-  // 잠금 상태 확인
-  if (isPathAccessRestricted(sanitizedPath)) {
-      errorLogWithIP('새 폴더 생성 오류: 대상 폴더 또는 상위 폴더 잠김', { path: sanitizedPath }, req);
-      return res.status(403).json({ success: false, message: '대상 폴더 또는 상위 폴더가 잠겨 있어 생성할 수 없습니다.' });
-  }
+
 
   // 직접 폴더 생성 시도
   try {
@@ -1430,10 +1411,17 @@ app.put('/api/files/*', express.json(), async (req, res) => {
     }
 
     // 대상 경로 잠금 확인 (기존과 동일)
-    if (isPathAccessRestricted(path.join(targetDirRelative, newName))) {
-        errorLogWithIP(`잠긴 폴더 내부 또는 잠긴 이름으로 이동/변경 시도: ${fullNewPath}`, null, req);
-        return res.status(403).send('잠긴 폴더 내부로 이동하거나 잠긴 이름으로 변경할 수 없습니다.');
-    }
+    // 대상 경로 잠금 확인 수정: 이름 변경 시에만 새 이름 잠금 확인, 이동 시에는 대상 폴더 잠금 확인 안 함
+    if (targetPath === undefined) { // 이름 변경인 경우
+      const newRelativePath = path.join(targetDirRelative, newName);
+      if (isPathAccessRestricted(newRelativePath)) {
+          errorLogWithIP(`잠긴 이름으로 변경 시도: ${fullNewPath}`, null, req);
+          return res.status(403).send('잠긴 이름으로 변경할 수 없습니다.');
+      }
+  }
+
+
+    
 
     // 대상 디렉토리 생성 (mkdir -p)
     try {
@@ -1879,10 +1867,7 @@ app.post('/api/files/:folderPath(*)', async (req, res) => {
     errorLogWithIP('새 폴더 생성 오류: 경로가 너무 김', { path: targetFullPath }, req);
     return res.status(400).json({ success: false, message: `경로가 너무 깁니다. (최대 ${MAX_PATH_BYTES} 바이트)` });
   }
-  if (isPathAccessRestricted(sanitizedPath)) {
-      errorLogWithIP('새 폴더 생성 오류: 대상 폴더 또는 상위 폴더 잠김', { path: sanitizedPath }, req);
-      return res.status(403).json({ success: false, message: '대상 폴더 또는 상위 폴더가 잠겨 있어 생성할 수 없습니다.' });
-  }
+
 
   // *** 직접 폴더 생성 로직 ***
   try {
@@ -1968,18 +1953,14 @@ async function saveLockedFolders() {
 // *** isPathAccessRestricted 함수 정의 추가 ***
 // 주어진 경로 또는 그 상위 경로가 잠겨 있는지 확인하는 함수
 function isPathAccessRestricted(targetPath) {
-    if (!targetPath) return false; // 빈 경로는 잠기지 않음
-    const normalizedTargetPath = targetPath.replace(/^\/+/, '').replace(/\/+$/, ''); // 정규화
-    
-    // 자기 자신 또는 상위 경로 중 하나라도 잠겨 있으면 접근 제한
-    return lockedFolders.some(lockedPath => {
-        const normalizedLockedPath = lockedPath.replace(/^\/+/, '').replace(/\/+$/, '');
-        // 대상 경로가 잠긴 경로 자체이거나, 잠긴 경로로 시작하는 경우 (하위 경로 포함)
-        return normalizedTargetPath === normalizedLockedPath || 
-               normalizedTargetPath.startsWith(normalizedLockedPath + '/') ||
-               // 대상 경로의 상위 경로 중 하나가 잠긴 경로인 경우
-               normalizedLockedPath.startsWith(normalizedTargetPath + '/');
-    });
+  if (!targetPath) return false; // 빈 경로는 잠기지 않음
+  const normalizedTargetPath = targetPath.replace(/^\/+/, '').replace(/\/+$/, ''); // 정규화
+
+  // 주어진 경로가 잠긴 폴더 목록에 정확히 포함되는지만 확인
+  return lockedFolders.some(lockedPath => {
+      const normalizedLockedPath = lockedPath.replace(/^\/+/, '').replace(/\/+$/, '');
+      return normalizedTargetPath === normalizedLockedPath;
+  });
 }
 // *** 함수 정의 끝 ***
 
