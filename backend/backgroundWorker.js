@@ -187,12 +187,12 @@ if (!operation || !targetPath) {
         });
         
         log(`삭제 대상 이동 완료: ${targetPath} -> ${tmpTargetPath}`, 'info');
-        
-        // 2. 임시 폴더에 있는 대상 삭제
-        const escapedTmpPath = escapeShellArg(tmpTargetPath);
-        const rmCommand = `rm -rf ${escapedTmpPath}`;
-        log(`임시 폴더에서 삭제 명령어 실행: ${rmCommand}`, 'debug');
-        
+                
+        // 2. 임시 폴더 자체를 삭제 (하위 항목 포함)
+        const escapedTmpFolderPath = escapeShellArg(tmpFolderPath);
+        const rmCommand = `rm -rf ${escapedTmpFolderPath}`;
+        log(`임시 폴더 전체 삭제 명령어 실행: ${rmCommand}`, 'debug');
+
         await new Promise((resolve, reject) => {
           exec(rmCommand, (error, stdout, stderr) => {
             if (stdout) {
@@ -202,14 +202,14 @@ if (!operation || !targetPath) {
               log(`rm stderr: ${stderr.trim()}`, 'debug');
             }
             if (error) {
-              errorLog(`임시 폴더에서 삭제 명령어 실행 오류 (${itemType}): ${tmpTargetPath}`, error);
+              errorLog(`임시 폴더 전체 삭제 명령어 실행 오류: ${tmpFolderPath}`, error);
               return reject(error);
             }
             resolve();
           });
         });
-        
-        log(`임시 폴더에서 ${itemType} 삭제 완료: ${tmpTargetPath}`, 'info');
+
+        log(`임시 폴더 전체 삭제 완료: ${tmpFolderPath}`, 'info');
         
       } catch (moveError) {
         // 이동 실패 시 원래 위치에서 직접 삭제 (기존 로직)
