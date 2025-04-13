@@ -1341,7 +1341,37 @@ h1 {
 }
 
 /* 텍스트 스타일 */
-#overall-progress-text,
+/* 시간 그룹 내 배치 조정 - #upload-time-remaining을 오른쪽으로 */
+#upload-progress-modal .progress-time-group {
+    display: flex;
+    justify-content: space-between; /* 요소 사이 공간 분배 */
+    align-items: center;
+    margin: 10px 0;
+    width: 100%; /* 전체 너비 사용 */
+}
+
+/* 전체 진행률 텍스트는 왼쪽에 배치 */
+#overall-progress-text {
+    flex: 3; /* 더 많은 공간 차지 */
+    text-align: left;
+    margin: 0 10px 0 0;
+    font-size: 0.9em;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 남은 시간은 오른쪽에 배치 */
+#upload-time-remaining {
+    flex: 2; /* 더 적은 공간 차지 */
+    text-align: right; /* 오른쪽 정렬 */
+    margin: 0;
+    font-size: 0.9em;
+    color: #555;
+    white-space: nowrap;
+}
+
 #total-upload-size,
 #current-file-info {
     margin: 12px 0;
@@ -1359,11 +1389,10 @@ h1 {
 }
 
 /* 속도 및 남은 시간 그룹 */
-#upload-progress-modal .progress-time-group,
 #upload-progress-modal .speed-size-group {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin: 10px 0;
 }
 
