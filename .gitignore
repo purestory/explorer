@@ -125,7 +125,9 @@ dist
 .tern-port
 
 # Temporary files
-backend/tmp/
+backend/tmp/*
+backend/share-folder/*
+tmp/*
 
 # Test files
 frontend/upload-test/

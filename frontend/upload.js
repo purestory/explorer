@@ -588,6 +588,9 @@ function cancelUpload() {
     if (typeof showToast === 'function') {
         showToast('업로드가 취소되었습니다.', 'info');
     }
+    setTimeout(() => {
+        loadFiles(typeof currentPath !== 'undefined' ? currentPath : '');
+    }, 300);
 }
 
 // --- 업로드 중지/재개 함수 ---

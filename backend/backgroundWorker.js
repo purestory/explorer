@@ -105,27 +105,138 @@ if (!operation || !targetPath) {
         }
       }
 
-      const escapedPath = escapeShellArg(targetPath);
-      const command = `rm -rf ${escapedPath}`;
-      log(`명령어 실행: ${command}`, 'debug'); // debug 레벨
+      // 임시 폴더 경로 설정 (수정된 부분 - 절대 경로 사용)
+      const tmpDir = '/home/purestory/webdav/backend/tmp';
       
-      await new Promise((resolve, reject) => {
-        exec(command, (error, stdout, stderr) => {
-          if (stdout) {
-            log(`rm stdout: ${stdout.trim()}`, 'debug'); // debug 레벨
-          }
-          if (stderr) {
-            log(`rm stderr: ${stderr.trim()}`, 'debug'); // debug 레벨
-          }
-          if (error) {
-            errorLog(`rm 명령어 실행 오류 (${itemType}): ${targetPath}`, error);
-            return reject(error);
-          }
-          resolve();
+      log(`실제 임시 폴더 경로: ${tmpDir}`, 'info'); // 경로 로깅 추가
+      
+      // 임시 폴더 생성 (없는 경우)
+      try {
+        await new Promise((resolve, reject) => {
+          const mkTmpCommand = `mkdir -p -m 777 ${escapeShellArg(tmpDir)}`;
+          log(`임시 폴더 생성 명령어 실행: ${mkTmpCommand}`, 'debug');
+          
+          exec(mkTmpCommand, (error, stdout, stderr) => {
+            if (error) {
+              errorLog(`임시 폴더 생성 오류: ${tmpDir}`, error);
+              return reject(error);
+            }
+            if (stderr) {
+              log(`임시 폴더 생성 stderr: ${stderr.trim()}`, 'debug');
+            }
+            resolve();
+          });
         });
-      });
+      } catch (mkdirError) {
+        errorLog(`임시 폴더 생성 실패: ${tmpDir}`, mkdirError);
+        // 임시 폴더 생성 실패해도 계속 진행 (직접 삭제)
+      }
+
+      // 타임스탬프를 포함한 고유한 임시 하위 폴더 생성
+      const timestamp = Date.now();
+      const timestamp_folder = `${timestamp}_delete_tmp`;
+      const tmpFolderPath = path.join(tmpDir, timestamp_folder);
       
-      log(`${itemType} 삭제 작업 완료 (rm 명령어 사용): ${targetPath}`, 'info'); // info 레벨
+      // 원본 파일/폴더 이름 그대로 유지
+      const basename = path.basename(targetPath);
+      const tmpTargetPath = path.join(tmpFolderPath, basename);
+      
+      // 임시 하위 폴더 생성
+      try {
+        await new Promise((resolve, reject) => {
+          const mkTmpFolderCommand = `mkdir -p -m 777 ${escapeShellArg(tmpFolderPath)}`;
+          log(`임시 하위 폴더 생성 명령어 실행: ${mkTmpFolderCommand}`, 'debug');
+          
+          exec(mkTmpFolderCommand, (error, stdout, stderr) => {
+            if (error) {
+              errorLog(`임시 하위 폴더 생성 오류: ${tmpFolderPath}`, error);
+              return reject(error);
+            }
+            if (stderr) {
+              log(`임시 하위 폴더 생성 stderr: ${stderr.trim()}`, 'debug');
+            }
+            resolve();
+          });
+        });
+      } catch (mkdirError) {
+        errorLog(`임시 하위 폴더 생성 실패: ${tmpFolderPath}`, mkdirError);
+        // 임시 폴더 생성 실패해도 계속 진행 (직접 삭제)
+      }
+      
+      // 1. 삭제 대상을 임시 폴더 내의 하위 폴더로 이동 (원본 이름 유지)
+      try {
+        log(`삭제 대상을 임시 폴더로 이동 시작: ${targetPath} -> ${tmpTargetPath}`, 'info');
+        
+        await new Promise((resolve, reject) => {
+          const mvCommand = `mv ${escapeShellArg(targetPath)} ${escapeShellArg(tmpTargetPath)}`;
+          log(`이동 명령어 실행: ${mvCommand}`, 'debug');
+          
+          exec(mvCommand, (error, stdout, stderr) => {
+            if (stdout) {
+              log(`mv stdout: ${stdout.trim()}`, 'debug');
+            }
+            if (stderr) {
+              log(`mv stderr: ${stderr.trim()}`, 'debug');
+            }
+            if (error) {
+              errorLog(`이동 명령어 실행 오류 (${itemType}): ${targetPath} -> ${tmpTargetPath}`, error);
+              return reject(error);
+            }
+            resolve();
+          });
+        });
+        
+        log(`삭제 대상 이동 완료: ${targetPath} -> ${tmpTargetPath}`, 'info');
+        
+        // 2. 임시 폴더에 있는 대상 삭제
+        const escapedTmpPath = escapeShellArg(tmpTargetPath);
+        const rmCommand = `rm -rf ${escapedTmpPath}`;
+        log(`임시 폴더에서 삭제 명령어 실행: ${rmCommand}`, 'debug');
+        
+        await new Promise((resolve, reject) => {
+          exec(rmCommand, (error, stdout, stderr) => {
+            if (stdout) {
+              log(`rm stdout: ${stdout.trim()}`, 'debug');
+            }
+            if (stderr) {
+              log(`rm stderr: ${stderr.trim()}`, 'debug');
+            }
+            if (error) {
+              errorLog(`임시 폴더에서 삭제 명령어 실행 오류 (${itemType}): ${tmpTargetPath}`, error);
+              return reject(error);
+            }
+            resolve();
+          });
+        });
+        
+        log(`임시 폴더에서 ${itemType} 삭제 완료: ${tmpTargetPath}`, 'info');
+        
+      } catch (moveError) {
+        // 이동 실패 시 원래 위치에서 직접 삭제 (기존 로직)
+        errorLog(`임시 폴더로 이동 실패, 직접 삭제 시도: ${targetPath}`, moveError);
+        
+        const escapedPath = escapeShellArg(targetPath);
+        const rmCommand = `rm -rf ${escapedPath}`;
+        log(`원래 위치에서 직접 삭제 명령어 실행: ${rmCommand}`, 'debug');
+        
+        await new Promise((resolve, reject) => {
+          exec(rmCommand, (error, stdout, stderr) => {
+            if (stdout) {
+              log(`rm stdout: ${stdout.trim()}`, 'debug');
+            }
+            if (stderr) {
+              log(`rm stderr: ${stderr.trim()}`, 'debug');
+            }
+            if (error) {
+              errorLog(`원래 위치에서 삭제 명령어 실행 오류 (${itemType}): ${targetPath}`, error);
+              return reject(error);
+            }
+            resolve();
+          });
+        });
+        
+        log(`원래 위치에서 ${itemType} 직접 삭제 완료: ${targetPath}`, 'info');
+      }
 
     } else if (operation === 'create') {
       const escapedPath = escapeShellArg(targetPath);
@@ -163,4 +274,4 @@ if (!operation || !targetPath) {
     errorLog(`${operation} 작업 중 오류 발생: ${targetPath}`, error);
     process.exit(1); 
   }
-})(); 
+})();
