@@ -1383,7 +1383,7 @@ h1 {
     word-break: break-all;
 }
 
-/* 취(recipe소 버튼 스타일 */
+/* 취소 버튼 스타일 */
 #cancelUploadBtn {
     background-color: #dc3545;
     color: white;
