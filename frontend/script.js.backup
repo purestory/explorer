@@ -236,7 +236,7 @@ function initContextMenu() {
                 const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
                 
                 // 잠금 상태에 따라 메뉴 텍스트 변경
-                if (isFolderLocked(itemPath)) {
+                if (isPathLocked(itemPath)) {
                     ctxLock.innerHTML = '<i class="fas fa-unlock"></i> 잠금 해제';
                 } else {
                     ctxLock.innerHTML = '<i class="fas fa-lock"></i> 잠금';
@@ -1183,11 +1183,14 @@ function renderFiles(files) {
                     fileItem.setAttribute('data-path', filePath);
                     
                     // 잠금 상태 확인 및 표시 - 직접 잠긴 폴더만 표시
-                    const isDirectlyLocked = isFolderLocked(filePath);
+                    const isDirectlyLocked = isPathLocked(filePath);
                     // 접근 제한 (상위 폴더가 잠겨있는 경우) 확인
+                    const isRestricted = isPathAccessRestricted(filePath) && !isDirectlyLocked;
                     
                     if (file.isFolder && isDirectlyLocked) {
                         fileItem.classList.add('locked-folder');
+                    } else if (file.isFolder && isRestricted) {
+                        // fileItem.classList.add('restricted-folder'); // 주석 처리
                     }
                     
                     // 아이콘 생성
@@ -2184,7 +2187,7 @@ async function deleteSelectedItems() {
     // 잠긴 폴더 확인 (기존 로직 유지)
     const hasRestrictedItems = itemList.some(itemName => {
         const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-        return isFolderLocked(itemPath);
+        return isPathAccessRestricted(itemPath);
     });
     if (hasRestrictedItems) {
         showToast('잠긴 폴더 또는 파일은 삭제할 수 없습니다.', 'warning');
@@ -3532,10 +3535,10 @@ function pasteItems() {
         const lockedItems = clipboardItems.filter(item => {
             const sourcePath = item.originalPath ? `${item.originalPath}/${item.name}` : item.name;
             // isPathAccessRestricted 함수가 정의되어 있는지 확인
-            if (typeof isFolderLocked === 'function') {
-                return isFolderLocked(sourcePath);
+            if (typeof isPathLocked === 'function') {
+                return isPathLocked(sourcePath);
             } else {
-                logWarn("[pasteItems] isFolderLocked function not found. Cannot check lock status.");
+                logWarn("[pasteItems] isPathAccessRestricted function not found. Cannot check lock status.");
                 return false; // 함수가 없으면 확인 불가
             }
         });
@@ -3634,34 +3637,6 @@ function pasteItems() {
         });
 }
 
-
-// 폴더가 직접 잠겨있는지 확인하는 함수
-function isFolderLocked(path) {
-    if (!lockFeatureAvailable) {
-        return false;
-    }
-    
-    // lockedFolders가 배열인지 확인
-    if (!Array.isArray(lockedFolders)) {
-        logError('lockedFolders가 배열이 아님:', lockedFolders);
-        return false;
-    }
-    
-    if (lockedFolders.length === 0) {
-        return false;
-    }
-    
-    // 해당 경로가 정확히 잠긴 폴더 목록에 포함되는지만 확인
-    return lockedFolders.some(lockedPath => {
-        if (typeof lockedPath !== 'string') {
-            logError('lockedPath가 문자열이 아님:', lockedPath);
-            return false;
-        }
-        return path === lockedPath;
-    });
-}
-
-
 // 폴더 잠금 상태 확인
 function isPathLocked(path) {
     // 잠금 기능을 사용할 수 없으면 항상 false 반환
@@ -3679,13 +3654,30 @@ function isPathLocked(path) {
 }
 
 // 경로 또는 그 상위 폴더가 잠겨 있어 접근이 제한되는지 확인
-// 경로 또는 그 상위 폴더가 잠겨 있어 접근이 제한되는지 확인 
+// 경로 또는 그 상위 폴더가 잠겨 있어 접근이 제한되는지 확인
 function isPathAccessRestricted(path) {
-    if (!lockFeatureAvailable || !lockedFolders || lockedFolders.length === 0) {
+    if (!lockFeatureAvailable) {
         return false;
     }
-    // 경로가 정확히 잠긴 폴더인지만 확인 (상위 경로 체크 제거)
-    return lockedFolders.some(lockedPath => path === lockedPath);
+    
+    // lockedFolders가 배열인지 확인
+    if (!Array.isArray(lockedFolders)) {
+        logError('lockedFolders가 배열이 아님:', lockedFolders);
+        return false;
+    }
+    
+    if (lockedFolders.length === 0) {
+        return false;
+    }
+    
+    // path 또는 path의 상위 경로 중 하나라도 lockedFolders에 포함되는지 확인
+    return lockedFolders.some(lockedPath => {
+        if (typeof lockedPath !== 'string') {
+            logError('lockedPath가 문자열이 아님:', lockedPath);
+            return false;
+        }
+        return path === lockedPath || path.startsWith(lockedPath + '/');
+    });
 }
 
 // 잠금 상태 로드 함수
@@ -3693,6 +3685,7 @@ function loadLockStatus() {
     // 이미 잠금 기능을 사용할 수 없다고 판단되면 바로 빈 배열 반환
     if (!lockFeatureAvailable) {
         logLog('잠금 기능을 사용할 수 없습니다.');
+        lockedFolders = [];
         return Promise.resolve([]);
     }
     
@@ -3711,22 +3704,22 @@ function loadLockStatus() {
         })
         .then(data => {
             // data가 null이거나 lockState가 없는 경우 빈 배열로 처리
-            if (!data || !data.lockState) {
+            if (!data || !data.lockState || !Array.isArray(data.lockState)) {
                 lockedFolders = [];
-         } else {
+                logWarn('잠금 상태 데이터가 유효한 배열이 아닙니다:', data);
+            } else {
                 lockedFolders = data.lockState;
             }
             logLog('잠금 폴더 목록:', lockedFolders);
             return lockedFolders;
         })
         .catch(error => {
+            // 오류 발생 시 빈 배열로 초기화
+            lockedFolders = [];
             // 콘솔 에러 메시지를 한 번만 표시
             if (lockFeatureAvailable) {
                 logError('잠금 상태 조회 오류:', error);
-                // 서버가 기능을 지원하지 않으므로 기능 비활성화
-                lockFeatureAvailable = false;
             }
-            lockedFolders = [];
             return [];
         });
 }
@@ -3768,7 +3761,8 @@ function toggleFolderLock(action = 'lock') {
             const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
 
             // isPathLocked와 isPathAccessRestricted 함수 존재 여부 확인
-            const isLockedFuncDefined = typeof isFolderLocked === 'function';
+            const isLockedFuncDefined = typeof isPathLocked === 'function';
+            const isRestrictedFuncDefined = typeof isPathAccessRestricted === 'function';
 
 
 
@@ -3776,7 +3770,7 @@ function toggleFolderLock(action = 'lock') {
                 name: itemName,
                 path: folderPath,
                 // isPathLocked 함수가 없으면 기본값 false 사용
-                isLocked: isLockedFuncDefined ? isFolderLocked(folderPath) : false
+                isLocked: isLockedFuncDefined ? isPathLocked(folderPath) : false
             });
         }
     });
@@ -4911,11 +4905,11 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
     // --- 추가된 부분: 이동할 원본 항목 잠금 확인 --- (isPathLocked 사용)
     const lockedItems = itemsToMove.filter(item => {
         // isPathLocked 함수가 정의되어 있는지 확인
-        if (typeof isFolderLocked === 'function') {
+        if (typeof isPathLocked === 'function') {
             // item.fullPath가 lockedFolders 배열에 정확히 일치하는지 확인
-            return isFolderLocked(item.fullPath); // isPathAccessRestricted -> isPathLocked 로 변경
+            return isPathLocked(item.fullPath); // isPathAccessRestricted -> isPathLocked 로 변경
         } else {
-            logWarn("[Internal Drop] isFolderLocked function not found. Cannot check lock status.");
+            logWarn("[Internal Drop] isPathLocked function not found. Cannot check lock status.");
             return false;
         }
     });
