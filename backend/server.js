@@ -1981,19 +1981,7 @@ function isFolderLocked(targetPath) {
 // *** 함수 정의 끝 ***
 
 
-// *** isPathAccessRestricted 함수 정의 추가 ***
-// 주어진 경로 또는 그 상위 경로가 잠겨 있는지 확인하는 함수
-function isPathAccessRestricted(targetPath) {
-  if (!targetPath) return false; // 빈 경로는 잠기지 않음
-  const normalizedTargetPath = targetPath.replace(/^\/+/, '').replace(/\/+$/, ''); // 정규화
 
-  // 주어진 경로가 잠긴 폴더 목록에 정확히 포함되는지만 확인
-  return lockedFolders.some(lockedPath => {
-      const normalizedLockedPath = lockedPath.replace(/^\/+/, '').replace(/\/+$/, '');
-      return normalizedTargetPath === normalizedLockedPath;
-  });
-}
-// *** 함수 정의 끝 ***
 
 // ===== 테스트용 파일 업로드 라우트 시작 =====
 const testUploadStorage = multer.diskStorage({
