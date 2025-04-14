@@ -458,7 +458,73 @@ function initDragSelect() {
             autoScrollAnimationId = null;
         }
     }
+    
+    // 드래그 선택 상태 초기화 함수
+    function resetDragSelectState() {
+        window.dragSelectState.isSelecting = false;
+        window.dragSelectState.dragStarted = false;
+        window.dragSelectState.startedOnFileItem = false;
+        window.dragSelectState.startedOnSelectedItem = false;
+    }
+    
+    // mousedown 이벤트 핸들러
+    document.addEventListener('mousedown', (e) => {
+        // 컨텍스트 메뉴 클릭, 오른쪽 버튼 클릭 등 무시
+        if (e.target.closest('.context-menu') || e.button !== 0 || e.target.closest('.top-bar-btn, .context-menu-item, #modeToggleBtn')) {
+            return;
+        }
+        // 자동 스크롤 중지
+        if (autoScrollAnimationId !== null) {
+            cancelAutoScroll();
+        }
+
+        const fileList = document.getElementById('fileList');
+        if (!fileList || e.target.id === 'searchInput') return;
+
+        let startClientX = e.clientX;
+        let startClientY = e.clientY;
+
+        // 파일/폴더 아이템 위에서 시작했는지 확인
+        const fileItemElement = e.target.closest('.file-item') || e.target.closest('.file-item-grid');
+        window.dragSelectState.startedOnFileItem = fileItemElement !== null;
+
+        // 선택된 파일 위에서 드래그 시작하는 경우 (파일 이동 시작점)
+        if (window.dragSelectState.startedOnFileItem && fileItemElement.classList.contains('selected')) {
+            window.dragSelectState.startedOnSelectedItem = true;
+            return; // 선택 상자 생성 안 함
+        }
+
+        // 빈 공간 클릭 시 드래그 선택 시작 준비
+        e.preventDefault(); // 텍스트 선택 등 기본 동작 방지
+        window.dragSelectState.dragStarted = false; // 아직 드래그 시작 안 함
+        const initialScrollTop = fileList.scrollTop;
+        const initialScrollLeft = fileList.scrollLeft;
+        window.dragSelectState.isSelecting = true; // 선택 모드 활성화
+
+        // 선택 상자 요소 가져오고 초기화
+        const selectionBox = document.getElementById('selectionBox');
+        if (!selectionBox) return; // 요소 없으면 중단
+        selectionBox.style.position = 'fixed'; // 화면 기준 위치 고정
+        selectionBox.style.left = `${startClientX}px`;
+        selectionBox.style.top = `${startClientY}px`;
+        selectionBox.style.width = '0px';
+        selectionBox.style.height = '0px';
+        selectionBox.style.display = 'none'; // 아직 보이지 않음
+        selectionBox.style.zIndex = '9999'; // 다른 요소 위에 표시
+        // 시작 좌표 및 스크롤 정보 저장 (dataset 사용)
+        selectionBox.dataset.startClientX = startClientX;
+        selectionBox.dataset.startClientY = startClientY;
+        selectionBox.dataset.initialScrollTop = initialScrollTop;
+    });
+
+    // 폴더 이동 후 드래그 선택 상태 초기화
+    document.addEventListener('folderChanged', () => {
+        resetDragSelectState();
+    });
 }
+
+
+
 // ===== 자동 스크롤 관련 전역 변수 =====
 let autoScrollIntervalId = null;
 let scrollDirection = 0;
@@ -968,6 +1034,9 @@ function loadFiles(path = '') {
     // 더블클릭이 가능한지 여부를 나타내는 전역 플래그
     window.doubleClickEnabled = false;
     
+    // 드래그 선택 상태 초기화
+    resetDragSelectState();
+    
     fetch(`${API_BASE_URL}/api/files/${encodedPath}`)
         .then(response => {
             if (!response.ok) {
@@ -1014,6 +1083,14 @@ function loadFiles(path = '') {
     
     // 디스크 사용량 로드
     loadDiskUsage();
+}
+
+// 드래그 선택 상태 초기화 함수
+function resetDragSelectState() {
+    window.dragSelectState.isSelecting = false;
+    window.dragSelectState.dragStarted = false;
+    window.dragSelectState.startedOnFileItem = false;
+    window.dragSelectState.startedOnSelectedItem = false;
 }
 
 // 파일 정렬 함수
@@ -2083,26 +2160,13 @@ function handleFileDblClick(e, fileItem) {
                 item.classList.remove('hover');
             }
         });
-        /*
-        // 마우스 이벤트 강제 발생 (기존 로직 유지 - 필요성 검토 필요)
-        setTimeout(() => {
-            try {
-                if (typeof window.mouseX === 'number' && typeof window.mouseY === 'number') {
-                    const mouseEvent = new MouseEvent('mousemove', {
-                        bubbles: true, cancelable: true, view: window,
-                        clientX: window.mouseX, clientY: window.mouseY
-                    });
-                    document.dispatchEvent(mouseEvent);
-                }
-            } catch (error) {
-                logError('마우스 이벤트 강제 발생 중 오류:', error);
-            }
-        }, 350); // 지연 시간 유지
-        */
 
         // 파일 목록 로드
         loadFiles(newPath);
         clearSelection(); // 선택 초기화
+
+        // 드래그 선택 상태 초기화
+        resetDragSelectState();
 
         return; // 폴더 탐색 후 함수 종료
     }
@@ -2128,13 +2192,14 @@ function handleFileDblClick(e, fileItem) {
             downloadFile(fileName);
         }
     }
+}
 
-    
-    // 파일 목록 로드
-    loadFiles(newPath);
-    
-    // 선택 초기화
-        clearSelection();
+// 드래그 선택 상태 초기화 함수
+function resetDragSelectState() {
+    window.dragSelectState.isSelecting = false;
+    window.dragSelectState.dragStarted = false;
+    window.dragSelectState.startedOnFileItem = false;
+    window.dragSelectState.startedOnSelectedItem = false;
 }
 
 // 이름 변경 다이얼로그 표시
