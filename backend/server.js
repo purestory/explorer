@@ -13,6 +13,10 @@ const archiver = require('archiver');
 const { promisify } = require('util');
 const fs_stream = require('fs');
 
+
+const session = require('express-session');
+
+
 // 쉘 인자를 안전하게 이스케이프하는 함수 (추가)
 
 // 특수문자를 완벽하게 이스케이프하는 전역 함수 정의
@@ -1019,44 +1023,7 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
 app.get('/api/lock-status', (req, res) => {
   res.json({ lockState: lockedFolders });
 });
-/*
-// 폴더 잠금 상태 조회 API (비동기화)
-app.get('/api/lock-status', async (req, res) => { // *** async 추가 ***
-  try {
-    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
-    let lockState = [];
-    
-    // *** 파일 존재 확인 및 읽기 (비동기) ***
-    try {
-      const fileContent = await fs.promises.readFile(lockedFoldersPath, 'utf8');
-      lockState = JSON.parse(fileContent).lockState || [];
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        // 파일이 없으면 빈 배열로 초기화하고 파일 생성 (비동기)
-        log('lockedFolders.json 파일 없음. 새로 생성합니다.', 'info');
-        try {
-          await fs.promises.writeFile(lockedFoldersPath, JSON.stringify({ lockState: [] }), 'utf8');
-        } catch (writeError) {
-          errorLog('lockedFolders.json 파일 생성 오류:', writeError);
-          // 파일 생성 실패 시에도 빈 배열로 응답
-        }
-      } else {
-        // 파싱 오류 또는 기타 읽기 오류
-        errorLog('잠긴 폴더 목록 읽기/파싱 오류:', error);
-        // 오류 발생 시에도 일단 빈 배열로 응답 (클라이언트 오류 방지)
-      }
-    }
-    
-    log(`잠금 상태 조회 완료: ${lockState.length}개 폴더 잠김`, 'info');
-    res.status(200).json({ lockState });
 
-  } catch (error) {
-    // 핸들러 자체의 예외 처리
-    errorLog('잠금 상태 조회 API 오류:', error);
-    res.status(500).send('서버 오류가 발생했습니다.');
-  }
-});
-*/
 // 폴더 잠금/해제 API (비동기화)
 app.post('/api/lock/:path(*)', express.json(), async (req, res) => { // *** async 추가, express.json() 미들웨어 추가 ***
   try {
@@ -1908,12 +1875,7 @@ app.post('/api/items/delete', async (req, res) => {
 let lockedFolders = []; // 잠긴 폴더 경로 목록 (메모리 저장)
 const LOCK_FILE_PATH = path.join(__dirname, 'lockedFolders.json'); // !!!! 파일 이름 수정 !!!!
 
-// 특수문자를 완벽하게 이스케이프하는 함수 (전역)
-// function escapeShellArg(arg) {
-//   // 모든 특수문자를 처리하기 위해 작은따옴표로 감싸고
-//   // 내부의 작은따옴표, 백틱, 달러 기호 등을 이스케이프
-//   return `'${arg.replace(/'/g, "'\\''")}'`;
-// }
+
 
 // 잠금 파일 로드 함수
 async function loadLockedFolders() {
@@ -2101,8 +2063,38 @@ app.post('/api/unlock', (req, res) => {
         errorLog('폴더 잠금 해제 저장 오류:', error);
         res.status(500).json({ success: false, message: '폴더 잠금 해제 저장 중 오류가 발생했습니다.' });
     });
-});// 서버 상태 확인 API
+});
+
+// 서버 상태 확인 API
 app.get('/api/status', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Server is running' });
     logWithIP('Server status checked', req, 'info');
 });
+
+// 폴더별 암호 인증 미들웨어 (기존 lockedFolders 변수를 재사용)
+app.use('/locked-folder', (req, res, next) => {
+  const folderPath = req.path;  // 진입하려는 폴더 경로
+  if (!req.session.authenticated || !lockedFolders[folderPath] || req.session.folder !== folderPath) {
+      res.status(401).send('해당 폴더의 암호가 필요합니다.');
+  } else {
+      next();
+  }
+});
+
+// 로그인 라우트 (기존 lockedFolders 변수를 재사용)
+app.post('/login', (req, res) => {
+  const { password, folder } = req.body;  // 요청 바디에서 폴더와 암호 추출
+  if (lockedFolders[folder] && lockedFolders[folder] === password) {
+      req.session.authenticated = true;
+      req.session.folder = folder;
+      res.send('인증 성공. 폴더에 접근 가능합니다.');
+  } else {
+      res.status(401).send('잘못된 암호 또는 폴더');
+  }
+});
+
+// 만약 lockedFolders가 아직 정의되지 않았다면, 여기에 로드 로직 추가 예시
+if (typeof lockedFolders === 'undefined') {
+  const lockedFoldersData = require('./lockedFolders.json');  // 필요한 경우 로드
+  lockedFolders = lockedFoldersData.lockState || [];
+}
