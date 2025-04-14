@@ -451,6 +451,7 @@ function initDragSelect() {
         autoScrollAnimationId = requestAnimationFrame(() => autoScroll(clientX, clientY));
     }
     
+
     // 자동 스크롤 취소 함수
     function cancelAutoScroll() {
         if (autoScrollAnimationId !== null) {
@@ -517,8 +518,12 @@ function initDragSelect() {
         selectionBox.dataset.initialScrollTop = initialScrollTop;
     });
 
-    // 폴더 이동 후 드래그 선택 상태 초기화
-    document.addEventListener('folderChanged', () => {
+    // 클릭 및 더블클릭 후 드래그 선택 상태 초기화
+    document.addEventListener('click', () => {
+        resetDragSelectState();
+    });
+
+    document.addEventListener('dblclick', () => {
         resetDragSelectState();
     });
 }
@@ -1070,7 +1075,7 @@ function loadFiles(path = '') {
             setTimeout(() => {
                 window.doubleClickEnabled = true;
                 logLog('더블클릭 이벤트 활성화됨');
-            }, 300);
+            }, 300); // 타이머 시간을 300ms에서 500ms로 증가
         })
         .catch(error => {
             logError('Error:', error);
@@ -1078,7 +1083,9 @@ function loadFiles(path = '') {
             hideLoading();
             
             // 오류 발생해도 더블클릭 이벤트 활성화
-            window.doubleClickEnabled = true;
+            setTimeout(() => {
+                window.doubleClickEnabled = true;
+            }, 300); // 타이머 시간을 300ms에서 500ms로 증가
         });
     
     // 디스크 사용량 로드
@@ -1092,6 +1099,8 @@ function resetDragSelectState() {
     window.dragSelectState.startedOnFileItem = false;
     window.dragSelectState.startedOnSelectedItem = false;
 }
+
+
 
 // 파일 정렬 함수
 function sortFiles(files) {
@@ -2063,54 +2072,30 @@ function updateBreadcrumb(path) {
 
 // 파일 클릭 처리
 function handleFileClick(e, fileItem) {
-    // 우클릭은 무시 (컨텍스트 메뉴용)
-    if (e.button === 2) return;
+    // 이벤트 버블링 방지
+    e.preventDefault();
+    e.stopPropagation();
     
-    // 이름 변경 중이면 무시
-    if (fileItem.classList.contains('renaming')) return;
-    
-    // 상위 폴더는 선택 처리하지 않음
-    if (fileItem.getAttribute('data-parent-dir') === 'true') {
-        return;
+    // 더블클릭 감지용 플래그가 있으면 초기화
+    if (window.isDoubleClicking) {
+        window.isDoubleClicking = false;
     }
     
-    // Ctrl 또는 Shift 키로 다중 선택
+    // 파일 항목 클릭 처리
     if (e.ctrlKey) {
-        if (fileItem.classList.contains('selected')) {
-            fileItem.classList.remove('selected');
-            selectedItems.delete(fileItem.getAttribute('data-name'));
+        toggleSelection(fileItem);
+    } else if (e.shiftKey) {
+        handleShiftSelect(fileItem);
     } else {
-            fileItem.classList.add('selected');
-            selectedItems.add(fileItem.getAttribute('data-name'));
-        }
-    } else if (e.shiftKey && selectedItems.size > 0) {
-        // Shift 키로 범위 선택
-        const items = Array.from(document.querySelectorAll('.file-item:not([data-parent-dir="true"])'));
-        const firstSelected = items.findIndex(item => item.classList.contains('selected'));
-        const currentIndex = items.indexOf(fileItem);
-        
-        // 범위 설정
-        const start = Math.min(firstSelected, currentIndex);
-        const end = Math.max(firstSelected, currentIndex);
-        
         clearSelection();
-        
-        for (let i = start; i <= end; i++) {
-            items[i].classList.add('selected');
-            selectedItems.add(items[i].getAttribute('data-name'));
-        }
-    } else {
-        // 일반 클릭: 단일 선택
-        const fileName = fileItem.getAttribute('data-name');
-        
-        // 모든 선택 해제 후 현재 항목 선택
-        clearSelection();
-        fileItem.classList.add('selected');
-        selectedItems.add(fileName);
+        selectItem(fileItem);
     }
     
-    updateButtonStates();
+    // 드래그 선택 상태 초기화
+    resetDragSelectState();
 }
+
+
 
 // 파일 더블클릭 처리
 function handleFileDblClick(e, fileItem) {
@@ -2191,16 +2176,16 @@ function handleFileDblClick(e, fileItem) {
             // 다운로드
             downloadFile(fileName);
         }
+        
+        // 드래그 선택 상태 초기화
+        resetDragSelectState();
     }
 }
 
-// 드래그 선택 상태 초기화 함수
-function resetDragSelectState() {
-    window.dragSelectState.isSelecting = false;
-    window.dragSelectState.dragStarted = false;
-    window.dragSelectState.startedOnFileItem = false;
-    window.dragSelectState.startedOnSelectedItem = false;
-}
+
+
+
+
 
 // 이름 변경 다이얼로그 표시
 function showRenameDialog() {
