@@ -139,12 +139,39 @@ function toggleSelection(fileItem) {
 
 // Shift 키를 이용한 범위 선택 함수
 function handleShiftSelect(fileItem) {
-    // 구현 예정 - 필요에 따라 추가 가능
-    // 현재는 단일 선택으로 처리
-    clearSelection();
-    selectItem(fileItem);
-}
+    const items = Array.from(document.querySelectorAll('.file-item, .file-item-grid'));
+    if (items.length === 0) return;
 
+    // 이미 선택된 항목이 있는지 확인
+    let startIndex = -1;
+    let endIndex = items.indexOf(fileItem);
+
+    // 선택된 항목 중 첫 번째를 시작점으로 설정
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].classList.contains('selected')) {
+            startIndex = i;
+            break;
+        }
+    }
+
+    // 선택된 항목이 없으면 현재 항목을 단일 선택
+    if (startIndex === -1) {
+        clearSelection();
+        selectItem(fileItem);
+        return;
+    }
+
+    // 범위 선택
+    clearSelection();
+    const minIndex = Math.min(startIndex, endIndex);
+    const maxIndex = Math.max(startIndex, endIndex);
+
+    for (let i = minIndex; i <= maxIndex; i++) {
+        if (!items[i].getAttribute('data-parent-dir')) { // 상위 폴더 제외
+            selectItem(items[i]);
+        }
+    }
+}
 // 모달 초기화
 function initModals() {
     // 모달 닫기 버튼
@@ -2094,6 +2121,7 @@ function handleFileClick(e, fileItem) {
     // 드래그 선택 상태 초기화
     resetDragSelectState();
 }
+
 
 
 
