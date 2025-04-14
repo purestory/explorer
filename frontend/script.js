@@ -969,6 +969,10 @@ function initShortcuts() {
             e.preventDefault();
             clearSelection();
             contextMenu.style.display = 'none';
+            lockModal.style.display = 'none';
+            unlockModal.style.display = 'none';
+
+
         }
     });
     
@@ -976,6 +980,9 @@ function initShortcuts() {
     window.shortcutsInitialized = true;
     logLog('단축키 초기화 완료');
 }
+
+
+
 
 // 디스크 사용량 가져오기
 function loadDiskUsage() {
@@ -1131,6 +1138,8 @@ function resetDragSelectState() {
     window.dragSelectState.startedOnFileItem = false;
     window.dragSelectState.startedOnSelectedItem = false;
 }
+
+
 
 
 
@@ -1881,10 +1890,11 @@ function init() {
     downloadBtn.addEventListener('click', downloadSelectedItems);
     
     // 새로고침 버튼 이벤트 추가
-    document.getElementById('refreshStorageBtn').addEventListener('click', () => {
-        loadDiskUsage();
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        location.reload();
     });
-    
+ 
+
     // 초기 파일 목록 로드
     // 초기화 시 window.currentPath 설정
     window.currentPath = currentPath || "";
@@ -3546,16 +3556,6 @@ async function compressSelectedItems() {
         // 여러 항목일 경우, 이름 요약 및 개수 표시
         const firstItems = filesToCompress.slice(0, 2).join(', ');
         sourceSummary = `'${firstItems}'${totalCount > 2 ? ` 외 ${totalCount - 2}개` : ''}`;
-        // 필요 시 파일/폴더 개수 상세 정보 추가 (아래 주석 참고)
-        // let fileCount = 0;
-        // let folderCount = 0;
-        // filesToCompress.forEach(name => {
-        //     const itemElement = document.querySelector(`.file-item[data-name="${CSS.escape(name)}"], .file-item-grid[data-name="${CSS.escape(name)}"]`);
-        //     if (itemElement && itemElement.getAttribute('data-is-folder') === 'true') folderCount++;
-        //     else fileCount++;
-        // });
-        // if (folderCount > 0 && fileCount > 0) sourceSummary += ` (폴더 ${folderCount}개, 파일 ${fileCount}개)`;
-        // else if (folderCount > 0) sourceSummary += ` (폴더 ${folderCount}개)`;
         // else if (fileCount > 0) sourceSummary += ` (파일 ${fileCount}개)`;
     }
     const targetDir = currentPath || '루트'; // 현재 경로가 비어있으면 루트로 표시
@@ -3765,6 +3765,10 @@ function toggleFolderLock(action = 'lock') {
     if (action === 'lock') {
         const modal = document.getElementById('lockModal');
         modal.style.display = 'flex';
+        const lockPassword = document.getElementById('lockPassword');
+        lockPassword.value = '';
+        lockPassword.setAttribute('autocomplete', 'off');
+        lockPassword.focus();
 
         document.getElementById('confirmLock').onclick = () => {
             const password = document.getElementById('lockPassword').value;
@@ -3780,22 +3784,41 @@ function toggleFolderLock(action = 'lock') {
             modal.style.display = 'none';
         };
     } else {
-        const modal = document.getElementById('unlockModal');
-        modal.style.display = 'flex';
+        // 선택된 폴더 중 암호가 설정된 폴더가 있는지 확인
+        const folderPaths = selectedFolders.map(folderName => {
+            return currentPath ? `${currentPath}/${folderName}` : folderName;
+        });
 
-        document.getElementById('confirmUnlock').onclick = () => {
-            const password = document.getElementById('unlockPassword').value;
-            unlockFolders(selectedFolders, password);
-            modal.style.display = 'none';
-        };
+        const hasPassword = folderPaths.some(path => {
+            const lockedFolder = lockedFolders.find(f => f.path === path);
+            return lockedFolder && lockedFolder.password;
+        });
 
-        document.getElementById('cancelUnlock').onclick = () => {
-            modal.style.display = 'none';
-        };
+        if (hasPassword) {
+            const modal = document.getElementById('unlockModal');
+            modal.style.display = 'flex';
+            const unlockPassword = document.getElementById('unlockPassword');
+            unlockPassword.value = '';
+            unlockPassword.setAttribute('autocomplete', 'off');
+            unlockPassword.focus();
 
-        document.querySelector('#unlockModal .modal-close').onclick = () => {
-            modal.style.display = 'none';
-        };
+            document.getElementById('confirmUnlock').onclick = () => {
+                const password = document.getElementById('unlockPassword').value;
+                unlockFolders(selectedFolders, password);
+                modal.style.display = 'none';
+            };
+
+            document.getElementById('cancelUnlock').onclick = () => {
+                modal.style.display = 'none';
+            };
+
+            document.querySelector('#unlockModal .modal-close').onclick = () => {
+                modal.style.display = 'none';
+            };
+        } else {
+            // 암호가 없는 경우 바로 잠금 해제 시도
+            unlockFolders(selectedFolders, '');
+        }
     }
 }
 
@@ -4970,3 +4993,32 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         }
     }
 }
+
+function checkServerStatus() {
+    fetch(`${API_BASE_URL}/api/status`)
+        .then(response => {
+            const serverStatusIcon = document.getElementById('serverStatusIcon');
+            const serverStatusText = document.getElementById('serverStatusText');
+            if (response.ok) {
+                serverStatusIcon.className = 'fas fa-lightbulb online';
+                serverStatusText.textContent = '서버가 켜져있습니다';
+            } else {
+                serverStatusIcon.className = 'fas fa-lightbulb offline';
+                serverStatusText.textContent = '서버가 꺼져있습니다';
+            }
+        })
+        .catch(error => {
+            const serverStatusIcon = document.getElementById('serverStatusIcon');
+            const serverStatusText = document.getElementById('serverStatusText');
+            serverStatusIcon.className = 'fas fa-lightbulb offline';
+            serverStatusText.textContent = '서버가 꺼져있습니다';
+            console.error('서버 상태 확인 오류:', error);
+        });
+}
+
+// 페이지 로드 시 서버 상태 확인
+document.addEventListener('DOMContentLoaded', function() {
+    checkServerStatus();
+    // 주기적으로 서버 상태 확인 (예: 30초마다)
+    setInterval(checkServerStatus, 30000);
+});

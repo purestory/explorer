@@ -2101,4 +2101,8 @@ app.post('/api/unlock', (req, res) => {
         errorLog('폴더 잠금 해제 저장 오류:', error);
         res.status(500).json({ success: false, message: '폴더 잠금 해제 저장 중 오류가 발생했습니다.' });
     });
+});// 서버 상태 확인 API
+app.get('/api/status', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Server is running' });
+    logWithIP('Server status checked', req, 'info');
 });

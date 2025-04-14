@@ -1,0 +1,11 @@
+--- index.html.original	2023-10-05 10:00:00.000000000 +0000
++++ index.html	2023-10-05 10:00:00.000000000 +0000
+@@ -22,7 +22,6 @@
+                     <span>0B / 0B (0%)</span>
+                     <div class="storage-bar-container">
+                         <div class="storage-bar"></div>
+-                    </div>
+-                <button id="refreshStorageBtn" title="저장소 정보 새로고침"><i class="fas fa-sync-alt"></i></button>
++                    </div>
+             </div>
+         </div>

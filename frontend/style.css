@@ -18,7 +18,7 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 5px;
 }
 
 header {
@@ -297,7 +297,7 @@ h1 {
     font-size: 18px;
 }
 
-/* === 내용 행 스타일 (5:1:1) === */
+/* === 내용 행 스타일 (5:1:1) ===  */
 .file-view.list-view .file-item .file-name {
     flex-grow: 5; 
     flex-shrink: 1;
@@ -949,7 +949,7 @@ h1 {
     gap: 10px;
 }
 
-#refreshStorageBtn {
+#refreshBtn {
     background-color: #34495e;
     color: white;
     border: none;
@@ -959,7 +959,7 @@ h1 {
     transition: background-color 0.2s;
 }
 
-#refreshStorageBtn:hover {
+#refreshBtn:hover {
     background-color: #4a6278;
 }
 
@@ -1543,42 +1543,6 @@ h1 {
     color: #666;
 }
 
-/* 파일 목록 관련 스타일 (toggle-file-list-btn, upload-file-list 등) - 제거됨 */
-
-/* 업로드 버튼 스타일 - 제거됨 */
-/*
-.upload-modal-buttons {
-    margin-top: 20px;
-}
-
-#cancel-upload-btn {
-    background: linear-gradient(145deg, #ff6b6b, #ee4d4d);
-    color: white;
-    padding: 12px 20px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1em;
-    font-weight: 500;
-    box-shadow: 0 4px 10px rgba(238, 77, 77, 0.3);
-    transition: all 0.2s ease;
-}
-
-#cancel-upload-btn:hover {
-    background: linear-gradient(145deg, #ee4d4d, #ff6b6b);
-    box-shadow: 0 6px 15px rgba(238, 77, 77, 0.4);
-    transform: translateY(-2px);
-}
-
-#cancel-upload-btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    box-shadow: none;
-    transform: none;
-}
-*/
-
-/* === End of Upload Progress Modal Styling === */
 
 /* === Upload Progress Modal Layout Adjustments === */
 #upload-progress-modal .modal-content p {
@@ -1600,4 +1564,83 @@ h1 {
 }
 /* === End of Upload Progress Modal Layout Adjustments === */
 
+/* 잠금 모달 스타일 */
+.modal input[type="password"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
 
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modal-buttons button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.modal-buttons button:first-child {
+    background-color: #007bff;
+    color: white;
+}
+
+.modal-buttons button:first-child:hover {
+    background-color: #0069d9;
+}
+
+.modal-buttons button:last-child {
+    background-color: #dc3545;
+    color: white;
+}
+
+.modal-buttons button:last-child:hover {
+    background-color: #c82333;
+}
+
+.modal input[type="password"]:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+
+.modal input[type="password"],
+.modal input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.modal input[type="password"]:focus,
+.modal input[type="text"]:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+}
+#serverStatus {
+    margin-top: 5px;
+    font-size: 14px;
+}
+
+#serverStatusIcon.online {
+    color: green;
+}
+
+#serverStatusIcon.offline {
+    color: red;
+}
