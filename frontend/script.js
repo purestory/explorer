@@ -1102,7 +1102,13 @@ function loadFiles(path = '') {
             setTimeout(() => {
                 window.doubleClickEnabled = true;
                 logLog('더블클릭 이벤트 활성화됨');
-            }, 300); // 타이머 시간을 300ms에서 500ms로 증가
+            }, 500); // 타이머 시간을 300ms에서 500ms로 증가
+            
+            // 잠금 상태 로드
+            loadLockStatus().then(() => {
+                logLog('잠금 상태 로드 완료');
+                renderFiles(data); // 잠금 상태 로드 후 다시 렌더링
+            });
         })
         .catch(error => {
             logError('Error:', error);
@@ -1112,13 +1118,12 @@ function loadFiles(path = '') {
             // 오류 발생해도 더블클릭 이벤트 활성화
             setTimeout(() => {
                 window.doubleClickEnabled = true;
-            }, 300); // 타이머 시간을 300ms에서 500ms로 증가
+            }, 500); // 타이머 시간을 300ms에서 500ms로 증가
         });
     
     // 디스크 사용량 로드
     loadDiskUsage();
 }
-
 // 드래그 선택 상태 초기화 함수
 function resetDragSelectState() {
     window.dragSelectState.isSelecting = false;
@@ -3713,249 +3718,194 @@ function pasteItems() {
 }
 
 
-// 폴더가 직접 잠겨있는지 확인하는 함수
 function isFolderLocked(path) {
-    if (!lockFeatureAvailable) {
-        return false;
-    }
-    
-    // lockedFolders가 배열인지 확인
-    if (!Array.isArray(lockedFolders)) {
-        logError('lockedFolders가 배열이 아님:', lockedFolders);
-        return false;
-    }
-    
-    if (lockedFolders.length === 0) {
-        return false;
-    }
-    
-    // 해당 경로가 정확히 잠긴 폴더 목록에 포함되는지만 확인
-    return lockedFolders.some(lockedPath => {
-        if (typeof lockedPath !== 'string') {
-            logError('lockedPath가 문자열이 아님:', lockedPath);
-            return false;
-        }
-        return path === lockedPath;
-    });
+    // 잠긴 폴더인지 확인
+    const isLocked = lockedFolders.some(folder => folder.path === path);
+    logLog(`폴더 잠금 상태 확인: ${path} - ${isLocked ? '잠김' : '잠김 아님'}`);
+    return isLocked;
 }
-
 
 // 잠금 상태 로드 함수
 function loadLockStatus() {
-    // 이미 잠금 기능을 사용할 수 없다고 판단되면 바로 빈 배열 반환
-    if (!lockFeatureAvailable) {
-        logLog('잠금 기능을 사용할 수 없습니다.');
-        return Promise.resolve([]);
-    }
-    
     return fetch(`${API_BASE_URL}/api/lock-status`)
         .then(response => {
             if (!response.ok) {
-                // 404 에러인 경우 기능을 사용할 수 없다고 표시
-                if (response.status === 404) {
-                    lockFeatureAvailable = false;
-                    logLog('잠금 기능이 서버에 구현되어 있지 않습니다.');
-                }
-                // 오류이지만 처리는 계속하기 위해 빈 배열 반환
-                return { lockState: [] };
+                throw new Error(`HTTP 오류! 상태: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            // data가 null이거나 lockState가 없는 경우 빈 배열로 처리
-            if (!data || !data.lockState) {
-                lockedFolders = [];
-         } else {
-                lockedFolders = data.lockState;
-            }
+            lockedFolders = data.lockState || [];
             logLog('잠금 폴더 목록:', lockedFolders);
-            return lockedFolders;
+            return lockedFolders; // 체이닝을 위해 반환
         })
         .catch(error => {
-            // 콘솔 에러 메시지를 한 번만 표시
-            if (lockFeatureAvailable) {
-                logError('잠금 상태 조회 오류:', error);
-                // 서버가 기능을 지원하지 않으므로 기능 비활성화
-                lockFeatureAvailable = false;
-            }
+            logError('잠금 상태 로드 오류:', error);
             lockedFolders = [];
-            return [];
+            return lockedFolders; // 오류 발생 시 빈 배열 반환
         });
 }
-
-
-
 // 폴더 잠금/해제 처리 함수 (viewMode 오류 수정 및 로그 기능 추가)
 function toggleFolderLock(action = 'lock') {
-    // --- 추가: 현재 뷰 모드 확인 ---
-    const listViewBtn = document.getElementById('listViewBtn');
-    // listViewBtn 요소가 존재하고 active 클래스를 가지고 있으면 'list', 아니면 'grid'
-    const viewMode = (listViewBtn && listViewBtn.classList.contains('active')) ? 'list' : 'grid';
-    // --- 뷰 모드 확인 끝 ---
-
-    // 잠금 기능을 사용할 수 없으면 경고 표시 (lockFeatureAvailable 변수 확인)
-    if (typeof lockFeatureAvailable !== 'undefined' && !lockFeatureAvailable) {
-        logWarn('폴더 잠금 기능을 사용할 수 없습니다 (서버 미지원).');
-        // 기능 미지원 시 사용자에게 알림 (선택적)
-        // showToast('폴더 잠금 기능이 서버에서 지원되지 않습니다.', 'warning');
-        return; // 기능 없으면 중단
-    }
-
-    if (!selectedItems || selectedItems.size === 0) {
-        statusInfo.textContent = '잠금/해제할 폴더를 선택하세요.';
+    if (selectedItems.size === 0) {
+        showToast('잠금/해제할 폴더를 선택하세요.', 'warning');
         return;
     }
 
-    const selectedFolders = [];
-
-    // 선택된 항목들 중에서 폴더만 필터링
-    selectedItems.forEach(itemName => {
-        // 현재 뷰 모드(리스트 또는 그리드)에 따라 올바른 선택자 사용
-        const selector = viewMode === 'list' // <-- 여기서 이제 viewMode 변수 사용 가능
-            ? `.file-item[data-name=\"${CSS.escape(itemName)}\"]`
-            : `.file-item-grid[data-name=\"${CSS.escape(itemName)}\"]`;
-        const element = document.querySelector(selector);
-
-        if (element && element.getAttribute('data-is-folder') === 'true') {
-            const folderPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-
-            // isPathLocked와 isPathAccessRestricted 함수 존재 여부 확인
-            const isLockedFuncDefined = typeof isFolderLocked === 'function';
-
-
-
-            selectedFolders.push({
-                name: itemName,
-                path: folderPath,
-                // isPathLocked 함수가 없으면 기본값 false 사용
-                isLocked: isLockedFuncDefined ? isFolderLocked(folderPath) : false
-            });
-        }
+    const selectedFolders = Array.from(selectedItems).filter(itemName => {
+        const item = document.querySelector(`[data-name="${itemName}"]`);
+        return item && item.getAttribute('data-is-folder') === 'true';
     });
 
-
     if (selectedFolders.length === 0) {
-        statusInfo.textContent = '선택된 항목 중 폴더가 없습니다.';
-        return; // 폴더가 없으면 함수 종료
-    }
-
-    // 처리할 폴더들을 필터링 (선택된 동작에 따라)
-    const foldersToProcess = action === 'lock'
-        ? selectedFolders.filter(folder => !folder.isLocked) // 잠금 동작이면 현재 잠기지 않은 폴더만
-        : selectedFolders.filter(folder => folder.isLocked); // 해제 동작이면 현재 잠긴 폴더만
-
-    if (foldersToProcess.length === 0) {
-        if (action === 'lock') {
-            statusInfo.textContent = '선택된 모든 폴더가 이미 잠겨 있습니다.';
-            showToast('선택된 모든 폴더가 이미 잠겨 있습니다.', 'info');
-        } else {
-            statusInfo.textContent = '선택된 모든 폴더가 이미 잠금 해제되어 있습니다.';
-            showToast('선택된 모든 폴더가 이미 잠금 해제되어 있습니다.', 'info');
-        }
-        clearSelection(); // 선택 해제
+        showToast('잠금/해제할 폴더를 선택하세요.', 'warning');
         return;
     }
 
-    showLoading();
-    const actionText = action === 'lock' ? '잠금' : '잠금 해제';
-    statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 처리 중...`;
+    if (action === 'lock') {
+        const modal = document.getElementById('lockModal');
+        modal.style.display = 'flex';
 
+        document.getElementById('confirmLock').onclick = () => {
+            const password = document.getElementById('lockPassword').value;
+            lockFolders(selectedFolders, password);
+            modal.style.display = 'none';
+        };
 
-    // 모든 폴더의 잠금/해제 작업을 순차적으로 처리
-    const processNextFolder = (index) => {
-        if (index >= foldersToProcess.length) {
-            // 모든 폴더 처리 완료
-            // loadLockStatus는 비동기이므로 완료 후 파일 목록 로드 필요
-            Promise.resolve(typeof loadLockStatus === 'function' ? loadLockStatus() : undefined)
-                .then(() => {
-                     // lockStatus 업데이트가 완료된 후 파일 목록 로드
-                    // 초기화 시 window.currentPath 설정
-                    window.currentPath = currentPath || "";
-                    loadFiles(currentPath); // 파일 목록 새로고침
-                    statusInfo.textContent = `${foldersToProcess.length}개 폴더 ${actionText} 완료`;
-                    showToast(`${foldersToProcess.length}개 폴더 ${actionText} 완료`, 'success');
-                    hideLoading();
-                    clearSelection(); // 처리 완료 후 선택 해제
-                }).catch(error => {
-                     logError('잠금 상태 로드 실패:', error);
-                     hideLoading();
-                     clearSelection();
-                     showToast('잠금 상태 업데이트 중 오류 발생', 'error');
-                     // 오류 발생 시에도 파일 목록은 로드하여 최신 상태 반영 시도
-                     window.currentPath = currentPath || "";
-                     loadFiles(currentPath);
-                });
-            return;
+        document.getElementById('cancelLock').onclick = () => {
+            modal.style.display = 'none';
+        };
+
+        document.querySelector('#lockModal .modal-close').onclick = () => {
+            modal.style.display = 'none';
+        };
+    } else {
+        const modal = document.getElementById('unlockModal');
+        modal.style.display = 'flex';
+
+        document.getElementById('confirmUnlock').onclick = () => {
+            const password = document.getElementById('unlockPassword').value;
+            unlockFolders(selectedFolders, password);
+            modal.style.display = 'none';
+        };
+
+        document.getElementById('cancelUnlock').onclick = () => {
+            modal.style.display = 'none';
+        };
+
+        document.querySelector('#unlockModal .modal-close').onclick = () => {
+            modal.style.display = 'none';
+        };
+    }
+}
+
+function lockFolders(folders, password = '') {
+    const folderPaths = folders.map(folderName => {
+        return currentPath ? `${currentPath}/${folderName}` : folderName;
+    });
+
+    const lockData = folderPaths.map(path => ({
+        path: path,
+        password: password
+    }));
+
+    logLog(`잠금 요청 URL: ${API_BASE_URL}/api/lock`);
+    logLog(`잠금 데이터:`, lockData);
+
+    fetch(`${API_BASE_URL}/api/lock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folders: lockData })
+    })
+    .then(response => {
+        logLog(`잠금 응답 상태: ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`HTTP 오류! 상태: ${response.status}`);
         }
-
-        const folder = foldersToProcess[index];
-        const encodedPath = encodeURIComponent(folder.path);
-
-        // --- 추가: 서버에 잠금/해제 액션 로그 전송 ---
-        const logMessage = `[${action === 'lock' ? 'Lock' : 'Unlock'} Action] '${folder.name}' 폴더 ${actionText} 요청 (경로: ${folder.path})`;
-        fetch(`${API_BASE_URL}/api/log-action`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: logMessage, level: 'minimal' })
-        }).catch(error => console.error(`${actionText} 액션 로그 전송 실패:`, error));
-        // --- 로그 전송 끝 ---
-
-        fetch(`${API_BASE_URL}/api/lock/${encodedPath}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ action: action }) // 'lock' 또는 'unlock'
-        })
-        .then(async response => { // async 추가하여 응답 본문 읽기 용이하게
-            if (!response.ok) {
-                 let errorMsg = `\'${folder.name}\' 폴더 ${actionText} 처리 실패`;
-                 try {
-                     const errorData = await response.json();
-                     errorMsg += `: ${errorData.error || response.statusText}`;
-                 } catch (e) {
-                      // 응답 본문이 JSON이 아닐 경우 텍스트로 읽기 시도
-                      try {
-                          const errorText = await response.text();
-                          errorMsg += ` (서버 응답: ${errorText || response.status})`;
-                      } catch (textError) {
-                          errorMsg += ` (서버 응답 상태: ${response.status})`;
-                      }
-                 }
-                throw new Error(errorMsg);
+        return response.text();
+    })
+    .then(text => {
+        logLog(`잠금 응답 내용:`, text);
+        try {
+            const data = JSON.parse(text);
+            if (data.success) {
+                folderPaths.forEach(path => {
+                    if (!lockedFolders.some(f => f.path === path)) {
+                        lockedFolders.push({ path, password });
+                    }
+                });
+                showToast(`${folders.length}개 폴더가 잠겼습니다.`, 'success');
+                loadFiles(currentPath); // UI 업데이트
+            } else {
+                showToast('폴더 잠금에 실패했습니다.', 'error');
             }
-            return response.json();
-        })
-        .then(data => {
-            // 서버에서 건너뛴 경우 UI 피드백
-            if (data.status === 'skipped') {
-                statusInfo.textContent = data.message; // 상태 표시줄에 메시지 표시
-                showToast(data.message, 'warning'); // 토스트 메시지로도 알림
-            } else if (data.status === 'success') {
-                 // 성공 시 로컬 잠금 상태 즉시 업데이트 (선택적)
-                 if (typeof updateLocalLockState === 'function') {
-                     updateLocalLockState(folder.path, action === 'lock');
-                 }
-                 // 다음 폴더 처리 진행 메시지 (선택적)
-                 statusInfo.textContent = `'${folder.name}' ${actionText} 완료. 다음 처리 중...`;
-            }
-            // 다음 폴더 처리
-            processNextFolder(index + 1);
-        })
-        .catch(error => {
-            logError(`폴더 ${actionText} 처리 중 오류:`, error);
-            showToast(error.message, 'error'); // 상세 오류 메시지 표시
-            hideLoading();
-            // 오류 발생 시에도 파일 목록은 새로고침하여 현재 상태 반영
-             // 초기화 시 window.currentPath 설정
-             window.currentPath = currentPath || "";
-            loadFiles(currentPath);
-            clearSelection(); // 오류 발생 시 선택 해제
-        });
-    };
+        } catch (error) {
+            logError('잠금 응답 파싱 오류:', error);
+            showToast('폴더 잠금 응답 처리 중 오류가 발생했습니다.', 'error');
+        }
+    })
+    .catch(error => {
+        logError('폴더 잠금 오류:', error);
+        showToast('폴더 잠금 중 오류가 발생했습니다.', 'error');
+    });
+}
 
-    // 첫 번째 폴더부터 처리 시작
-    processNextFolder(0);
+function unlockFolders(folders, password = '') {
+    const folderPaths = folders.map(folderName => {
+        return currentPath ? `${currentPath}/${folderName}` : folderName;
+    });
+
+    // 비밀번호 확인
+    const incorrectFolders = folderPaths.filter(path => {
+        const lockedFolder = lockedFolders.find(f => f.path === path);
+        return lockedFolder && lockedFolder.password && lockedFolder.password !== password;
+    });
+
+    if (incorrectFolders.length > 0) {
+        showToast('비밀번호가 올바르지 않습니다.', 'error');
+        return;
+    }
+
+    logLog(`잠금 해제 요청 URL: ${API_BASE_URL}/api/unlock`);
+    logLog(`잠금 해제 데이터:`, folderPaths);
+
+    fetch(`${API_BASE_URL}/api/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folders: folderPaths })
+    })
+    .then(response => {
+        logLog(`잠금 해제 응답 상태: ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`HTTP 오류! 상태: ${response.status}`);
+        }
+        return response.text();
+    })
+    .then(text => {
+        logLog(`잠금 해제 응답 내용:`, text);
+        try {
+            const data = JSON.parse(text);
+            if (data.success) {
+                folderPaths.forEach(path => {
+                    const index = lockedFolders.findIndex(f => f.path === path);
+                    if (index !== -1) {
+                        lockedFolders.splice(index, 1);
+                    }
+                });
+                showToast(`${folders.length}개 폴더가 잠금 해제되었습니다.`, 'success');
+                loadFiles(currentPath); // UI 업데이트
+            } else {
+                showToast('폴더 잠금 해제에 실패했습니다.', 'error');
+            }
+        } catch (error) {
+            logError('잠금 해제 응답 파싱 오류:', error);
+            showToast('폴더 잠금 해제 응답 처리 중 오류가 발생했습니다.', 'error');
+        }
+    })
+    .catch(error => {
+        logError('폴더 잠금 해제 오류:', error);
+        showToast('폴더 잠금 해제 중 오류가 발생했습니다.', 'error');
+    });
 }
 
 // 파일 항목 초기화 - 각 파일/폴더에 이벤트 연결

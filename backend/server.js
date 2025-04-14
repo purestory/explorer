@@ -1015,6 +1015,11 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
   }
 });
 
+
+app.get('/api/lock-status', (req, res) => {
+  res.json({ lockState: lockedFolders });
+});
+/*
 // 폴더 잠금 상태 조회 API (비동기화)
 app.get('/api/lock-status', async (req, res) => { // *** async 추가 ***
   try {
@@ -1051,7 +1056,7 @@ app.get('/api/lock-status', async (req, res) => { // *** async 추가 ***
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
-
+*/
 // 폴더 잠금/해제 API (비동기화)
 app.post('/api/lock/:path(*)', express.json(), async (req, res) => { // *** async 추가, express.json() 미들웨어 추가 ***
   try {
@@ -1912,42 +1917,33 @@ const LOCK_FILE_PATH = path.join(__dirname, 'lockedFolders.json'); // !!!! 파�
 
 // 잠금 파일 로드 함수
 async function loadLockedFolders() {
-    try {
-        await fs.promises.access(LOCK_FILE_PATH);
-        const data = await fs.promises.readFile(LOCK_FILE_PATH, 'utf8');
-        // !!!! JSON 파싱 로직 추가 !!!!
-        const parsedData = JSON.parse(data);
-        lockedFolders = parsedData.lockState || []; // lockState 배열 사용
-        log(`잠긴 폴더 목록 로드 완료: ${lockedFolders.length}개`, 'info');
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            // !!!! 로그 메시지 수정 !!!!
-            log('잠금 파일(lockedFolders.json)이 존재하지 않아 새로 시작합니다.', 'info');
-            lockedFolders = [];
-            // !!!! 파일 없을 때 빈 파일 생성 로직 추가 !!!!
-            try {
-                await fs.promises.writeFile(LOCK_FILE_PATH, JSON.stringify({ lockState: [] }), 'utf8');
-                log('새 잠금 파일(lockedFolders.json) 생성됨.', 'info');
-            } catch (writeError) {
-                errorLog('새 잠금 파일 생성 오류:', writeError);
-            }
-        } else {
-            // !!!! JSON 파싱 오류 처리 추가 !!!!
-            errorLog('잠금 파일 로드 또는 파싱 중 오류 발생', error);
-            lockedFolders = []; // 오류 시 빈 목록으로 초기화
-        }
-    }
+  const filePath = path.join(__dirname, 'lockedFolders.json');
+  try {
+      const data = await fs.promises.readFile(filePath, 'utf8');
+      const jsonData = JSON.parse(data);
+      lockedFolders = jsonData.lockState || [];
+      log(`잠금 폴더 로드됨: ${lockedFolders.length}개`, 'info');
+  } catch (error) {
+      if (error.code === 'ENOENT') {
+          log('잠금 폴더 파일이 없습니다. 새 파일을 생성합니다.', 'info');
+          lockedFolders = [];
+          await saveLockedFolders();
+      } else {
+          errorLog('잠금 폴더 로드 오류:', error);
+          lockedFolders = [];
+      }
+  }
 }
-
 // 잠금 파일 저장 함수
 async function saveLockedFolders() {
-    try {
-        // !!!! JSON 형식으로 저장 !!!!
-        await fs.promises.writeFile(LOCK_FILE_PATH, JSON.stringify({ lockState: lockedFolders }, null, 2), 'utf8'); 
-        log('잠긴 폴더 목록 저장 완료', 'debug');
-    } catch (error) {
-        errorLog('잠금 파일 저장 중 오류 발생', error);
-    }
+  const filePath = path.join(__dirname, 'lockedFolders.json');
+  try {
+      await fs.promises.writeFile(filePath, JSON.stringify({ lockState: lockedFolders }, null, 2), 'utf8');
+      log('잠금 폴더 저장됨', 'info');
+  } catch (error) {
+      errorLog('잠금 폴더 저장 오류:', error);
+      throw error;
+  }
 }
 
 
@@ -2061,3 +2057,48 @@ module.exports = {
   cleanupTmpDirectory: cleanupTmpDirectory,
   // 다른 필요한 함수나 변수가 있다면 여기에 추가
 };
+
+// 폴더 잠금 API 엔드포인트
+app.post('/api/lock', (req, res) => {
+    const { folders } = req.body;
+    if (!folders || !Array.isArray(folders)) {
+        return res.status(400).json({ success: false, message: '잘못된 요청 데이터입니다.' });
+    }
+
+    folders.forEach(folder => {
+        if (!lockedFolders.some(f => f.path === folder.path)) {
+            lockedFolders.push(folder);
+        }
+    });
+
+    saveLockedFolders().then(() => {
+        log(`폴더 잠금 요청 처리됨: ${folders.length}개 폴더`, 'info');
+        res.json({ success: true });
+    }).catch(error => {
+        errorLog('폴더 잠금 저장 오류:', error);
+        res.status(500).json({ success: false, message: '폴더 잠금 저장 중 오류가 발생했습니다.' });
+    });
+});
+
+// 폴더 잠금 해제 API 엔드포인트
+app.post('/api/unlock', (req, res) => {
+    const { folders } = req.body;
+    if (!folders || !Array.isArray(folders)) {
+        return res.status(400).json({ success: false, message: '잘못된 요청 데이터입니다.' });
+    }
+
+    folders.forEach(folderPath => {
+        const index = lockedFolders.findIndex(f => f.path === folderPath);
+        if (index !== -1) {
+            lockedFolders.splice(index, 1);
+        }
+    });
+
+    saveLockedFolders().then(() => {
+        log(`폴더 잠금 해제 요청 처리됨: ${folders.length}개 폴더`, 'info');
+        res.json({ success: true });
+    }).catch(error => {
+        errorLog('폴더 잠금 해제 저장 오류:', error);
+        res.status(500).json({ success: false, message: '폴더 잠금 해제 저장 중 오류가 발생했습니다.' });
+    });
+});

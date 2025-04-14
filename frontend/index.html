@@ -186,5 +186,34 @@
     </div>
 </div>
 
+<!-- 폴더 잠금 모달 -->
+<div id="lockModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close">&times;</span>
+        <h2>폴더 잠금</h2>
+        <p>선택한 폴더를 잠급니다. 비밀번호를 설정할 수 있습니다 (선택 사항).</p>
+        <input type="password" id="lockPassword" placeholder="비밀번호 (선택 사항)">
+        <div class="modal-buttons">
+            <button id="confirmLock">잠금</button>
+            <button id="cancelLock">취소</button>
+        </div>
+    </div>
+</div>
+
+<!-- 폴더 잠금 해제 모달 -->
+<div id="unlockModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close">&times;</span>
+        <h2>폴더 잠금 해제</h2>
+        <p>선택한 폴더의 잠금을 해제합니다. 비밀번호가 설정된 경우 입력하세요.</p>
+        <input type="password" id="unlockPassword" placeholder="비밀번호">
+        <div class="modal-buttons">
+            <button id="confirmUnlock">해제</button>
+            <button id="cancelUnlock">취소</button>
+        </div>
+    </div>
+</div>
+
+
 </body>
 </html>
