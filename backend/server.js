@@ -1390,7 +1390,7 @@ app.put('/api/files/*', express.json(), async (req, res) => {
     }
 
     // 잠금 확인 로직 (기존과 동일)
-    if (isPathAccessRestricted(oldPathRelative)) {
+    if (isFolderLocked(oldPathRelative)) {
         errorLogWithIP(`잠긴 항목 이동/이름 변경 시도: ${fullOldPath}`, null, req);
         return res.status(403).send('잠긴 폴더 또는 그 하위 항목은 이동하거나 이름을 변경할 수 없습니다.');
     }
@@ -1414,7 +1414,7 @@ app.put('/api/files/*', express.json(), async (req, res) => {
     // 대상 경로 잠금 확인 수정: 이름 변경 시에만 새 이름 잠금 확인, 이동 시에는 대상 폴더 잠금 확인 안 함
     if (targetPath === undefined) { // 이름 변경인 경우
       const newRelativePath = path.join(targetDirRelative, newName);
-      if (isPathAccessRestricted(newRelativePath)) {
+      if (isFolderLocked(newRelativePath)) {
           errorLogWithIP(`잠긴 이름으로 변경 시도: ${fullNewPath}`, null, req);
           return res.status(403).send('잠긴 이름으로 변경할 수 없습니다.');
       }
@@ -1949,6 +1949,37 @@ async function saveLockedFolders() {
         errorLog('잠금 파일 저장 중 오류 발생', error);
     }
 }
+
+
+
+// *** isFolderLocked 함수 정의 추가 ***
+// 주어진 경로가 직접 잠겨 있는지만 확인하는 함수
+function isFolderLocked(targetPath) {
+  if (!targetPath) return false; // 빈 경로는 잠기지 않음
+  const normalizedTargetPath = targetPath.replace(/^\/+/, '').replace(/\/+$/, ''); // 정규화
+
+  // lockedFolders가 배열인지 확인
+  if (!Array.isArray(lockedFolders)) {
+    errorLog('lockedFolders가 배열이 아님:', lockedFolders);
+    return false;
+  }
+
+  if (lockedFolders.length === 0) {
+    return false;
+  }
+
+  // 주어진 경로가 잠긴 폴더 목록에 정확히 포함되는지만 확인
+  return lockedFolders.some(lockedPath => {
+    if (typeof lockedPath !== 'string') {
+      errorLog('lockedPath가 문자열이 아님:', lockedPath);
+      return false;
+    }
+    const normalizedLockedPath = lockedPath.replace(/^\/+/, '').replace(/\/+$/, '');
+    return normalizedTargetPath === normalizedLockedPath;
+  });
+}
+// *** 함수 정의 끝 ***
+
 
 // *** isPathAccessRestricted 함수 정의 추가 ***
 // 주어진 경로 또는 그 상위 경로가 잠겨 있는지 확인하는 함수

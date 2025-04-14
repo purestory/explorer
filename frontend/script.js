@@ -3661,7 +3661,7 @@ function isFolderLocked(path) {
     });
 }
 
-
+/*
 // 폴더 잠금 상태 확인
 function isPathLocked(path) {
     // 잠금 기능을 사용할 수 없으면 항상 false 반환
@@ -3678,6 +3678,7 @@ function isPathLocked(path) {
     return lockedFolders.includes(path);
 }
 
+
 // 경로 또는 그 상위 폴더가 잠겨 있어 접근이 제한되는지 확인
 // 경로 또는 그 상위 폴더가 잠겨 있어 접근이 제한되는지 확인 
 function isPathAccessRestricted(path) {
@@ -3687,6 +3688,8 @@ function isPathAccessRestricted(path) {
     // 경로가 정확히 잠긴 폴더인지만 확인 (상위 경로 체크 제거)
     return lockedFolders.some(lockedPath => path === lockedPath);
 }
+*/
+
 
 // 잠금 상태 로드 함수
 function loadLockStatus() {
