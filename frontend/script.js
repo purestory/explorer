@@ -1107,11 +1107,14 @@ function loadFiles(path = '') {
             statusInfo.textContent = `${data.length}개 항목`;
             
             // 로딩 완료 후 더블클릭 이벤트 활성화 (타이머 시간 증가)
+            /*
             setTimeout(() => {
                 window.doubleClickEnabled = true;
                 logLog('더블클릭 이벤트 활성화됨');
             }, 200); // 타이머 시간을 300ms에서 500ms로 증가
-            
+            */
+            window.doubleClickEnabled = true;
+          
             // 잠금 상태 로드
             loadLockStatus().then(() => {
                 logLog('잠금 상태 로드 완료');
@@ -2070,15 +2073,15 @@ function updateBreadcrumb(path) {
     
     breadcrumb.innerHTML = breadcrumbHTML;
     
-        // 경로 클릭 이벤트
-        breadcrumb.querySelectorAll('span').forEach(span => {
+    // 경로 클릭 이벤트
+    breadcrumb.querySelectorAll('span').forEach(span => {
         span.addEventListener('click', () => {
             currentPath = span.getAttribute('data-path');
             // 히스토리 상태 업데이트 추가
             updateHistoryState(currentPath);
             // 초기화 시 window.currentPath 설정
             window.currentPath = currentPath || "";
-            //loadFiles(currentPath);
+            loadFiles(currentPath);
     
             // 선택 초기화
             clearSelection();
@@ -2599,45 +2602,6 @@ function handleDropZoneDragLeave(e) {
     }
 }
 
-function handleDropZoneDrop(e) {
-    logLog('드롭존에 파일 드롭됨');
-    preventDefaults(e);
-    
-    // 드래그 상태 초기화
-    window.draggingInProgress = false;
-    
-    // 내부/외부 파일 판단
-    const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
-    
-    // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리
-    if (isExternalDrop) {
-        logLog('드롭존 드롭 - 외부 파일 드롭 처리');
-        handleExternalFileDrop(e, currentPath);
-    } 
-    // 내부 파일이라도 경로가 비어있으면 오류 처리
-    else if (isInternalDrop && draggedPaths.length > 0) {
-        logLog('드롭존 드롭 - 내부 파일 이동 처리:', draggedPaths);
-        // 현재 드롭존의 경로로 파일 이동
-        handleInternalFileDrop(draggedPaths, { path: currentPath });
-    }
-    // 판단 불가능한 경우
-    else {
-        logLog('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
-        showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
-        
-    }
-    
-    // 전체 영역 드롭존 이벤트 리스너 등록
-    window.removeEventListener('dragenter', handleDropZoneDragEnter);
-    window.removeEventListener('dragover', handleDropZoneDragOver);
-    window.removeEventListener('dragleave', handleDropZoneDragLeave);
-    dropZone.removeEventListener('drop', handleDropZoneDrop);
-    
-    logLog('드롭존 이벤트 리스너 등록 완료 (handleDrop 이벤트는 initDropZone에서 등록)');
-    
-    // 개발 모드에서 폴더 항목 CSS 선택자 유효성 확인
-    logLog('폴더 항목 개수:', document.querySelectorAll('.file-item[data-is-folder="true"]').length);
-}
 
 // 내부 드래그인지 확인하는 함수 (파일 경로 기반 + 기본값은 내부)
 function isInternalDrag(e) {
@@ -3336,8 +3300,8 @@ function initHistoryNavigation() {
     window.addEventListener('popstate', (e) => {
         if (e.state && e.state.path !== undefined) {
             currentPath = e.state.path;
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
+            // 초기화 시 window.currentPath 설정
+            window.currentPath = currentPath || "";
             loadFiles(currentPath);
         }
     });
