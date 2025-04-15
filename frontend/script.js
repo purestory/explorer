@@ -1296,111 +1296,79 @@ function renderFiles(files) {
                 noFilesDiv.textContent = '파일이 없습니다.';
                 filesContainer.appendChild(noFilesDiv);
             } else {
+// renderFiles 함수 내에서 파일 항목을 생성하는 부분 수정
+// "파일 항목 생성" 부분을 다음 코드로 대체
+
+                // 각 파일 항목 표시
                 visibleFiles.forEach(file => {
                     // 파일 항목 생성
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item';
+                    fileItem.setAttribute('data-id', file.name);
                     fileItem.setAttribute('data-name', file.name);
-                    fileItem.setAttribute('data-id', file.name); // ID 속성 추가
                     fileItem.setAttribute('data-is-folder', file.isFolder.toString());
-                    fileItem.setAttribute('data-size', file.size);
-                    fileItem.setAttribute('data-date', file.modifiedTime);
-                    fileItem.setAttribute('draggable', 'true');
-                    
-                    // 상위 폴더인 경우 (..) 추가 속성 설정
-                    if (file.name === '..') {
-                        fileItem.setAttribute('data-parent-dir', 'true');
-                    }
-                    
-                    // 파일 경로 계산
-                    const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
-                    fileItem.setAttribute('data-path', filePath);
-                    
-                    // 잠금 상태 확인 및 표시 - 직접 잠긴 폴더만 표시
-                    const isDirectlyLocked = isFolderLocked(filePath);
-                    // 접근 제한 (상위 폴더가 잠겨있는 경우) 확인
-                    
-                    if (file.isFolder && isDirectlyLocked) {
-                        fileItem.classList.add('locked-folder');
-                    }
                     
                     // 아이콘 생성
                     const fileIcon = document.createElement('div');
                     fileIcon.className = 'file-icon';
                     
-                    // 폴더/파일 아이콘 설정
+                    // 폴더인 경우와 파일인 경우 구분
                     if (file.isFolder) {
+                        // 기본 폴더 아이콘
                         fileIcon.innerHTML = '<i class="fas fa-folder"></i>';
                     } else {
+                        // 파일 아이콘 (기존 로직 유지)
                         const iconClass = getFileIconClass(file.name);
                         fileIcon.innerHTML = `<i class="${iconClass}"></i>`;
                     }
                     
-                    // 파일명 생성
+                    // 이름 표시
                     const fileName = document.createElement('div');
                     fileName.className = 'file-name';
-                    fileName.innerText = file.name;
                     
-                    // 파일 정보 생성
+                    // 폴더인 경우 잠금 상태 확인 및 아이콘 추가
+                    if (file.isFolder) {
+                        const folderPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+                        // 폴더가 잠겨있는지 확인
+                        const isLocked = lockedFolders.some(lockedFolder => lockedFolder.path === folderPath);
+                        // 비밀번호가 설정되어 있는지 확인
+                        const hasPassword = lockedFolders.some(lockedFolder => 
+                            lockedFolder.path === folderPath && lockedFolder.password);
+                            
+                        // 폴더 이름과 함께 잠금 아이콘 표시 (있는 경우)
+                        if (isLocked) {
+                            if (hasPassword) {
+                                // 비밀번호가 설정된 잠긴 폴더
+                                fileName.innerHTML = `${file.name} <i class="fas fa-key" style="margin-left: 5px; color: #FFD700;"></i>`;
+                            } else {
+                                // 일반 잠긴 폴더
+                                fileName.innerHTML = `${file.name} <i class="fas fa-shield-alt" style="margin-left: 5px; color: #4CAF50;"></i>`;
+                            }
+                        } else {
+                            fileName.innerText = file.name;
+                        }
+                    } else {
+                        fileName.innerText = file.name;
+                    }
+                    
+                    // 파일 상세 정보 (크기, 수정일)
                     const fileDetails = document.createElement('div');
                     fileDetails.className = 'file-details';
+                    fileDetails.innerHTML = `
+                        <div class="file-size">${formatFileSize(file.size)}</div>
+                        <div class="file-date">${formatDate(file.modifiedTime)}</div>
+                    `;
                     
-                    // 파일 크기 생성
-                    const fileSize = document.createElement('div');
-                    fileSize.className = 'file-size';
-                    fileSize.innerText = file.isFolder ? '--' : formatFileSize(file.size);
-                    
-                    // 수정일 생성
-                    const fileDate = document.createElement('div');
-                    fileDate.className = 'file-date';
-                    fileDate.innerText = formatDate(file.modifiedTime);
-                    
-                    // 파일 정보 추가
-                    fileDetails.appendChild(fileSize);
-                    fileDetails.appendChild(fileDate);
-                    
-                    // 파일 항목에 요소 추가
+                    // 항목에 모든 요소 추가
                     fileItem.appendChild(fileIcon);
                     fileItem.appendChild(fileName);
                     fileItem.appendChild(fileDetails);
                     
-                    // 잠긴 폴더에 잠금 아이콘 추가
-                    if (file.isFolder && isDirectlyLocked) {
-                        const lockIcon = document.createElement('div');
-                        lockIcon.className = 'lock-icon';
-                        lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
-                        fileItem.appendChild(lockIcon);
-                    }
-                    
-
-                    
-                    // 이벤트 리스너 설정
-                    fileItem.addEventListener('click', (e) => {
-                        if (e.target.classList.contains('rename-input')) return;
-                        
-                        // 상위 폴더(..)는 선택되지 않도록 처리
-                        if (fileItem.getAttribute('data-parent-dir') === 'true') {
-                            // 원클릭으로 상위 폴더 이동을 하지 않도록 수정
-                            // 대신 handleFileClick 함수로 처리하여 더블클릭 이벤트에서만 이동하도록 함
-                            e.preventDefault();
-                            e.stopPropagation();
-                            return;
-                        }
-                        
-                        // 기존 핸들링 계속
-                        handleFileClick(e, fileItem);
-                    });
-                    
-                    // 더블클릭 이벤트
-                    fileItem.addEventListener('dblclick', (e) => {
-                        if (e.target.classList.contains('rename-input')) return;
-                        
-                        // handleFileDblClick 함수를 사용하여 통합 처리
-                        handleFileDblClick(e, fileItem);
-                    });
-                    
-                    // 파일 항목을 목록에 추가
+                    // 컨테이너에 추가
                     filesContainer.appendChild(fileItem);
+                    
+                    // 파일 항목 초기화 함수 호출
+                    initFileItem(fileItem);
                 });
             }
             
