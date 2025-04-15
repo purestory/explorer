@@ -3813,37 +3813,19 @@ function toggleFolderLock(action = 'lock') {
         lockPassword.setAttribute('autocomplete', 'off');
         lockPassword.focus();
 
-        // 확인 버튼 클릭 핸들러 함수
-        const confirmLockHandler = () => {
+        document.getElementById('confirmLock').onclick = () => {
             const password = document.getElementById('lockPassword').value;
             lockFolders(selectedFolders, password);
             modal.style.display = 'none';
-            // 이벤트 리스너 제거
-            lockPassword.removeEventListener('keydown', lockKeydownHandler);
         };
 
-        // Enter 키 처리를 위한 이벤트 핸들러
-        const lockKeydownHandler = (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                confirmLockHandler();
-            }
-        };
-
-        // Enter 키 이벤트 리스너 등록
-        lockPassword.addEventListener('keydown', lockKeydownHandler);
-
-        document.getElementById('confirmLock').onclick = confirmLockHandler;
-
-        const cancelLockHandler = () => {
+        document.getElementById('cancelLock').onclick = () => {
             modal.style.display = 'none';
-            // 이벤트 리스너 제거
-            lockPassword.removeEventListener('keydown', lockKeydownHandler);
         };
 
-        document.getElementById('cancelLock').onclick = cancelLockHandler;
-
-        document.querySelector('#lockModal .modal-close').onclick = cancelLockHandler;
+        document.querySelector('#lockModal .modal-close').onclick = () => {
+            modal.style.display = 'none';
+        };
     } else {
         // 선택된 폴더 중 암호가 설정된 폴더가 있는지 확인
         const folderPaths = selectedFolders.map(folderName => {
@@ -3863,37 +3845,19 @@ function toggleFolderLock(action = 'lock') {
             unlockPassword.setAttribute('autocomplete', 'off');
             unlockPassword.focus();
 
-            // 확인 버튼 클릭 핸들러 함수
-            const confirmUnlockHandler = () => {
+            document.getElementById('confirmUnlock').onclick = () => {
                 const password = document.getElementById('unlockPassword').value;
                 unlockFolders(selectedFolders, password);
                 modal.style.display = 'none';
-                // 이벤트 리스너 제거
-                unlockPassword.removeEventListener('keydown', unlockKeydownHandler);
             };
 
-            // Enter 키 처리를 위한 이벤트 핸들러
-            const unlockKeydownHandler = (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    confirmUnlockHandler();
-                }
-            };
-
-            // Enter 키 이벤트 리스너 등록
-            unlockPassword.addEventListener('keydown', unlockKeydownHandler);
-
-            document.getElementById('confirmUnlock').onclick = confirmUnlockHandler;
-
-            const cancelUnlockHandler = () => {
+            document.getElementById('cancelUnlock').onclick = () => {
                 modal.style.display = 'none';
-                // 이벤트 리스너 제거
-                unlockPassword.removeEventListener('keydown', unlockKeydownHandler);
             };
 
-            document.getElementById('cancelUnlock').onclick = cancelUnlockHandler;
-
-            document.querySelector('#unlockModal .modal-close').onclick = cancelUnlockHandler;
+            document.querySelector('#unlockModal .modal-close').onclick = () => {
+                modal.style.display = 'none';
+            };
         } else {
             // 암호가 없는 경우 바로 잠금 해제 시도
             unlockFolders(selectedFolders, '');
@@ -4155,7 +4119,7 @@ function initFileItem(fileItem) {
     // 컨텍스트 메뉴 (우클릭) 이벤트 연결
     fileItem.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        //showContextMenu(e, fileItem);
+        showContextMenu(e, fileItem);
     });
     
     // 클릭 이벤트 연결
