@@ -1806,7 +1806,9 @@ function init() {
     
     // 모달 초기화
     initModals();
-    
+
+    initRules(); // 주석 해제
+
     // 드래그 선택 초기화
     initDragSelect();
     
@@ -5194,18 +5196,18 @@ function checkServerStatus() {
             const serverStatusIcon = document.getElementById('serverStatusIcon');
             const serverStatusText = document.getElementById('serverStatusText');
             if (response.ok) {
-                serverStatusIcon.className = 'fas fa-lightbulb online';
-                serverStatusText.textContent = '서버가 켜져있습니다';
+                serverStatusIcon.className = 'fas fa-lightbulb glowing-bulb';
+                serverStatusText.innerHTML = '<span class="status-text status-on">서버 ON</span>';
             } else {
-                serverStatusIcon.className = 'fas fa-lightbulb offline';
-                serverStatusText.textContent = '서버가 꺼져있습니다';
+                serverStatusIcon.className = 'fas fa-lightbulb off-bulb';
+                serverStatusText.innerHTML = '<span class="status-text status-off">서버 OFF</span>';
             }
         })
         .catch(error => {
             const serverStatusIcon = document.getElementById('serverStatusIcon');
             const serverStatusText = document.getElementById('serverStatusText');
-            serverStatusIcon.className = 'fas fa-lightbulb offline';
-            serverStatusText.textContent = '서버가 꺼져있습니다';
+            serverStatusIcon.className = 'fas fa-lightbulb off-bulb';
+            serverStatusText.innerHTML = '<span class="status-text status-off">서버 OFF</span>';
             console.error('서버 상태 확인 오류:', error);
         });
 }
@@ -5216,3 +5218,247 @@ document.addEventListener('DOMContentLoaded', function() {
     // 주기적으로 서버 상태 확인 (예: 30초마다)
     setInterval(checkServerStatus, 30000);
 });
+
+
+function initRules() {
+    const rulesBtn = document.getElementById('rulesBtn');
+    const rulesModal = document.getElementById('rulesModal');
+    const rulesContent = document.getElementById('rulesContent');
+    const closeRulesBtn = document.getElementById('closeRulesBtn');
+    const modalClose = rulesModal.querySelector('.modal-close');
+    
+    // 모달 스타일 즉시 적용
+    rulesModal.style.display = 'none';
+    rulesModal.style.position = 'fixed';
+    rulesModal.style.zIndex = '1000';
+    rulesModal.style.left = '0';
+    rulesModal.style.top = '0';
+    rulesModal.style.width = '100%';
+    rulesModal.style.height = '100%';
+    rulesModal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    rulesModal.style.alignItems = 'center';
+    rulesModal.style.justifyContent = 'center';
+    
+    // 모달 컨텐츠 스타일 즉시 적용
+    const modalContent = rulesModal.querySelector('.modal-content');
+    modalContent.style.backgroundColor = '#fff';
+    modalContent.style.width = '80%';
+    modalContent.style.maxWidth = '800px';
+    modalContent.style.maxHeight = '90vh';
+    modalContent.style.borderRadius = '8px';
+    modalContent.style.boxShadow = '0 5px 30px rgba(0, 0, 0, 0.3)';
+    modalContent.style.display = 'flex';
+    modalContent.style.flexDirection = 'column';
+    
+    // 모달 헤더 스타일
+    const modalHeader = rulesModal.querySelector('.modal-header');
+    modalHeader.style.padding = '15px 20px';
+    modalHeader.style.borderBottom = '1px solid #e9ecef';
+    modalHeader.style.backgroundColor = '#f8f9fa';
+    modalHeader.style.position = 'relative';
+    modalHeader.style.borderRadius = '8px 8px 0 0';
+    
+    // 모달 바디 스타일 (스크롤 명시적 적용)
+    const modalBody = rulesModal.querySelector('.modal-body');
+    modalBody.style.padding = '20px';
+    modalBody.style.overflow = 'auto';
+    modalBody.style.flex = '1';
+    modalBody.style.maxHeight = 'calc(90vh - 140px)'; // 헤더와 푸터 공간 감안
+    
+    // 모달 푸터 스타일
+    const modalFooter = rulesModal.querySelector('.modal-footer');
+    modalFooter.style.padding = '15px 20px';
+    modalFooter.style.borderTop = '1px solid #e9ecef';
+    modalFooter.style.backgroundColor = '#f8f9fa';
+    modalFooter.style.textAlign = 'right';
+    modalFooter.style.borderRadius = '0 0 8px 8px';
+    
+    // 내용 스타일 개선
+    const contentStyle = document.createElement('style');
+    contentStyle.textContent = `
+        #rulesContent h1 {
+            color: #212529;
+            font-size: 1.8rem;
+            margin-top: 0;
+            margin-bottom: 1.2rem;
+            font-weight: 600;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 0.5rem;
+        }
+        
+        #rulesContent h2 {
+            color: #343a40;
+            font-size: 1.5rem;
+            margin-top: 1.8rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+        
+        #rulesContent p {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+        
+        #rulesContent ul {
+            padding-left: 20px;
+            margin-bottom: 1.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        #rulesContent li {
+            margin-bottom: 0.5rem;
+            position: relative;
+            list-style-type: none;
+            padding-left: 1.3em;
+            line-height: 1.6;
+        }
+        
+        #rulesContent li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #4dabf7;
+        }
+    `;
+    document.head.appendChild(contentStyle);
+  
+    
+    
+    // 창 크기 변경 시 모달 사이즈 조정
+    window.addEventListener('resize', () => {
+        if (rulesModal.style.display === 'flex') {
+            const windowHeight = window.innerHeight;
+            const headerHeight = document.querySelector('#rulesModal .modal-header').offsetHeight;
+            const footerHeight = document.querySelector('#rulesModal .modal-footer').offsetHeight;
+            const maxBodyHeight = windowHeight * 0.8 - headerHeight - footerHeight;
+            
+            const modalBody = document.querySelector('#rulesModal .modal-body');
+            modalBody.style.maxHeight = `${maxBodyHeight}px`;
+        }
+    });
+
+    // 이벤트 핸들러
+    rulesBtn.addEventListener('click', () => {
+        loadRulesContent();
+        rulesModal.style.display = 'flex'; // flex로 변경하여 중앙 정렬
+    });
+    
+    closeRulesBtn.addEventListener('click', () => {
+        rulesModal.style.display = 'none';
+    });
+    
+    modalClose.addEventListener('click', () => {
+        rulesModal.style.display = 'none';
+    });
+    
+    window.addEventListener('click', (e) => {
+        if (e.target === rulesModal) {
+            rulesModal.style.display = 'none';
+        }
+    });
+}
+
+function loadRulesContent() {
+    const rulesContent = document.getElementById('rulesContent');
+    const modalBody = document.querySelector('#rulesModal .modal-body');
+    
+    // 로딩 표시
+    rulesContent.innerHTML = '<div class="spinner"></div>';
+    
+    // 이용규칙 파일 가져오기
+    fetch('rules/terms.txt')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(text => {
+            // 마크다운 형식의 텍스트를 HTML로 변환
+            const htmlContent = convertMarkdownToHtml(text);
+            rulesContent.innerHTML = htmlContent;
+            
+            // 컨텐츠 로드 후 스크롤 영역 재조정
+            setTimeout(() => {
+                // 창 높이에 맞게 모달 바디 최대 높이 동적 조정
+                const windowHeight = window.innerHeight;
+                const headerHeight = document.querySelector('#rulesModal .modal-header').offsetHeight;
+                const footerHeight = document.querySelector('#rulesModal .modal-footer').offsetHeight;
+                const maxBodyHeight = windowHeight * 0.8 - headerHeight - footerHeight;
+                
+                modalBody.style.maxHeight = `${maxBodyHeight}px`;
+                modalBody.style.overflowY = 'auto';
+                
+                // 스크롤 위치 초기화
+                modalBody.scrollTop = 0;
+            }, 100);
+        })
+        .catch(error => {
+            console.error('이용규칙 로드 중 오류 발생:', error);
+            rulesContent.innerHTML = '<p class="error">이용규칙을 불러오는 중 오류가 발생했습니다.</p>';
+        });
+}
+
+
+// 마크다운 변환 함수 개선 - 좀 더 명확한 구조 생성
+function convertMarkdownToHtml(markdown) {
+    // 줄별로 처리
+    const lines = markdown.split('\n');
+    let html = '';
+    let inList = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // 빈 줄 처리
+        if (line === '') {
+            if (inList) {
+                html += '</ul>\n';
+                inList = false;
+            }
+            continue;
+        }
+        
+        // 제목 처리
+        if (line.startsWith('# ')) {
+            if (inList) {
+                html += '</ul>\n';
+                inList = false;
+            }
+            html += `<h1>${line.substring(2)}</h1>\n`;
+        } 
+        else if (line.startsWith('## ')) {
+            if (inList) {
+                html += '</ul>\n';
+                inList = false;
+            }
+            html += `<h2>${line.substring(3)}</h2>\n`;
+        }
+        // 리스트 항목 처리
+        else if (line.startsWith('- ')) {
+            if (!inList) {
+                html += '<ul>\n';
+                inList = true;
+            }
+            html += `  <li>${line.substring(2)}</li>\n`;
+        }
+        // 일반 텍스트는 단락으로 처리
+        else {
+            if (inList) {
+                html += '</ul>\n';
+                inList = false;
+            }
+            html += `<p>${line}</p>\n`;
+        }
+    }
+    
+    // 마지막에 열린 목록이 있다면 닫기
+    if (inList) {
+        html += '</ul>\n';
+    }
+    
+    return html;
+}
+
+// init() 함수 내에 이 코드를 추가해야 합니다:
+// initRules();

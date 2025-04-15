@@ -26,7 +26,8 @@
             </div>
             <div id="serverStatus">
                 <span id="serverStatusIcon"></span> <span id="serverStatusText">서버 상태 확인 중...            </span>
-                    <button id="modeToggleBtn" title="모드 전환 (현재: 운영)" style="margin-left: 180px;"><i class="fas fa-cog"></i></button>
+                    <button id="modeToggleBtn" title="모드 전환 (현재: 운영)" style="margin-left: 100px;"><i class="fas fa-cog"></i></button>
+                    <button id="rulesBtn" title="이용규칙" style="margin-left: 5px;"><i class="fas fa-book">이용규칙</i></button>
             </div>
 
 
@@ -166,72 +167,85 @@
     <script src="script.js?v=20250405"></script>
 
     <!-- 업로드 진행률 모달 -->
-<!-- 업로드 진행률 모달 -->
-<!-- 업로드 진행률 모달 -->
-<!-- 업로드 진행률 모달 -->
-<!-- 업로드 진행률 모달 -->
-<div id="upload-progress-modal" class="modal">
+    <div id="upload-progress-modal" class="modal">
+        <div class="modal-content">
+            <h4>파일 업로드 중...</h4>
+            <div class="progress-time-group">
+                <p id="overall-progress-text"></p>
+                <p id="upload-time-remaining">남은 시간: 계산 중...</p>
+            </div>
+            <p id="current-file-info"></p>
+            <div id="overall-progress-bar-container" style="margin: 10px 0;">
+                <div id="overall-progress-bar"></div>
+            </div>
+            <div class="speed-size-group">
+                <p id="upload-speed">속도: 0 KB/s</p>
+                <p id="total-upload-size">업로드: 0 B / 0 B</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" id="cancelUploadBtn">취소</button>
+                <button class="btn btn-primary" id="resumeUploadBtn">중지</button>
+            </div>
+        </div>
+    </div>
+
+<!-- 이용규칙 모달 -->
+<div id="rulesModal" class="modal">
     <div class="modal-content">
-        <h4>파일 업로드 중...</h4>
-        <div class="progress-time-group">
-            <p id="overall-progress-text"></p>
-            <p id="upload-time-remaining">남은 시간: 계산 중...</p>
+        <div class="modal-header">
+            <h3><i class="fas fa-book"></i> 웹DAV 서비스 이용 규칙 및 면책 조항</h3>
+            <span class="modal-close">&times;</span>
         </div>
-        <p id="current-file-info"></p>
-        <div id="overall-progress-bar-container" style="margin: 10px 0;">
-            <div id="overall-progress-bar"></div>
-        </div>
-        <div class="speed-size-group">
-            <p id="upload-speed">속도: 0 KB/s</p>
-            <p id="total-upload-size">업로드: 0 B / 0 B</p>
+        <div class="modal-body">
+            <div id="rulesContent"></div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-danger" id="cancelUploadBtn">취소</button>
-            <button class="btn btn-primary" id="resumeUploadBtn">중지</button>
+            <button class="btn" id="closeRulesBtn">확인</button>
         </div>
     </div>
 </div>
 
-<!-- 폴더 잠금 모달 -->
-<div id="lockModal" class="modal">
-    <div class="modal-content">
-        <span class="modal-close">&times;</span>
-        <h2>폴더 잠금</h2>
-        <p>선택한 폴더를 잠급니다. 비밀번호를 설정할 수 있습니다 (선택 사항).</p>
-        <input type="text" id="lockPassword" placeholder="암호를 입력하세요 (선택 사항)">
-        <div class="modal-buttons">
-            <button id="confirmLock">잠금</button>
-            <button id="cancelLock">취소</button>
+    <!-- 폴더 잠금 모달 -->
+    <div id="lockModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>폴더 잠금</h2>
+            <p>선택한 폴더를 잠급니다. 비밀번호를 설정할 수 있습니다 (선택 사항).</p>
+            <input type="text" id="lockPassword" placeholder="암호를 입력하세요 (선택 사항)">
+            <div class="modal-buttons">
+                <button id="confirmLock">잠금</button>
+                <button id="cancelLock">취소</button>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- 폴더 잠금 해제 모달 -->
-<div id="unlockModal" class="modal">
-    <div class="modal-content">
-        <span class="modal-close">&times;</span>
-        <h2>폴더 잠금 해제</h2>
-        <p>선택한 폴더의 잠금을 해제합니다. 비밀번호가 설정된 경우 입력하세요.</p>
-        <input type="text" id="unlockPassword" placeholder="암호를 입력하세요">
-        <div class="modal-buttons">
-            <button id="confirmUnlock">해제</button>
-            <button id="cancelUnlock">취소</button>
+    <!-- 폴더 잠금 해제 모달 -->
+    <div id="unlockModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>폴더 잠금 해제</h2>
+            <p>선택한 폴더의 잠금을 해제합니다. 비밀번호가 설정된 경우 입력하세요.</p>
+            <input type="text" id="unlockPassword" placeholder="암호를 입력하세요">
+            <div class="modal-buttons">
+                <button id="confirmUnlock">해제</button>
+                <button id="cancelUnlock">취소</button>
+            </div>
         </div>
     </div>
-</div>
-<!-- 폴더 비밀번호 입력 모달 -->
-<div id="folderPasswordModal" class="modal">
-    <div class="modal-content">
-        <span class="modal-close">&times;</span>
-        <h2>폴더 접근 제한</h2>
-        <p>이 폴더는 비밀번호로 보호되어 있습니다.</p>
-        <input type="text" id="folderPasswordInput" placeholder="비밀번호를 입력하세요">
-        <div class="modal-buttons">
-            <button id="confirmFolderPassword">확인</button>
-            <button id="cancelFolderPassword">취소</button>
+
+    <!-- 폴더 비밀번호 입력 모달 -->
+    <div id="folderPasswordModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>폴더 접근 제한</h2>
+            <p>이 폴더는 비밀번호로 보호되어 있습니다.</p>
+            <input type="text" id="folderPasswordInput" placeholder="비밀번호를 입력하세요">
+            <div class="modal-buttons">
+                <button id="confirmFolderPassword">확인</button>
+                <button id="cancelFolderPassword">취소</button>
+            </div>
         </div>
     </div>
-</div>
 
 </body>
 </html>

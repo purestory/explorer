@@ -29,6 +29,9 @@ Thumbs.db
 backend/share-folder/*
 !backend/share-folder/.gitkeep
 
+backend/lockedFolders.json
+
+
 # 에디터 설정
 .vscode/
 .idea/
