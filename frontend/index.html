@@ -9,10 +9,11 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text x=%2250%22 y=%22.9em%22 font-size=%2290%22 text-anchor=%22middle%22>☁️</text></svg>">
 </head>
 <body>
-    <header>
-        <h1><i class="fas fa-cloud"></i> WebDAV 파일 서버</h1>
+    <div class="main-container" style="max-width: 1200px; margin: 0 auto; padding: 0 5px;">
+    <div class="header-container" style="margin: 0 auto; padding: 0 5px;">
+    <header style="max-width: 1200px; margin: 0 auto; padding: 10px 5px; display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="margin: 0;"><i class="fas fa-cloud"></i> WebDAV 파일 서버</h2>
         <div class="header-right">
-
             <div class="storage-info">
                 <i class="fas fa-database"></i>
                 <div id="storageInfoText">
@@ -28,12 +29,11 @@
                 <span id="serverStatusIcon"></span> <span id="serverStatusText">서버 상태 확인 중...            </span>
                     <button id="modeToggleBtn" title="모드 전환 (현재: 운영)" style="margin-left: 100px;"><i class="fas fa-cog"></i></button>
                     <button id="rulesBtn" title="이용규칙" style="margin-left: 5px;"><i class="fas fa-book">이용규칙</i></button>
-            </div>
-
-
-
+            </div>           <!-- 저장소 정보와 서버 상태 -->
         </div>
     </header>
+    </div>
+
     
     <div class="container">
         <div class="file-explorer">
@@ -89,6 +89,7 @@
             </div>
         </div>
     </div>
+    </div>  
     
     <!-- 새 폴더 생성 모달 -->
     <div class="modal" id="folderModal">
