@@ -2159,7 +2159,7 @@ function handleFileDblClick(e, fileItem) {
             const folderInfo = lockedFolders.find(f => f.path === newPath);
             if (folderInfo && folderInfo.password) {
                 logLog(`잠긴 폴더 접근 시도: ${newPath}, 비밀번호 필요`);
-                navigateToLockedFolder(fileName, newPath);
+                navigateToLockedFolder(fileName, newPath); // Promise 반환하므로 따로 처리 불필요
                 window.doubleClickEnabled = true; // 더블클릭 다시 활성화
                 return;
             }
@@ -3693,7 +3693,9 @@ function toggleFolderLock(action = 'lock') {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 confirmLockHandler();
-            }
+            } else if (e.key === 'Escape') {
+                cancelLockHandler();
+            }           
         };
 
         // Enter 키 이벤트 리스너 등록
@@ -3743,7 +3745,9 @@ function toggleFolderLock(action = 'lock') {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     confirmUnlockHandler();
-                }
+                } else if (event.key === 'Escape') {
+                    cancelUnlockHandler();
+                }                
             };
 
             // Enter 키 이벤트 리스너 등록
@@ -3876,66 +3880,81 @@ function unlockFolders(folders, password = '') {
     });
 }
 
-
 // 잠긴 폴더 접근 처리 함수
 function navigateToLockedFolder(folderName, folderPath) {
-    const modal = document.getElementById('folderPasswordModal');
-    const passwordInput = document.getElementById('folderPasswordInput');
-    passwordInput.value = '';
-    passwordInput.setAttribute('autocomplete', 'off');
-    passwordInput.focus();    
-    // 현재 처리중인 폴더 정보 저장
-    window.currentLockedFolder = {
-        name: folderName,
-        path: folderPath
-    };
-    
-    // 모달 표시
-    modal.style.display = 'flex';
-    passwordInput.value = '';
-    passwordInput.focus();
-    
-    // 확인 버튼 클릭 핸들러
-    document.getElementById('confirmFolderPassword').onclick = () => {
-        const password = passwordInput.value;
-        verifyFolderPassword(folderPath, password);
-        modal.style.display = 'none';
-    };
-    
-    // 취소 버튼 클릭 핸들러
-    document.getElementById('cancelFolderPassword').onclick = () => {
-        modal.style.display = 'none';
-        window.currentLockedFolder = null;
-    };
-    
-    // 닫기 버튼 클릭 핸들러
-    document.querySelector('#folderPasswordModal .modal-close').onclick = () => {
-        modal.style.display = 'none';
-        window.currentLockedFolder = null;
-    };
-    
-    // Enter 키 처리
-    passwordInput.addEventListener('keyup', function(event) {
-        if (event.key === 'Enter') {
-            document.getElementById('confirmFolderPassword').click();
-            passwordInput.removeEventListener('keyup', arguments.callee);
-        }else if (event.key === 'Escape') {
-            // ESC 키 누르면 취소 버튼 클릭과 동일한 효과
-            document.getElementById('cancelFolderPassword').click();
-            passwordInput.removeEventListener('keyup', arguments.callee);
-
+    return new Promise((resolve) => {
+        const modal = document.getElementById('folderPasswordModal');
+        const passwordInput = document.getElementById('folderPasswordInput');
+        const confirmBtn = document.getElementById('confirmFolderPassword');
+        const cancelBtn = document.getElementById('cancelFolderPassword');
+        const closeBtn = modal.querySelector('.modal-close');
+        
+        // 현재 처리중인 폴더 정보 저장
+        window.currentLockedFolder = {
+            name: folderName,
+            path: folderPath
+        };
+        
+        // 입력 필드 초기화
+        passwordInput.value = '';
+        passwordInput.setAttribute('autocomplete', 'off');
+        
+        // 모달 표시
+        modal.style.display = 'flex';
+        passwordInput.focus();
+        
+        // 확인 버튼 클릭 핸들러
+        const confirmHandler = () => {
+            const password = passwordInput.value;
+            cleanup();
+            resolve(password); // 비밀번호 반환
+        };
+        
+        // 취소 버튼 클릭 핸들러
+        const cancelHandler = () => {
+            cleanup();
+            window.currentLockedFolder = null;
+            resolve(null); // 취소 시 null 반환
+        };
+        
+        // 키보드 이벤트 핸들러
+        const keydownHandler = (event) => {
+            if (event.key === 'Enter') {
+                confirmHandler();
+            } else if (event.key === 'Escape') {
+                cancelHandler();
+            }
+        };
+        
+        // 이벤트 리스너 정리 함수
+        const cleanup = () => {
+            modal.style.display = 'none';
+            confirmBtn.removeEventListener('click', confirmHandler);
+            cancelBtn.removeEventListener('click', cancelHandler);
+            closeBtn.removeEventListener('click', cancelHandler);
+            passwordInput.removeEventListener('keydown', keydownHandler);
+        };
+        
+        // 이벤트 리스너 등록
+        confirmBtn.addEventListener('click', confirmHandler);
+        cancelBtn.addEventListener('click', cancelHandler);
+        closeBtn.addEventListener('click', cancelHandler);
+        passwordInput.addEventListener('keydown', keydownHandler);
+    }).then(password => {
+        // Promise 결과로 비밀번호를 받아서 처리
+        if (password !== null) {
+            return verifyFolderPassword(folderPath, password);
         }
+        return false; // 취소된 경우
     });
 }
 
 // 폴더 비밀번호 검증 함수
 function verifyFolderPassword(folderPath, password) {
-    if (!folderPath || !window.currentLockedFolder) return;
-    
-    const encodedFolderPath = encodeURIComponent(folderPath);
+    if (!folderPath || !window.currentLockedFolder) return Promise.resolve(false);
     
     showLoading();
-    fetch(`${API_BASE_URL}/api/verify-folder-password`, {
+    return fetch(`${API_BASE_URL}/api/verify-folder-password`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -3956,25 +3975,27 @@ function verifyFolderPassword(folderPath, password) {
         if (data.success) {
             // 비밀번호 맞음, 폴더로 이동
             const newPath = window.currentLockedFolder.path;
-            //syncCurrentPath(newPath);
-            updateHistoryState(newPath);
-            loadFiles(newPath);
-            clearSelection();
+            syncCurrentPath(newPath); // currentPath 업데이트
+            updateHistoryState(newPath); // 브라우저 히스토리 상태 업데이트
+            loadFiles(newPath); // 파일 목록 로드
+            clearSelection(); // 선택 초기화
             window.currentLockedFolder = null;
             logLog(`비밀번호 확인됨: ${folderPath}`);
+            return true;
         } else {
             // 비밀번호 틀림
             showToast('비밀번호가 일치하지 않습니다.', 'error');
             logLog(`비밀번호 불일치: ${folderPath}`);
+            return false;
         }
     })
     .catch(error => {
         hideLoading();
         showToast('폴더 접근 오류: ' + error.message, 'error');
         logError('폴더 비밀번호 검증 오류:', error);
+        return false;
     });
 }
-
 
 // 파일 항목 초기화 - 각 파일/폴더에 이벤트 연결
 function initFileItem(fileItem) {
