@@ -2098,3 +2098,37 @@ if (typeof lockedFolders === 'undefined') {
   const lockedFoldersData = require('./lockedFolders.json');  // 필요한 경우 로드
   lockedFolders = lockedFoldersData.lockState || [];
 }
+
+
+
+// 폴더 비밀번호 검증 API
+app.post('/api/verify-folder-password', express.json(), async (req, res) => {
+  try {
+    const { path: folderPath, password } = req.body;
+    
+    if (!folderPath) {
+      return res.status(400).json({ success: false, message: '폴더 경로가 없습니다.' });
+    }
+    
+    // 해당 경로가 잠겨있는지 확인
+    const lockedFolder = lockedFolders.find(f => f.path === folderPath);
+    
+    if (!lockedFolder) {
+      return res.status(400).json({ success: false, message: '잠금 설정된 폴더가 아닙니다.' });
+    }
+    
+    // 비밀번호 확인
+    const isPasswordCorrect = lockedFolder.password === password;
+    
+    if (isPasswordCorrect) {
+      log(`폴더 비밀번호 확인 성공: ${folderPath}`, 'info');
+      return res.json({ success: true });
+    } else {
+      log(`폴더 비밀번호 확인 실패: ${folderPath}`, 'info');
+      return res.json({ success: false, message: '비밀번호가 일치하지 않습니다.' });
+    }
+  } catch (error) {
+    errorLog('폴더 비밀번호 검증 API 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
