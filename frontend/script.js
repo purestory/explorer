@@ -269,7 +269,7 @@ function initContextMenu() {
                 if (isFolderLocked(itemPath)) {
                     ctxLock.innerHTML = '<i class="fas fa-unlock"></i> 잠금 해제';
                 } else {
-                    ctxLock.innerHTML = '<i class="fas fa-shield-alt"></i> 잠금';
+                    ctxLock.innerHTML = '<i class="fas fa-key"></i> 잠금';
                 }
             } else {
                 
@@ -1113,6 +1113,7 @@ function loadFiles(path = '') {
                 logLog('더블클릭 이벤트 활성화됨');
             }, 200); // 타이머 시간을 300ms에서 500ms로 증가
             */
+           
             window.doubleClickEnabled = true;
           
             // 잠금 상태 로드
@@ -2208,7 +2209,7 @@ function handleFileDblClick(e, fileItem) {
             const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
             // 새 창에서 파일 열기
             window.open(fileUrl, '_blank');
-        } else {
+    } else {
             // 다운로드
             downloadFile(fileName);
         }
@@ -2596,7 +2597,7 @@ function handleDropZoneDragOver(e) {
 function handleDropZoneDragLeave(e) {
         // relatedTarget이 null이거나 dropZone의 자식 요소가 아닌 경우에만 비활성화
     if (!dropZone.contains(e.relatedTarget)) {
-            dropZone.classList.remove('active');
+        dropZone.classList.remove('active');
     }
 }
 
@@ -2857,9 +2858,9 @@ function initViewModes() {
         listView = false;
         gridViewBtn.classList.add('active');
         listViewBtn.classList.remove('active');
-        // 초기화 시 window.currentPath 설정
-        window.currentPath = currentPath || "";
-        loadFiles(currentPath); 
+    // 초기화 시 window.currentPath 설정
+    window.currentPath = currentPath || "";
+    loadFiles(currentPath);
     });
     
     listViewBtn.addEventListener('click', () => {
@@ -3913,7 +3914,7 @@ function navigateToLockedFolder(folderName, folderPath) {
         // 취소 버튼 클릭 핸들러
         const cancelHandler = () => {
             cleanup();
-            window.currentLockedFolder = null;
+                            window.currentLockedFolder = null;
             resolve(null); // 취소 시 null 반환
         };
         
