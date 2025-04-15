@@ -804,10 +804,7 @@ document.addEventListener('mouseup', (e) => {
     const selectionBox = document.getElementById('selectionBox'); 
     if (selectionBox) { selectionBox.style.display = 'none'; } // 선택 상자 숨김
     // 상태 초기화
-    window.dragSelectState.isSelecting = false;
-    window.dragSelectState.dragStarted = false;
-    window.dragSelectState.startedOnFileItem = false;
-    window.dragSelectState.startedOnSelectedItem = false;
+    resetDragSelectState()
     // 버튼 상태 마지막 업데이트
     updateButtonStates(); 
 });
@@ -841,10 +838,7 @@ function setupGlobalDragCleanup() {
             }
 
             // 드래그 관련 상태 플래그 초기화
-            window.dragSelectState.isSelecting = false;
-            window.dragSelectState.dragStarted = false;
-            window.dragSelectState.startedOnFileItem = false;
-            window.dragSelectState.startedOnSelectedItem = false;
+            resetDragSelectState()
             
             // 마지막으로 버튼 상태 업데이트
             updateButtonStates(); 
@@ -1102,7 +1096,7 @@ function loadFiles(path = '') {
             });
             
             // 정렬 적용
-            renderFiles(data);
+            //renderFiles(data);
             updateBreadcrumb(path);
             hideLoading();
             
@@ -1222,8 +1216,8 @@ function renderFiles(files) {
                             sortField = sortBy;
                             sortDirection = 'asc';
                         }
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
+                        // 초기화 시 window.currentPath 설정
+                        window.currentPath = currentPath || "";
                         loadFiles(currentPath);
                     });
                 });
@@ -1247,7 +1241,7 @@ function renderFiles(files) {
             const visibleFiles = sortedFiles.filter(file => !file.name.startsWith('.'));
             
             // 잠금 상태 디버그 로깅
-            logLog('현재 잠금 폴더 목록:', lockedFolders);
+            logLog('현재 잠금 폴더 목록:renderFiles', lockedFolders);
             
             // 상위 폴더로 이동 항목 추가 (루트 폴더가 아닌 경우)
             if (currentPath) {
@@ -2073,15 +2067,15 @@ function updateBreadcrumb(path) {
     
     breadcrumb.innerHTML = breadcrumbHTML;
     
-    // 경로 클릭 이벤트
-    breadcrumb.querySelectorAll('span').forEach(span => {
+        // 경로 클릭 이벤트
+        breadcrumb.querySelectorAll('span').forEach(span => {
         span.addEventListener('click', () => {
             currentPath = span.getAttribute('data-path');
             // 히스토리 상태 업데이트 추가
             updateHistoryState(currentPath);
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
-    loadFiles(currentPath);
+            // 초기화 시 window.currentPath 설정
+            window.currentPath = currentPath || "";
+            //loadFiles(currentPath);
     
             // 선택 초기화
             clearSelection();
@@ -2898,8 +2892,8 @@ function initViewModes() {
         listView = false;
         gridViewBtn.classList.add('active');
         listViewBtn.classList.remove('active');
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
+        // 초기화 시 window.currentPath 설정
+        window.currentPath = currentPath || "";
         loadFiles(currentPath); 
     });
     
@@ -2907,8 +2901,8 @@ function initViewModes() {
         listView = true;
         listViewBtn.classList.add('active');
         gridViewBtn.classList.remove('active');
-    // 초기화 시 window.currentPath 설정
-    window.currentPath = currentPath || "";
+        // 초기화 시 window.currentPath 설정
+        window.currentPath = currentPath || "";
         loadFiles(currentPath);
     });
     
@@ -3309,42 +3303,6 @@ function compressAndDownload(itemList) {
         statusInfo.textContent = '압축 실패';
         logError('압축 후 다운로드 오류:', error);
     });
-}
-
-// 항목 이동
-function moveItems(itemIds) {
-    if (!Array.isArray(itemIds) || itemIds.length === 0) return;
-    
-    // 상위 폴더(..)는 제외
-    const itemsToMove = itemIds.filter(id => id !== '..');
-    
-    if (itemsToMove.length === 0) {
-        alert('이동할 항목이 없습니다. 상위 폴더는 이동할 수 없습니다.');
-        return;
-    }
-    
-    // 클립보드에 추가
-    clipboardItems = [];
-    itemsToMove.forEach(id => {
-        const element = document.querySelector(`.file-item[data-id="${id}"]`);
-        if (element) {
-            clipboardItems.push({
-                name: id,
-                isFolder: element.getAttribute('data-is-folder') === 'true',
-                originalPath: currentPath
-            });
-        }
-    });
-    
-    clipboardOperation = 'cut';
-    pasteBtn.disabled = false;
-
-
-    window.currentPath = currentPath || "";
-    loadFiles(currentPath);
-    
-    // 선택 초기화
-    clearSelection();
 }
 
 // 브라우저 히스토리 상태 업데이트
@@ -3772,7 +3730,7 @@ function loadLockStatus() {
         })
         .then(data => {
             lockedFolders = data.lockState || [];
-            logLog('잠금 폴더 목록:', lockedFolders);
+            logLog('잠금 폴더 목록:loadLockStatus', lockedFolders);
             return lockedFolders; // 체이닝을 위해 반환
         })
         .catch(error => {
