@@ -1485,7 +1485,7 @@ function initDragAndDrop() {
             return;
         }
         
-        logLog('드래그 시작 - 대상:', e.target.className);
+        console.log('!!!!!!!!!!드래그 시작 - 대상:', e.target.className);
         
         // 파일 항목 요소 찾기
         const fileItem = e.target.closest('.file-item');
@@ -4104,109 +4104,130 @@ function initFileItem(fileItem) {
         });
     });
     
-    // 드래그 시작 처리를 위한 mousedown 이벤트 유지
-    fileItem.addEventListener('mousedown', (e) => {
-        // 우클릭은 여기서 처리하지 않음
-        if (e.button !== 0) return;
-        
-        // 상위 폴더는 드래그되지 않도록
-        if (fileItem.getAttribute('data-parent-dir') === 'true') {
-            return;
-        }
-        
-        // 이름 변경 중이면 무시
-        if (fileItem.classList.contains('renaming')) return;
-        
-        // 파일 아이템 드래그 가능하도록 설정
-        fileItem.setAttribute('draggable', 'true');
-        
-        // 선택된 항목을 클릭한 경우 선택 상태 유지 (드래그 시작 가능)
-        if (fileItem.classList.contains('selected')) {
-            // mousedown 이벤트의 기본 동작을 멈추지 않음 (drag 이벤트 발생 허용)
-            // 대신 e.stopPropagation()만 호출하여 document의 mousedown 핸들러가 호출되지 않도록 함
-            e.stopPropagation();
-            return;
-        }
-        
-        // 선택되지 않은 항목을 클릭한 경우 새로 선택 (mousedown에서 즉시 선택)
-        if (!e.ctrlKey && !e.shiftKey) {
-            clearSelection();
-            selectItem(fileItem);
-            // 드래그를 허용하기 위해 기본 동작은 막지 않음
-            e.stopPropagation();
-        }
-    });
+// mousedown 이벤트 핸들러 수정
+fileItem.addEventListener('mousedown', (e) => {
+    // 우클릭은 여기서 처리하지 않음
+    if (e.button !== 0) return;
     
-    // 드래그 이벤트 연결
-    fileItem.addEventListener('dragstart', (e) => {
-        // 상위 폴더는 드래그되지 않도록
-        if (fileItem.getAttribute('data-parent-dir') === 'true') {
-            e.preventDefault();
-            return;
+    // 상위 폴더는 드래그되지 않도록
+    if (fileItem.getAttribute('data-parent-dir') === 'true') {
+        return;
+    }
+    
+    // 이름 변경 중이면 무시
+    if (fileItem.classList.contains('renaming')) return;
+    
+    // 파일 아이템 드래그 가능하도록 설정
+    fileItem.setAttribute('draggable', 'true');
+    
+    // 선택된 항목을 클릭한 경우 선택 상태 유지 (드래그 시작 가능)
+    if (fileItem.classList.contains('selected')) {
+        // mousedown 이벤트의 기본 동작을 멈추지 않음 (drag 이벤트 발생 허용)
+        // 대신 e.stopPropagation()만 호출하여 document의 mousedown 핸들러가 호출되지 않도록 함
+        e.stopPropagation();
+    } else {
+        // 선택되지 않은 항목은 바로 선택하지 않고 
+        // 드래그 가능하게만 설정 (dragstart에서 결정)
+        e.stopPropagation();
+    }
+});
+    
+ // 드래그 이벤트 연결
+fileItem.addEventListener('dragstart', (e) => {
+    // 상위 폴더는 드래그되지 않도록
+    if (fileItem.getAttribute('data-parent-dir') === 'true') {
+        e.preventDefault();
+        return;
+    }
+    
+    // 선택된 항목이 아니면 드래그 취소하고 드래그 선택 모드로 전환
+    if (!fileItem.classList.contains('selected')) {
+        e.preventDefault(); // 드래그 이동 취소
+        
+        // 드래그 선택 모드로 전환
+        if (window.dragSelectState) {
+            window.dragSelectState.isSelecting = true;
+            window.dragSelectState.startedOnFileItem = false; // 파일 항목에서 시작했지만, 선택되지 않았으므로 false
+            
+            // 선택 상자 초기화
+            const selectionBox = document.getElementById('selectionBox');
+            if (selectionBox) {
+                // 마우스 위치 기준으로 선택 상자 초기화
+                selectionBox.style.position = 'fixed';
+                selectionBox.style.left = `${e.clientX}px`;
+                selectionBox.style.top = `${e.clientY}px`;
+                selectionBox.style.width = '0px';
+                selectionBox.style.height = '0px';
+                selectionBox.style.display = 'none'; // 아직 보이지 않음
+                // 시작 좌표 저장
+                selectionBox.dataset.startClientX = e.clientX;
+                selectionBox.dataset.startClientY = e.clientY;
+                // 초기 스크롤 위치 저장
+                const fileList = document.getElementById('fileList');
+                if (fileList) {
+                    selectionBox.dataset.initialScrollTop = fileList.scrollTop;
+                    selectionBox.dataset.initialScrollLeft = fileList.scrollLeft;
+                }
+            }
+        }
+        return; // 드래그 이동 중단
+    }
+    
+    try {
+        // 선택된 항목들의 전체 경로 생성
+        const draggedItems = Array.from(selectedItems).map(itemName => {
+            // 전체 경로 생성 (파일 시스템 구조에 맞게 경로 생성)
+            return currentPath ? `${currentPath}/${itemName}` : itemName;
+        });
+        
+        logLog('드래그 시작 - 항목:', draggedItems);
+        
+        // 1. 텍스트 데이터로 경로 정보 저장
+        // 여러 항목은 줄바꿈으로 구분된 문자열로 저장
+        e.dataTransfer.setData('text/plain', draggedItems.join('\n'));
+        
+        // 2. 내부 드래그 마커 설정 (호환성 유지)
+        e.dataTransfer.setData('application/x-internal-drag', 'true');
+        
+        // 3. 드래그 시각 효과 설정
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // 4. 추가 메타데이터 저장 - 경로 기반 구분을 위한 정보
+        const metaData = {
+            source: 'internal',
+            type: 'webdav-path',
+            host: window.location.hostname,
+            items: draggedItems
+        };
+        e.dataTransfer.setData('application/json', JSON.stringify(metaData));
+            
+        // 글로벌 드래그 상태 추적 시작
+        if (typeof window.startFileDrag === 'function') {
+            window.startFileDrag(selectedItems);
         }
         
-        // 선택된 항목이 아니면 드래그 취소 (수정: 드래그 시작 시점에 선택)
-        if (!fileItem.classList.contains('selected')) {
-            // 선택되지 않은 항목은 먼저 선택
-            clearSelection();
-            selectItem(fileItem);
-        }
-        
-        try {
-            // 선택된 항목들의 전체 경로 생성
-            const draggedItems = Array.from(selectedItems).map(itemName => {
-                // 전체 경로 생성 (파일 시스템 구조에 맞게 경로 생성)
-                return currentPath ? `${currentPath}/${itemName}` : itemName;
+        // 드래그 중 스타일 적용
+        setTimeout(() => {
+            document.querySelectorAll('.file-item.selected, .file-item-grid.selected').forEach(item => {
+                item.classList.add('dragging');
             });
-            
-            logLog('드래그 시작 - 항목:', draggedItems);
-            
-            // 1. 텍스트 데이터로 경로 정보 저장
-            // 여러 항목은 줄바꿈으로 구분된 문자열로 저장
-            e.dataTransfer.setData('text/plain', draggedItems.join('\n'));
-            
-            // 2. 내부 드래그 마커 설정 (호환성 유지)
-            e.dataTransfer.setData('application/x-internal-drag', 'true');
-            
-            // 3. 드래그 시각 효과 설정
-            e.dataTransfer.effectAllowed = 'move';
-            
-            // 4. 추가 메타데이터 저장 - 경로 기반 구분을 위한 정보
-            const metaData = {
-                source: 'internal',
-                type: 'webdav-path',
-                host: window.location.hostname,
-                items: draggedItems
-            };
-            e.dataTransfer.setData('application/json', JSON.stringify(metaData));
-            
-            // 글로벌 드래그 상태 추적 시작
-            if (typeof window.startFileDrag === 'function') {
-                window.startFileDrag(selectedItems);
-            }
-            
-            // 드래그 중 스타일 적용
-            setTimeout(() => {
-                document.querySelectorAll('.file-item.selected, .file-item-grid.selected').forEach(item => {
-                    item.classList.add('dragging');
-                });
-            }, 0);
-            
-            logLog('[File Drag Start] 경로 기반 내부 드래그 설정 완료', draggedItems);
-            logLog('[File Drag Start] dataTransfer types:', Array.from(e.dataTransfer.types));
+        }, 0);
+        
+        logLog('[File Drag Start] 경로 기반 내부 드래그 설정 완료', draggedItems);
+        logLog('[File Drag Start] dataTransfer types:', Array.from(e.dataTransfer.types));
 
-        } catch (error) {
-            logError('드래그 설정 중 오류 발생:', error);
-            // 오류 발생 시 기본 정보만이라도 설정 (단일 파일명)
-            try {
-                const singleItemPath = currentPath ? `${currentPath}/${fileItem.getAttribute('data-name')}` : fileItem.getAttribute('data-name');
-                e.dataTransfer.setData('text/plain', singleItemPath);
-                e.dataTransfer.setData('application/x-internal-drag', 'true');
-            } catch (innerError) {
-                logError('기본 드래그 설정도 실패:', innerError);
-            }
+    } catch (error) {
+        logError('드래그 설정 중 오류 발생:', error);
+        // 오류 발생 시 기본 정보만이라도 설정 (단일 파일명)
+        try {
+            const singleItemPath = currentPath ? `${currentPath}/${fileItem.getAttribute('data-name')}` : fileItem.getAttribute('data-name');
+            e.dataTransfer.setData('text/plain', singleItemPath);
+            e.dataTransfer.setData('application/x-internal-drag', 'true');
+        } catch (innerError) {
+            logError('기본 드래그 설정도 실패:', innerError);
         }
-    });
+    }
+});
     
     // 드래그 종료 이벤트
     fileItem.addEventListener('dragend', (e) => {
