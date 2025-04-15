@@ -1109,7 +1109,7 @@ function loadFiles(path = '') {
             setTimeout(() => {
                 window.doubleClickEnabled = true;
                 logLog('더블클릭 이벤트 활성화됨');
-            }, 500); // 타이머 시간을 300ms에서 500ms로 증가
+            }, 200); // 타이머 시간을 300ms에서 500ms로 증가
             
             // 잠금 상태 로드
             loadLockStatus().then(() => {
@@ -1125,7 +1125,7 @@ function loadFiles(path = '') {
             // 오류 발생해도 더블클릭 이벤트 활성화
             setTimeout(() => {
                 window.doubleClickEnabled = true;
-            }, 500); // 타이머 시간을 300ms에서 500ms로 증가
+            }, 200); // 타이머 시간을 300ms에서 500ms로 증가
         });
     
     // 디스크 사용량 로드
@@ -2419,12 +2419,8 @@ async function deleteSelectedItems() {
 
      let refreshDelay;
     if (itemCount <= 100) {
-        refreshDelay = 300; // 0.5초
-    } else if (itemCount <= 1000) {
-        refreshDelay = 1000; // 1초
-    } else {
-        refreshDelay = 2000; // 2초
-    }
+        refreshDelay = 200; // 0.5초
+    } 
     console.log(`[Delete Action] Scheduling refresh in ${refreshDelay}ms for ${itemCount} items.`); // 디버깅용 로그
     setTimeout(() => loadFiles(currentPath), refreshDelay); // 동적 지연 시간 적용
     // --- 수정 끝 ---
@@ -4382,7 +4378,7 @@ function showToast(message, type = 'info') {
             if (toast.parentNode) {
                 toast.parentNode.removeChild(toast);
             }
-        }, 300); // 페이드아웃 시간
+        }, 500); // 페이드아웃 시간
     }, 3000);
 }
 
