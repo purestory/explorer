@@ -2260,20 +2260,65 @@ function showRenameDialog() {
         }
     }
 }
-// 선택 항목 삭제 (백그라운드 처리 UX 개선 및 액션 로깅 추가)
+
+
+
+// 폴더 내에 잠긴 폴더가 있는지 확인하는 함수 (클라이언트)
+function hasLockedSubfolders(folderPath) {
+    // 정규화된 경로 (마지막 슬래시 제거)
+    const normalizedFolderPath = folderPath.replace(/\/+$/, '');
+    
+    // lockedFolders 배열을 순회하며 하위 경로에 잠긴 폴더가 있는지 확인
+    return lockedFolders.some(lockedFolder => {
+        const lockedPath = lockedFolder.path;
+        
+        // 자기 자신이 아니고, 잠긴 경로가 현재 폴더 경로로 시작하는지 확인
+        // 예: 현재 폴더가 "A/B"이고 잠긴 폴더가 "A/B/C"나 "A/B/D/E"와 같은 경우
+        return lockedPath !== normalizedFolderPath && 
+               lockedPath.startsWith(normalizedFolderPath + '/');
+    });
+}
+
+// 선택 항목 삭제 (하위 폴더 잠김 확인 추가)
 async function deleteSelectedItems() {
     if (selectedItems.size === 0) return;
 
     const itemList = Array.from(selectedItems);
     const itemCount = itemList.length;
 
-    // 잠긴 폴더 확인 (기존 로직 유지)
-    const hasRestrictedItems = itemList.some(itemName => {
+    // 직접 잠긴 항목 확인
+    const directlyLockedItems = [];
+    // 하위에 잠긴 폴더가 있는 항목
+    const itemsWithLockedSubfolders = [];
+
+    // 각 선택된 항목에 대해 확인
+    for (const itemName of itemList) {
         const itemPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-        return isFolderLocked(itemPath);
-    });
-    if (hasRestrictedItems) {
-        showToast('잠긴 폴더 또는 파일은 삭제할 수 없습니다.', 'warning');
+        
+        // 1. 항목 자체가 잠겨 있는지 확인
+        if (isFolderLocked(itemPath)) {
+            directlyLockedItems.push(itemName);
+            continue;
+        }
+        
+        // 2. 폴더이고 내부에 잠긴 폴더가 있는지 확인
+        const item = document.querySelector(`[data-name="${CSS.escape(itemName)}"]`);
+        const isFolder = item && item.getAttribute('data-is-folder') === 'true';
+        
+        if (isFolder && hasLockedSubfolders(itemPath)) {
+            itemsWithLockedSubfolders.push(itemName);
+        }
+    }
+    
+    // 잠긴 항목이 있는 경우 처리
+    if (directlyLockedItems.length > 0) {
+        showToast('잠긴 폴더는 삭제할 수 없습니다.', 'warning');
+        return;
+    }
+    
+    // 하위에 잠긴 폴더가 있는 경우 처리
+    if (itemsWithLockedSubfolders.length > 0) {
+        showToast('하위 폴더에 잠긴 폴더가 있어 삭제할 수 없습니다.', 'warning');
         return;
     }
 
