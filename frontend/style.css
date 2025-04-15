@@ -47,7 +47,7 @@ h1 {
 
 .navigation-bar {
     background-color: #f0f0f0;
-    padding: 10px 15px;
+    padding: 5px 15px;
     border-bottom: 1px solid #ddd;
     display: flex;
     align-items: center;
@@ -299,7 +299,7 @@ h1 {
 
 /* === 내용 행 스타일 (5:1:1) ===  */
 .file-view.list-view .file-item .file-name {
-    flex-grow: 5; 
+    flex-grow: 3; 
     flex-shrink: 1;
     flex-basis: 0;
     white-space: nowrap;
@@ -307,6 +307,8 @@ h1 {
     text-overflow: ellipsis;
     padding-right: 15px;
     text-align: left; /* 내용: 이름 왼쪽 정렬 유지 */
+    font-size: 0.95rem;
+
 }
 
 .file-view.list-view .file-item .file-size {
@@ -318,7 +320,7 @@ h1 {
     padding-right: 15px; /* 왼쪽 정렬 시 우측 여백 추가 */
     padding-left: 0; /* 왼쪽 여백 제거 */
     color: #6c757d;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
 }
 
 .file-view.list-view .file-item .file-date {
@@ -326,16 +328,17 @@ h1 {
     flex-shrink: 0;
     flex-basis: 0;
     min-width: 120px;
-    text-align: left; /* 내용: 날짜 왼쪽 정렬로 변경 */
+    text-align:left; /* 내용: 날짜 왼쪽 정렬로 변경 */
     padding-right: 10px; /* 왼쪽 정렬 시 우측 여백 추가 */
     padding-left: 0; /* 왼쪽 여백 제거 */
     color: #6c757d;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
+    white-space: nowrap;
 }
 
 /* === 제목 행 스타일 (3:1:1) === */
 .file-view.list-view .file-list-header .header-name {
-    flex-grow: 3; /* 제목: 이름 비율 3으로 변경 */
+    flex-grow: 2; /* 제목: 이름 비율 3으로 변경 */
     flex-shrink: 1;
     flex-basis: 0;
     white-space: nowrap;
@@ -376,15 +379,7 @@ h1 {
     background-color: #e3f2fd;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
-/*
-.file-item.selected {
-    background-color: #e3f2fd;
-    box-shadow: 0 0 5px rgba(188, 213, 240, 0.3);
-    border: 1px solid #cfebf5;
-    outline: 1px solid #add8e6;
-    outline-offset: -1px;
-}
-*/
+
 .file-item.cut {
     opacity: 0.5;
 }
@@ -667,8 +662,9 @@ h1 {
 }
 
 .file-item:hover {
-    background-color: #e3f2fd;
-    transform: translateY(-2px);
+    background-color: #45a2e4;
+
+   /* transform: translateY(-2px);*/
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
@@ -677,7 +673,7 @@ h1 {
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
 /*    border: 1px solid #007bff;*/
     outline: 1px solid #007bff;
-    outline-offset: 0px;
+    outline-offset: -2px;
 }
 
 .file-item.cut {
