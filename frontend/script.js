@@ -104,7 +104,7 @@ function updateButtonStates() {
     document.getElementById('ctxCut').style.display = selectedCount > 0 ? 'flex' : 'none';
     document.getElementById('ctxDelete').style.display = selectedCount > 0 ? 'flex' : 'none';
     document.getElementById('ctxDownload').style.display = selectedCount > 0 ? 'flex' : 'none';
-    document.getElementById('ctxOpen').style.display = selectedCount === 1 ? 'flex' : 'none';
+    
 }
 
 // 모든 선택 해제
@@ -230,13 +230,16 @@ function hideLoading() {
 
 // 컨텍스트 메뉴 초기화
 function initContextMenu() {
-    // 컨텍스트 메뉴 숨기기
-    document.addEventListener('click', () => {
-        contextMenu.style.display = 'none';
+    // 기본 메뉴 닫기 이벤트
+    document.addEventListener('click', function(e) {
+        // 컨텍스트 메뉴 외부를 클릭한 경우에만 메뉴 숨김
+        if (contextMenu && !contextMenu.contains(e.target)) {
+            contextMenu.style.display = 'none';
+        }
     });
     
     // 항목에 대한 컨텍스트 메뉴
-    fileView.addEventListener('contextmenu', (e) => {
+    fileView.addEventListener('contextmenu', function(e) {
         e.preventDefault();
         
         const fileItem = e.target.closest('.file-item');
@@ -248,15 +251,15 @@ function initContextMenu() {
             
             // 파일 타입에 따라 열기/다운로드 메뉴 표시 조정
             const isFolder = fileItem.getAttribute('data-is-folder') === 'true';
-            const ctxOpen = document.getElementById('ctxOpen');
+            
             const ctxDownload = document.getElementById('ctxDownload');
             const ctxLock = document.getElementById('ctxLock'); // 잠금 메뉴 항목
             
             if (isFolder) {
-                ctxOpen.innerHTML = '<i class="fas fa-folder-open"></i> 열기';
-                ctxDownload.style.display = 'flex'; // 폴더도 다운로드 메뉴 표시
-                ctxDownload.innerHTML = '<i class="fas fa-download"></i> 다운로드'; // 폴더도 그냥 다운로드로 표시
-                ctxLock.style.display = 'flex'; // 폴더인 경우에만 잠금 메뉴 표시
+                
+                ctxDownload.style.display = 'flex';
+                ctxDownload.innerHTML = '<i class="fas fa-download"></i> 다운로드';
+                ctxLock.style.display = 'flex';
                 
                 // 경로 가져오기
                 const itemName = fileItem.getAttribute('data-name');
@@ -266,14 +269,19 @@ function initContextMenu() {
                 if (isFolderLocked(itemPath)) {
                     ctxLock.innerHTML = '<i class="fas fa-unlock"></i> 잠금 해제';
                 } else {
-                    ctxLock.innerHTML = '<i class="fas fa-lock"></i> 잠금';
+                    ctxLock.innerHTML = '<i class="fas fa-shield-alt"></i> 잠금';
                 }
             } else {
-                ctxOpen.innerHTML = '<i class="fas fa-external-link-alt"></i> 열기';
+                
                 ctxDownload.style.display = 'flex';
-                ctxDownload.innerHTML = '<i class="fas fa-download"></i> 다운로드'; // 일반 파일은 다운로드로 표시
-                ctxLock.style.display = 'none'; // 파일인 경우 잠금 메뉴 숨김
+                ctxDownload.innerHTML = '<i class="fas fa-download"></i> 다운로드';
+                ctxLock.style.display = 'none';
             }
+            
+            // 모든 메뉴 항목 표시
+            document.querySelectorAll('.context-menu-item').forEach(item => {
+                item.style.display = 'flex';
+            });
             
             // 압축 메뉴 표시
             document.getElementById('ctxCompress').style.display = 'flex';
@@ -295,7 +303,7 @@ function initContextMenu() {
     });
     
     // 빈 공간에 대한 컨텍스트 메뉴
-    fileList.addEventListener('contextmenu', (e) => {
+    fileList.addEventListener('contextmenu', function(e) {
         if (e.target === fileList || e.target === fileView) {
             e.preventDefault();
             clearSelection();
@@ -323,46 +331,40 @@ function initContextMenu() {
         }
     });
     
-    // 컨텍스트 메뉴 항목 클릭 핸들러
-    document.getElementById('ctxOpen').addEventListener('click', () => {
-        const selectedItem = document.querySelector('.file-item.selected');
-        if (!selectedItem) return;
-        
-        const isFolder = selectedItem.getAttribute('data-is-folder') === 'true';
-        const fileName = selectedItem.getAttribute('data-name');
-        
-        if (isFolder) {
-            // 폴더인 경우 열기
-            navigateToFolder(fileName);
-        } else {
-            // 파일인 경우 열기 (브라우저에서 직접 열기)
-            openFile(fileName);
-        }
-    });
+
     
-    document.getElementById('ctxDownload').addEventListener('click', () => {
+    document.getElementById('ctxDownload').onclick = function() {
         downloadSelectedItems();
-    });
+    };
     
-    document.getElementById('ctxCut').addEventListener('click', cutSelectedItems);
-    document.getElementById('ctxPaste').addEventListener('click', pasteItems);
-    document.getElementById('ctxRename').addEventListener('click', showRenameDialog);
-    document.getElementById('ctxDelete').addEventListener('click', deleteSelectedItems);
+    document.getElementById('ctxCut').onclick = function() {
+        cutSelectedItems();
+    };
     
-    // 폴더 잠금 토글 이벤트 추가 (수정)
-    document.getElementById('ctxLock').addEventListener('click', (e) => {
-        // 메뉴 텍스트에서 명령 확인 (잠금 또는 해제)
+    document.getElementById('ctxPaste').onclick = function() {
+        pasteItems();
+    };
+    
+    document.getElementById('ctxRename').onclick = function() {
+        showRenameDialog();
+    };
+    
+    document.getElementById('ctxDelete').onclick = function() {
+        deleteSelectedItems();
+    };
+    
+    document.getElementById('ctxLock').onclick = function(e) {
         const menuText = e.currentTarget.textContent.trim();
         const action = menuText.includes('잠금 해제') ? 'unlock' : 'lock';
         toggleFolderLock(action);
-    });
+    };
     
-    document.getElementById('ctxNewFolder').addEventListener('click', () => {
+    document.getElementById('ctxNewFolder').onclick = function() {
         // 현재 폴더에 존재하는 파일 목록 확인
         const fileItems = document.querySelectorAll('.file-item');
         const existingNames = Array.from(fileItems).map(item => item.getAttribute('data-name'));
         
-        // 기본 폴더명 '새폴더'와 중복되지 않는 이름 찾기
+        // 기본 폴더명 설정
         let defaultName = '새폴더';
         let counter = 1;
         
@@ -371,19 +373,24 @@ function initContextMenu() {
             counter++;
         }
         
-        // 기본 폴더명 설정
         folderNameInput.value = defaultName;
         folderModal.style.display = 'flex';
         folderNameInput.focus();
-        
-        // 모든 텍스트를 선택하여 바로 수정할 수 있게 함
         folderNameInput.select();
-    });
+    };
     
-    // 압축 메뉴 이벤트 추가
-    document.getElementById('ctxCompress').addEventListener('click', compressSelectedItems);
+    document.getElementById('ctxCompress').onclick = function() {
+        compressSelectedItems();
+    };
+    // 더 간단한 방법 - 이벤트 위임을 사용한 구현
+    document.getElementById('contextMenu').addEventListener('click', function(e) {
+        // 클릭한 요소가 메뉴 항목인 경우
+        if (e.target.closest('.context-menu-item')) {
+            // 컨텍스트 메뉴 즉시 숨기기
+            this.style.display = 'none';
+        }
+    });    
 }
-
 // 파일 열기 함수 (브라우저에서 직접 열기)
 function openFile(fileName) {
     const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
@@ -2112,11 +2119,15 @@ function updateBreadcrumb(path) {
     });
 }
 
-// 파일 클릭 처리
 function handleFileClick(e, fileItem) {
     // 이벤트 버블링 방지
     e.preventDefault();
     e.stopPropagation();
+    
+    // 컨텍스트 메뉴가 열려있으면 닫기 - 여기에 추가
+    if (contextMenu.style.display === 'block') {
+        contextMenu.style.display = 'none';
+    }
     
     // 더블클릭 감지용 플래그가 있으면 초기화
     if (window.isDoubleClicking) {
@@ -2139,13 +2150,15 @@ function handleFileClick(e, fileItem) {
 
 
 
-
-// 파일 더블클릭 처리
 function handleFileDblClick(e, fileItem) {
     // 이벤트 버블링 방지
     e.preventDefault();
     e.stopPropagation();
     
+    // 컨텍스트 메뉴가 열려있으면 닫기 - 여기에 추가
+    if (contextMenu.style.display === 'block') {
+        contextMenu.style.display = 'none';
+    }
     // 더블클릭 이벤트가 비활성화된 상태이면 무시
     if (window.doubleClickEnabled === false) {
         logLog('더블클릭 이벤트가 비활성화 상태입니다.');
@@ -3753,8 +3766,17 @@ function loadLockStatus() {
             return lockedFolders; // 오류 발생 시 빈 배열 반환
         });
 }
+
+
+
 // 폴더 잠금/해제 처리 함수 (viewMode 오류 수정 및 로그 기능 추가)
 function toggleFolderLock(action = 'lock') {
+    // 컨텍스트 메뉴 숨기기 - 함수 시작 부분에 추가
+    const contextMenu = document.getElementById('contextMenu');
+    if (contextMenu) {
+        contextMenu.style.display = 'none';
+    }
+
     if (selectedItems.size === 0) {
         showToast('잠금/해제할 폴더를 선택하세요.', 'warning');
         return;
@@ -3944,7 +3966,9 @@ function unlockFolders(folders, password = '') {
 function navigateToLockedFolder(folderName, folderPath) {
     const modal = document.getElementById('folderPasswordModal');
     const passwordInput = document.getElementById('folderPasswordInput');
-    
+    passwordInput.value = '';
+    passwordInput.setAttribute('autocomplete', 'off');
+    passwordInput.focus();    
     // 현재 처리중인 폴더 정보 저장
     window.currentLockedFolder = {
         name: folderName,
