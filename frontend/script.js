@@ -2434,11 +2434,11 @@ function handleDragStart(e, fileItem) {
     // 내부 파일 드래그임을 표시하는 데이터 추가
     e.dataTransfer.setData('application/webdav-internal', 'true');
     
-    // 드래그 중 스타일 적용
+    // 드래그 중 스타일 적용 (필요한 내부 로직만 유지하고 시각적 변화는 제거)
     setTimeout(() => {
-        document.querySelectorAll('.file-item.selected').forEach(item => {
-            item.classList.add('dragging');
-        });
+        // 시각적 변화를 일으키는 클래스 추가 부분 제거
+        // 대신 내부 상태만 관리
+        window.isDraggingActive = true;
     }, 0);
     
     isDragging = true;
@@ -4206,11 +4206,11 @@ fileItem.addEventListener('dragstart', (e) => {
             window.startFileDrag(selectedItems);
         }
         
-        // 드래그 중 스타일 적용
+        // 드래그 중 스타일 적용 (필요한 내부 로직만 유지하고 시각적 변화는 제거)
         setTimeout(() => {
-            document.querySelectorAll('.file-item.selected, .file-item-grid.selected').forEach(item => {
-                item.classList.add('dragging');
-            });
+            // 시각적 변화를 일으키는 클래스 추가 부분 제거
+            // 대신 내부 상태만 관리
+            window.isDraggingActive = true;
         }, 0);
         
         logLog('[File Drag Start] 경로 기반 내부 드래그 설정 완료', draggedItems);
