@@ -1853,6 +1853,9 @@ function init() {
     
     // 검색 초기화
     initSearch();
+
+    initHistoryNavigation();
+
     
     logLog('WebDAV 파일 탐색기 초기화됨');
    
@@ -3340,65 +3343,6 @@ function initHistoryNavigation() {
     });
 }
 
-// 파일 다운로드 및 실행 함수
-function downloadAndOpenFile(fileName) {
-    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-    const encodedPath = encodeURIComponent(filePath);
-    const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
-    
-    // 파일 확장자 확인
-    const fileExt = fileName.split('.').pop().toLowerCase();
-    
-    // 실행 가능 확장자 목록
-    const executableTypes = ['exe', 'msi', 'bat', 'cmd', 'ps1', 'sh', 'app', 'vbs', 'jar'];
-    
-    // 브라우저에서 볼 수 있는 파일 확장자
-    const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
-                          'mp4', 'webm', 'ogg', 'mp3', 'wav', 
-                          'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
-    
-    // 실행 가능한 파일인 경우
-    if (executableTypes.includes(fileExt)) {
-        // 사용자에게 알림
-        statusInfo.textContent = `${fileName} 다운로드 중...`;
-        
-        // 원래 방식으로 복구
-        const link = document.createElement('a');
-        link.href = fileUrl;
-        link.setAttribute('download', fileName); // 명시적으로 download 속성 설정
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        setTimeout(() => {
-            statusInfo.textContent = `${fileName} 다운로드 완료됨. 파일을 실행하세요.`;
-        }, 1000);
-    } 
-    // 브라우저에서 볼 수 있는 파일인 경우
-    else if (viewableTypes.includes(fileExt)) {
-        // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
-        const viewUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
-        // 새 창에서 열기
-        window.open(viewUrl, '_blank');
-        statusInfo.textContent = `${fileName} 파일 열기`;
-    } 
-    // 그 외 파일은 단순 다운로드
-    else {
-        // 원래 방식으로 복구
-        const link = document.createElement('a');
-        link.href = fileUrl;
-        link.setAttribute('download', fileName); // 명시적으로 download 속성 설정
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        statusInfo.textContent = `${fileName} 다운로드 중...`;
-        
-        setTimeout(() => {
-            statusInfo.textContent = `${fileName} 다운로드 완료`;
-        }, 1000);
-    }
-}
 
 
 // 화면 클릭 시 파일 선택 해제 리스너 수정 
