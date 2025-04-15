@@ -12,24 +12,15 @@
     <div class="main-container" style="max-width: 1200px; margin: 0 auto; padding: 0 5px;">
     <div class="header-container" style="margin: 0 auto; padding: 0 5px;">
     <header style="max-width: 1200px; margin: 0 auto; padding: 10px 5px; display: flex; justify-content: space-between; align-items: center;">
-        <h2 style="margin: 0;"><i class="fas fa-cloud"></i> WebDAV 파일 서버</h2>
+        <h2 style="margin-left: 30px;"><i class="fas fa-cloud"></i> WebDAV 파일 서버</h2>
         <div class="header-right">
             <div class="storage-info">
                 <i class="fas fa-database"></i>
-                <div id="storageInfoText">
-                    <span>0B / 0B (0%)</span>
-
-                    <div class="storage-bar-container">
-                        <div class="storage-bar"></div>
-                    </div>
-                </div>
-
+                <div id="storageInfoText"><span>0B / 0B (0%)</span><div class="storage-bar-container"><div class="storage-bar"></div></div></div>
             </div>
             <div id="serverStatus">
-                <span id="serverStatusIcon"></span> <span id="serverStatusText">서버 상태 확인 중...            </span>
-                    <button id="modeToggleBtn" title="모드 전환 (현재: 운영)" style="margin-left: 100px;"><i class="fas fa-cog"></i></button>
-                    <button id="rulesBtn" title="이용규칙" style="margin-left: 5px;"><i class="fas fa-book">이용규칙</i></button>
-            </div>           <!-- 저장소 정보와 서버 상태 -->
+                <span id="serverStatusIcon"></span> <span id="serverStatusText">서버 확인 중...</span>                        
+            </div>
         </div>
     </header>
     </div>
@@ -89,6 +80,10 @@
             </div>
         </div>
     </div>
+    <div id="rules-container">
+            <button id="modeToggleBtn" title="모드 전환 (현재: 운영)" style="margin-left: 10px;"><i class="fas fa-cog"></i></button>
+            <button id="rulesBtn" title="이용규칙" style="margin-left: 5px;"><i class="fas fa-book">이용규칙</i></button>
+    </div>     
     </div>  
     
     <!-- 새 폴더 생성 모달 -->
@@ -194,7 +189,7 @@
 <div id="rulesModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3><i class="fas fa-book"></i> 웹DAV 서비스 이용 규칙 및 면책 조항</h3>
+            <h3><i class="fas fa-book"></i>  WebDAV 서비스 이용 규칙 및 면책 조항</h3>
             <span class="modal-close">&times;</span>
         </div>
         <div class="modal-body">

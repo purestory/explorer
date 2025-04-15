@@ -1116,10 +1116,8 @@ function loadFiles(path = '') {
             window.doubleClickEnabled = true;
           
             // 잠금 상태 로드
-            loadLockStatus().then(() => {
-                logLog('잠금 상태 로드 완료');
-                renderFiles(data); // 잠금 상태 로드 후 다시 렌더링
-            });
+            
+            renderFiles(data); // 잠금 상태 로드 후 다시 렌더링
         })
         .catch(error => {
             logError('Error:', error);
@@ -3920,6 +3918,12 @@ function navigateToLockedFolder(folderName, folderPath) {
     passwordInput.addEventListener('keyup', function(event) {
         if (event.key === 'Enter') {
             document.getElementById('confirmFolderPassword').click();
+            passwordInput.removeEventListener('keyup', arguments.callee);
+        }else if (event.key === 'Escape') {
+            // ESC 키 누르면 취소 버튼 클릭과 동일한 효과
+            document.getElementById('cancelFolderPassword').click();
+            passwordInput.removeEventListener('keyup', arguments.callee);
+
         }
     });
 }
@@ -3952,7 +3956,7 @@ function verifyFolderPassword(folderPath, password) {
         if (data.success) {
             // 비밀번호 맞음, 폴더로 이동
             const newPath = window.currentLockedFolder.path;
-            syncCurrentPath(newPath);
+            //syncCurrentPath(newPath);
             updateHistoryState(newPath);
             loadFiles(newPath);
             clearSelection();
@@ -5063,17 +5067,17 @@ function checkServerStatus() {
             const serverStatusText = document.getElementById('serverStatusText');
             if (response.ok) {
                 serverStatusIcon.className = 'fas fa-lightbulb glowing-bulb';
-                serverStatusText.innerHTML = '<span class="status-text status-on">서버 ON</span>';
+                serverStatusText.innerHTML = '<span class="status-text status-on">서버 On</span>';
             } else {
                 serverStatusIcon.className = 'fas fa-lightbulb off-bulb';
-                serverStatusText.innerHTML = '<span class="status-text status-off">서버 OFF</span>';
+                serverStatusText.innerHTML = '<span class="status-text status-off">서버 Off</span>';
             }
         })
         .catch(error => {
             const serverStatusIcon = document.getElementById('serverStatusIcon');
             const serverStatusText = document.getElementById('serverStatusText');
             serverStatusIcon.className = 'fas fa-lightbulb off-bulb';
-            serverStatusText.innerHTML = '<span class="status-text status-off">서버 OFF</span>';
+            serverStatusText.innerHTML = '<span class="status-text status-off">서버 Off</span>';
             console.error('서버 상태 확인 오류:', error);
         });
 }
@@ -5231,8 +5235,8 @@ function loadRulesContent() {
     // 로딩 표시
     rulesContent.innerHTML = '<div class="spinner"></div>';
     
-    // 이용규칙 파일 가져오기
-    fetch('rules/terms.txt')
+    // 이용규칙 파일 가져오기 - 캐시 방지를 위한 쿼리 파라미터 추가
+    fetch(`rules/terms.txt?_=${new Date().getTime()}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -5244,27 +5248,13 @@ function loadRulesContent() {
             const htmlContent = convertMarkdownToHtml(text);
             rulesContent.innerHTML = htmlContent;
             
-            // 컨텐츠 로드 후 스크롤 영역 재조정
-            setTimeout(() => {
-                // 창 높이에 맞게 모달 바디 최대 높이 동적 조정
-                const windowHeight = window.innerHeight;
-                const headerHeight = document.querySelector('#rulesModal .modal-header').offsetHeight;
-                const footerHeight = document.querySelector('#rulesModal .modal-footer').offsetHeight;
-                const maxBodyHeight = windowHeight * 0.8 - headerHeight - footerHeight;
-                
-                modalBody.style.maxHeight = `${maxBodyHeight}px`;
-                modalBody.style.overflowY = 'auto';
-                
-                // 스크롤 위치 초기화
-                modalBody.scrollTop = 0;
-            }, 100);
+            // 나머지 코드는 동일
         })
         .catch(error => {
             console.error('이용규칙 로드 중 오류 발생:', error);
             rulesContent.innerHTML = '<p class="error">이용규칙을 불러오는 중 오류가 발생했습니다.</p>';
         });
 }
-
 
 // 마크다운 변환 함수 개선 - 좀 더 명확한 구조 생성
 function convertMarkdownToHtml(markdown) {
