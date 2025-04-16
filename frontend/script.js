@@ -4,7 +4,7 @@ const minDragDistance = 10; // Minimum pixels to start drag selection
 // 수정할 코드:
 // 수정 후 (Option 1):
 const API_BASE_URL = window.location.hostname === 'itsmyzone.iptime.org' ? 
-  'https://itsmyzone.iptime.org' : 
+  'http://itsmyzone.iptime.org' : 
   (window.location.hostname.includes('netlify.app') ? 
     '' : '');
 let currentPath = '';

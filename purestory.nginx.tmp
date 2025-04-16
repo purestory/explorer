@@ -1,0 +1,25 @@
+server {
+    listen 80;
+    server_name itsmyzone.iptime.org;
+
+    location /webdav/ {
+        alias /home/purestory/webdav/frontend/;
+        index index.html;
+    }
+
+    location /webdav-api/ {
+        proxy_pass http://[::1]:3333/webdav-api/; 
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location = /favicon.ico {
+        alias /home/purestory/webdav/frontend/favicon.ico;
+    }
+
+    types {
+        application/javascript js;
+        text/html html;
+        text/css css;
+    }
+} 
