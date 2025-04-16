@@ -3,9 +3,9 @@
 const minDragDistance = 10; // Minimum pixels to start drag selection
 // 수정할 코드:
 const API_BASE_URL = window.location.hostname === 'itsmyzone.iptime.org' ? 
-  'http://itsmyzone.iptime.org/api' : 
+  'https://itsmyzone.iptime.org/api' : // HTTP를 HTTPS로 변경
   (window.location.hostname.includes('netlify.app') ? 
-    'http://itsmyzone.iptime.org/api' : '/api');
+    'https://itsmyzone.iptime.org/api' : '/api'); // HTTP를 HTTPS로 변경
 let currentPath = '';
 let selectedItems = new Set();
 let clipboardItems = [];
