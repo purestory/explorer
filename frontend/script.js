@@ -6,7 +6,7 @@ const minDragDistance = 10; // Minimum pixels to start drag selection
 const API_BASE_URL = window.location.hostname === 'itsmyzone.iptime.org' ? 
   'https://itsmyzone.iptime.org' : 
   (window.location.hostname.includes('netlify.app') ? 
-    'https://itsmyzone.iptime.org' : '');
+    '' : '');
 let currentPath = '';
 let selectedItems = new Set();
 let clipboardItems = [];
