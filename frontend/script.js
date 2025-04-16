@@ -411,7 +411,7 @@ function openFile(fileName) {
     // 브라우저에서 볼 수 있는 파일인 경우
     if (viewableTypes.includes(fileExt)) {
         // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
-        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
+        const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}?view=true`;
         
         // 새 창에서 열기
         window.open(fileUrl, '_blank');
@@ -421,7 +421,7 @@ function openFile(fileName) {
         statusInfo.textContent = `${fileName} 다운로드 중...`;
         
         // 다운로드 모드 URL (쿼리 파라미터 없음)
-        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+        const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}`;
         
         // 원래 방식으로 복구
         const link = document.createElement('a');
@@ -1000,7 +1000,7 @@ function initShortcuts() {
 function loadDiskUsage() {
     showLoading();
     
-    fetch(`${API_BASE_URL}/api/disk-usage`)
+    fetch(`${API_BASE_URL}/webdav-api/disk-usage`)
         .then(response => {
             if (!response.ok) {
                 throw new Error('디스크 사용량 정보를 가져오는 데 실패했습니다.');
@@ -1088,7 +1088,7 @@ function loadFiles(path = '') {
     // 드래그 선택 상태 초기화
     resetDragSelectState();
     
-    fetch(`${API_BASE_URL}/api/files/${encodedPath}`)
+    fetch(`${API_BASE_URL}/webdav-api/files/${encodedPath}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`상태 ${response.status}: ${response.statusText}`);
@@ -1423,7 +1423,7 @@ function downloadFile(fileName) {
     const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
     // 경로에 한글이 포함된 경우를 위해 인코딩 처리
     const encodedPath = encodeURIComponent(filePath);
-    const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+    const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}`;
     
     // 다운로드 링크를 새 창에서 열기
     window.open(fileUrl, '_blank');
@@ -2217,7 +2217,7 @@ function handleFileDblClick(e, fileItem) {
         
         if (viewableTypes.includes(fileExt)) {
             // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
-            const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}?view=true`;
+            const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}?view=true`;
             // 새 창에서 파일 열기
             window.open(fileUrl, '_blank');
     } else {
@@ -2349,7 +2349,7 @@ async function deleteSelectedItems() {
         }
         logMessage += ` (${currentPath || '루트'})`;
 
-        fetch(`${API_BASE_URL}/api/log-action`, {
+        fetch(`${API_BASE_URL}/webdav-api/log-action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: logMessage, level: 'minimal' }) // minimal 레벨로 전송
@@ -2371,7 +2371,7 @@ async function deleteSelectedItems() {
 
         try {
             // *** 중요: 개별 삭제 요청은 그대로 유지 ***
-            const response = await fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
+            const response = await fetch(`${API_BASE_URL}/webdav-api/files/${encodedPath}`, {
                 method: 'DELETE'
             });
 
@@ -2951,7 +2951,7 @@ function initFolderCreation() {
 
         // --- 추가: 서버에 액션 로그 전송 ---
         const logMessage = `[Create Folder Action] '${folderName}' (폴더) 생성 요청 (${currentPath || '루트'})`;
-        fetch(`${API_BASE_URL}/api/log-action`, {
+        fetch(`${API_BASE_URL}/webdav-api/log-action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: logMessage, level: 'minimal' })
@@ -2960,15 +2960,15 @@ function initFolderCreation() {
 
         const path = currentPath ? `${currentPath}/${folderName}` : folderName;
         // 경로에 한글이 포함된 경우를 위해 인코딩 처리
-        // !!! 수정: /api/folders 엔드포인트 사용하도록 변경 필요 가능성 !!!
-        // 현재 /api/files/:path 로 POST 요청 보내는 중. 서버 API 확인 필요.
+        // !!! 수정: /webdav-api/folders 엔드포인트 사용하도록 변경 필요 가능성 !!!
+        // 현재 /webdav-api/files/:path 로 POST 요청 보내는 중. 서버 API 확인 필요.
         // 일단 기존 로직 유지.
         const encodedPath = encodeURIComponent(path);
 
         showLoading();
         statusInfo.textContent = '폴더 생성 중...';
 
-        fetch(`${API_BASE_URL}/api/files/${encodedPath}`, { // <-- 이 API 경로가 폴더 생성용인지 확인 필요
+        fetch(`${API_BASE_URL}/webdav-api/files/${encodedPath}`, { // <-- 이 API 경로가 폴더 생성용인지 확인 필요
             method: 'POST'
         })
         .then(response => {
@@ -3041,7 +3041,7 @@ function initRenaming() {
             // --- 추가: 서버에 액션 로그 전송 ---
             const itemType = isFolder ? '(폴더)' : '(파일)';
             const logMessage = `[Rename Action] '${oldName}' ${itemType} -> '${newName}' 이름 변경 요청 (${currentPath || '루트'})`;
-            fetch(`${API_BASE_URL}/api/log-action`, {
+            fetch(`${API_BASE_URL}/webdav-api/log-action`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: logMessage, level: 'minimal' })
@@ -3055,7 +3055,7 @@ function initRenaming() {
             showLoading();
             statusInfo.textContent = '이름 변경 중...';
     
-            fetch(`${API_BASE_URL}/api/files/${encodedPath}`, {
+            fetch(`${API_BASE_URL}/webdav-api/files/${encodedPath}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -3131,7 +3131,7 @@ function downloadSelectedItems() {
         // 단일 파일 경로 생성
         const filePath = currentPath ? `${currentPath}/${itemId}` : itemId;
         const encodedPath = encodeURIComponent(filePath);
-        const fileUrl = `${API_BASE_URL}/api/files/${encodedPath}`;
+        const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}`;
         
         // 폴더인 경우에도 압축하여 다운로드
         if (isFolder) {
@@ -3204,7 +3204,7 @@ function compressAndDownload(itemList) {
     const currentDir = currentPath || '루트';
     logMessage += ` (원본 경로: ${currentDir})`; // 원본 항목들이 있던 경로 명시
 
-    fetch(`${API_BASE_URL}/api/log-action`, {
+    fetch(`${API_BASE_URL}/webdav-api/log-action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: logMessage, level: 'minimal' })
@@ -3212,7 +3212,7 @@ function compressAndDownload(itemList) {
     // --- 로그 전송 끝 ---
 
     // 압축 API 호출
-    fetch(`${API_BASE_URL}/api/compress`, {
+    fetch(`${API_BASE_URL}/webdav-api/compress`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -3237,7 +3237,7 @@ function compressAndDownload(itemList) {
         // 압축 성공 후 다운로드 시작
         const zipPath = data.zipPath ? `${data.zipPath}/${data.zipFile}` : data.zipFile;
         const encodedZipPath = encodeURIComponent(zipPath);
-        const zipUrl = `${API_BASE_URL}/api/files/${encodedZipPath}`;
+        const zipUrl = `${API_BASE_URL}/webdav-api/files/${encodedZipPath}`;
 
         // a 태그를 이용한 다운로드 방식
         const link = document.createElement('a');
@@ -3253,7 +3253,7 @@ function compressAndDownload(itemList) {
 
         // 임시 압축 파일 삭제 (다운로드 시작 후 10초 후)
         setTimeout(() => {
-            fetch(`${API_BASE_URL}/api/files/${encodedZipPath}`, {
+            fetch(`${API_BASE_URL}/webdav-api/files/${encodedZipPath}`, {
                 method: 'DELETE'
             })
             .then(response => { // 응답 상태 확인
@@ -3473,7 +3473,7 @@ async function compressSelectedItems() {
     const targetDir = currentPath || '루트'; // 현재 경로가 비어있으면 루트로 표시
     logMessage += `${sourceSummary} -> '${zipName}'(으)로 압축 (대상 경로: ${targetDir})`;
 
-    fetch(`${API_BASE_URL}/api/log-action`, {
+    fetch(`${API_BASE_URL}/webdav-api/log-action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: logMessage, level: 'minimal' })
@@ -3481,7 +3481,7 @@ async function compressSelectedItems() {
     // --- 로그 전송 끝 ---
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/compress`, {
+        const response = await fetch(`${API_BASE_URL}/webdav-api/compress`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3563,7 +3563,7 @@ function pasteItems() {
             
             // 잘라내기는 이름 변경(이동)으로 처리
             promises.push(
-                fetch(`${API_BASE_URL}/api/files/${encodedSourcePath}`, {
+                fetch(`${API_BASE_URL}/webdav-api/files/${encodedSourcePath}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -3639,7 +3639,7 @@ function isFolderLocked(path) {
 
 // 잠금 상태 로드 함수
 function loadLockStatus() {
-    return fetch(`${API_BASE_URL}/api/lock-status`)
+    return fetch(`${API_BASE_URL}/webdav-api/lock-status`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP 오류! 상태: ${response.status}`);
@@ -3793,10 +3793,10 @@ function lockFolders(folders, password = '') {
         password: password
     }));
 
-    logLog(`잠금 요청 URL: ${API_BASE_URL}/api/lock`);
+    logLog(`잠금 요청 URL: ${API_BASE_URL}/webdav-api/lock`);
     logLog(`잠금 데이터:`, lockData);
 
-    fetch(`${API_BASE_URL}/api/lock`, {
+    fetch(`${API_BASE_URL}/webdav-api/lock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folders: lockData })
@@ -3850,10 +3850,10 @@ function unlockFolders(folders, password = '') {
         return;
     }
 
-    logLog(`잠금 해제 요청 URL: ${API_BASE_URL}/api/unlock`);
+    logLog(`잠금 해제 요청 URL: ${API_BASE_URL}/webdav-api/unlock`);
     logLog(`잠금 해제 데이터:`, folderPaths);
 
-    fetch(`${API_BASE_URL}/api/unlock`, {
+    fetch(`${API_BASE_URL}/webdav-api/unlock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folders: folderPaths })
@@ -3966,7 +3966,7 @@ function verifyFolderPassword(folderPath, password) {
     if (!folderPath || !window.currentLockedFolder) return Promise.resolve(false);
     
     showLoading();
-    return fetch(`${API_BASE_URL}/api/verify-folder-password`, {
+    return fetch(`${API_BASE_URL}/webdav-api/verify-folder-password`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -4891,7 +4891,7 @@ async function moveItem(sourcePath, targetPathBase, overwrite = false) {
     const encodedSourcePath = encodeURIComponent(sourcePath);
     const itemName = sourcePath.includes('/') ? sourcePath.substring(sourcePath.lastIndexOf('/') + 1) : sourcePath;
 
-    const response = await fetch(`${API_BASE_URL}/api/files/${encodedSourcePath}`, {
+    const response = await fetch(`${API_BASE_URL}/webdav-api/files/${encodedSourcePath}`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         // overwrite 플래그는 백엔드 API가 지원해야 함 (현재 API는 body로 처리)
@@ -4993,7 +4993,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
         const sourceParentPath = itemsInfo[0]?.parentPath || currentPath || '루트'; // 첫 항목의 부모 경로
         logMessage += ` (From: ${sourceParentPath}, To: ${targetPath})`;
 
-        fetch(`${API_BASE_URL}/api/log-action`, {
+        fetch(`${API_BASE_URL}/webdav-api/log-action`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: logMessage, level: 'minimal' })
@@ -5094,7 +5094,7 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
 }
 
 function checkServerStatus() {
-    fetch(`${API_BASE_URL}/api/status`)
+    fetch(`${API_BASE_URL}/webdav-api/status`)
         .then(response => {
             const serverStatus = document.getElementById('serverStatus');
             const serverStatusIcon = document.getElementById('serverStatusIcon');
@@ -5366,7 +5366,7 @@ function convertMarkdownToHtml(markdown) {
 }
 
 function checkSystemResources() {
-    fetch(`${API_BASE_URL}/api/system-resources`)
+    fetch(`${API_BASE_URL}/webdav-api/system-resources`)
       .then(response => {
         if (!response.ok) {
           throw new Error('서버 리소스 정보 가져오기 실패');

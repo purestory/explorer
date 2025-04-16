@@ -483,7 +483,7 @@ app.get('/', (req, res) => {
 });
 
 // 파일 업로드 API 수정 (비동기화 및 병렬 처리 제한)
-app.post('/api/upload', uploadMiddleware.any(), async (req, res) => {
+app.post('/webdav-api/upload', uploadMiddleware.any(), async (req, res) => {
   // *** 동적 import 추가 ***
   const pLimit = (await import('p-limit')).default;
 
@@ -880,7 +880,7 @@ function formatDate(dateString) {
 app.use('/webdav', webdav.extensions.express('/webdav', server));
 
 // 디스크 사용량 확인 API
-app.get('/api/disk-usage', async (req, res) => { // *** async 추가 ***
+app.get('/webdav-api/disk-usage', async (req, res) => { // *** async 추가 ***
   try {
     // *** await 추가 ***
     const diskUsage = await getDiskUsage(); 
@@ -897,7 +897,7 @@ app.get('/api/disk-usage', async (req, res) => { // *** async 추가 ***
 
 // 파일 압축 API (비동기화)
 // 파일 압축 API (비동기화)
-app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 추가 ***
+app.post('/webdav-api/compress', bodyParser.json(), async (req, res) => { // *** async 추가 ***
   try {
     const { files, targetPath, zipName, forDownload } = req.body;
     
@@ -1020,12 +1020,12 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
 });
 
 
-app.get('/api/lock-status', (req, res) => {
+app.get('/webdav-api/lock-status', (req, res) => {
   res.json({ lockState: lockedFolders });
 });
 
 // 폴더 잠금/해제 API (비동기화)
-app.post('/api/lock/:path(*)', express.json(), async (req, res) => { // *** async 추가, express.json() 미들웨어 추가 ***
+app.post('/webdav-api/lock/:path(*)', express.json(), async (req, res) => { // *** async 추가, express.json() 미들웨어 추가 ***
   try {
     const folderPath = decodeURIComponent(req.params.path || '');
     const action = req.body.action || 'lock'; // 'lock' 또는 'unlock'
@@ -1133,7 +1133,7 @@ app.post('/api/lock/:path(*)', express.json(), async (req, res) => { // *** asyn
 });
 
 // 파일 목록 조회 또는 파일 다운로드
-app.get('/api/files/*', async (req, res) => {
+app.get('/webdav-api/files/*', async (req, res) => {
   try {
     // URL 디코딩하여 한글 경로 처리
     let requestPath = decodeURIComponent(req.params[0] || '');
@@ -1250,7 +1250,7 @@ app.get('/api/files/*', async (req, res) => {
 });
 
 // 새 폴더 생성 라우터 (직접 생성 방식)
-app.post('/api/files/:folderPath(*)', async (req, res) => {
+app.post('/webdav-api/files/:folderPath(*)', async (req, res) => {
   const folderPathRaw = req.params.folderPath;
   logWithIP(`새 폴더 생성 요청 수신 - Raw Path: ${folderPathRaw}`, req, 'info');
 
@@ -1333,7 +1333,7 @@ app.post('/api/files/:folderPath(*)', async (req, res) => {
 });
 
 // 파일/폴더 이름 변경 또는 이동 (시스템 명령어로 재수정)
-app.put('/api/files/*', express.json(), async (req, res) => {
+app.put('/webdav-api/files/*', express.json(), async (req, res) => {
   try {
     const oldPathRelative = decodeURIComponent(req.params[0] || '');
     const { newName, targetPath, overwrite } = req.body;
@@ -1581,7 +1581,7 @@ app.put('/api/files/*', express.json(), async (req, res) => {
 });
 
 // 파일/폴더 삭제 (백그라운드 처리 - 이 부분은 변경 없음, 워커에서 rm 사용)
-app.delete('/api/files/*', async (req, res) => {
+app.delete('/webdav-api/files/*', async (req, res) => {
   try {
     const itemPath = decodeURIComponent(req.params[0] || '');
     const fullPath = path.join(ROOT_DIRECTORY, itemPath);
@@ -1654,7 +1654,7 @@ app.delete('/api/files/*', async (req, res) => {
 });
 
 // 새 폴더 생성 (비동기화)
-app.post('/api/folders', express.json(), async (req, res) => { // *** async 추가 ***
+app.post('/webdav-api/folders', express.json(), async (req, res) => { // *** async 추가 ***
   const { folderPath, folderName } = req.body;
   if (!folderName) {
     return res.status(400).send('폴더 이름이 제공되지 않았습니다.');
@@ -1717,7 +1717,7 @@ app.post('/api/folders', express.json(), async (req, res) => { // *** async 추�
   }
 });
 // 로그 레벨 변경 API
-app.put('/api/log-level', express.json(), (req, res) => { // !!!! express.json() 미들웨어 추가 !!!!
+app.put('/webdav-api/log-level', express.json(), (req, res) => { // !!!! express.json() 미들웨어 추가 !!!!
   const { level } = req.body;
   if (level && LOG_LEVELS.hasOwnProperty(level)) {
     setLogLevel(level);
@@ -1729,7 +1729,7 @@ app.put('/api/log-level', express.json(), (req, res) => { // !!!! express.json()
 });
 
 // === 추가: 클라이언트 액션 로깅 API ===
-app.post('/api/log-action', express.json(), (req, res) => {
+app.post('/webdav-api/log-action', express.json(), (req, res) => {
   const { message, level = 'minimal' } = req.body; // 기본 레벨은 minimal
 
   if (!message) {
@@ -1802,7 +1802,7 @@ function escapeShellArg(arg) {
 }
 
 // 새 폴더 생성 라우터
-app.post('/api/files/:folderPath(*)', async (req, res) => {
+app.post('/webdav-api/files/:folderPath(*)', async (req, res) => {
   const folderPathRaw = req.params.folderPath;
   logWithIP(`새 폴더 생성 요청 수신 - Raw Path: ${folderPathRaw}`, req, 'info');
 
@@ -1867,7 +1867,7 @@ app.post('/api/files/:folderPath(*)', async (req, res) => {
 });
 
 // 파일 및 폴더 삭제 라우터 (기존 - 워커 사용)
-app.post('/api/items/delete', async (req, res) => {
+app.post('/webdav-api/items/delete', async (req, res) => {
   // ... 기존 삭제 로직 (워커 사용) ...
 });
 
@@ -1958,7 +1958,7 @@ const testUploadStorage = multer.diskStorage({
 
 const testUploadMiddleware = multer({ storage: testUploadStorage });
 
-app.post('/api/upload/test', testUploadMiddleware.single('testFile'), (req, res) => {
+app.post('/webdav-api/upload/test', testUploadMiddleware.single('testFile'), (req, res) => {
   if (!req.file) {
     return res.status(400).send('테스트 파일이 업로드되지 않았습니다.');
   }
@@ -2021,7 +2021,7 @@ module.exports = {
 };
 
 // 폴더 잠금 API 엔드포인트
-app.post('/api/lock', (req, res) => {
+app.post('/webdav-api/lock', (req, res) => {
     const { folders } = req.body;
     if (!folders || !Array.isArray(folders)) {
         return res.status(400).json({ success: false, message: '잘못된 요청 데이터입니다.' });
@@ -2043,7 +2043,7 @@ app.post('/api/lock', (req, res) => {
 });
 
 // 폴더 잠금 해제 API 엔드포인트
-app.post('/api/unlock', (req, res) => {
+app.post('/webdav-api/unlock', (req, res) => {
     const { folders } = req.body;
     if (!folders || !Array.isArray(folders)) {
         return res.status(400).json({ success: false, message: '잘못된 요청 데이터입니다.' });
@@ -2066,7 +2066,7 @@ app.post('/api/unlock', (req, res) => {
 });
 
 // 서버 상태 확인 API
-app.get('/api/status', (req, res) => {
+app.get('/webdav-api/status', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Server is running' });
     logWithIP('Server status checked', req, 'info');
 });
@@ -2074,7 +2074,7 @@ app.get('/api/status', (req, res) => {
 // CPU 및 메모리 사용량 API 추가
 // 시스템 리소스(CPU/메모리/SSD) 정보를 제공하는 API 엔드포인트
 // 시스템 리소스(CPU/메모리) 정보를 제공하는 API 엔드포인트
-app.get('/api/system-resources', (req, res) => {
+app.get('/webdav-api/system-resources', (req, res) => {
   try {
     logWithIP('[API] 시스템 리소스 확인 요청', req, requestLogLevel);
     
@@ -2155,7 +2155,7 @@ if (typeof lockedFolders === 'undefined') {
 
 
 // 폴더 비밀번호 검증 API
-app.post('/api/verify-folder-password', express.json(), async (req, res) => {
+app.post('/webdav-api/verify-folder-password', express.json(), async (req, res) => {
   try {
     const { path: folderPath, password } = req.body;
     
