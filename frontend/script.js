@@ -931,21 +931,34 @@ document.addEventListener('mouseleave', (e) => {
 // 드래그 종료 처리
 
 // 단축키 초기화
+// 단축키 초기화
+// 단축키 초기화
 function initShortcuts() {
     // 이미 초기화되었는지 확인
     if (window.shortcutsInitialized) {
         logLog('단축키가 이미 초기화되어 있습니다. 중복 호출 방지.');
-        return;
+        // 이미 초기화되었더라도 기존 리스너 제거 후 재설정
+        document.removeEventListener('keydown', window.shortcutKeydownHandler);
     }
     
-    document.addEventListener('keydown', (e) => {
-        // 모달이 열려 있는지 확인 (이 부분 추가)
+    // 디버깅용 플래그 추가
+    window.shortcutDebug = true;
+    
+    // 키다운 핸들러 함수를 전역 변수에 저장 (나중에 제거 가능하도록)
+    window.shortcutKeydownHandler = function(e) {
+        // 디버그 모드일 때 로그 출력
+        if (window.shortcutDebug) {
+            console.log(`키 이벤트 감지: ${e.key}, Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}`);
+        }
+        
+        // 모달이 열려 있는지 확인
         const isModalOpen = document.querySelector('.modal[style*="display: flex"]') !== null;
         
-        // 모달이 열려 있을 때는 Delete 키 이벤트 처리 건너뛰기 (이 부분 추가)
+        // 모달이 열려 있을 때는 Delete 키 이벤트 처리 건너뛰기
         if (isModalOpen && (e.key === 'Delete' || e.key === 'Backspace')) {
             return;
-        }        
+        }
+        
         // F2: 이름 변경
         if (e.key === 'F2' && selectedItems.size === 1) {
             e.preventDefault();
@@ -960,18 +973,21 @@ function initShortcuts() {
         
         // Ctrl+A: 모두 선택
         if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+            if (window.shortcutDebug) console.log('Ctrl+A 감지: 모두 선택 시도');
             e.preventDefault();
             selectAllItems();
         }
         
         // Ctrl+X: 잘라내기
         if (e.key === 'x' && (e.ctrlKey || e.metaKey) && selectedItems.size > 0) {
+            if (window.shortcutDebug) console.log('Ctrl+X 감지: 잘라내기 시도');
             e.preventDefault();
             cutSelectedItems();
         }
         
         // Ctrl+V: 붙여넣기
         if (e.key === 'v' && (e.ctrlKey || e.metaKey) && clipboardItems.length > 0) {
+            if (window.shortcutDebug) console.log('Ctrl+V 감지: 붙여넣기 시도');
             e.preventDefault();
             pasteItems();
         }
@@ -981,12 +997,14 @@ function initShortcuts() {
             e.preventDefault();
             clearSelection();
             contextMenu.style.display = 'none';
-            lockModal.style.display = 'none';
-            unlockModal.style.display = 'none';
-
-
+            // lockModal이 존재하는지 확인 후 처리
+            if (window.lockModal) lockModal.style.display = 'none';
+            if (window.unlockModal) unlockModal.style.display = 'none';
         }
-    });
+    };
+    
+    // 이벤트 리스너 등록
+    document.addEventListener('keydown', window.shortcutKeydownHandler);
     
     // 초기화 완료 플래그 설정
     window.shortcutsInitialized = true;
@@ -1840,8 +1858,10 @@ function init() {
         uploadButton.addEventListener('click', () => {
             const fileUploadInput = document.getElementById('fileUpload');
             if (fileUploadInput) {
+                showToast('업로드는 드래그 앤 드롭으로 하시는 것을 권장합니다.', 'info');
                 fileUploadInput.click(); // 파일 선택 창 열기
                 logLog('[Script] 업로드 버튼 클릭 - 파일 선택 대화상자 열기');
+
             } else {
                 logError('[Script] 파일 업로드 입력 요소를 찾을 수 없습니다.');
             }
