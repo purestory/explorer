@@ -327,31 +327,29 @@ app.use((req, res, next) => {
   next();
 });
 
-// 용량 확인 미들웨어
+// backend/server.js
 app.use((req, res, next) => {
-  // 파일 업로드 요청의 경우 용량 체크 - 일시적으로 주석 처리
-  /*
-  if (req.method === 'POST' && req.path === '/api/upload') {
-    const diskUsage = getDiskUsage();
-    
-    // Content-Length 헤더가 있으면 업로드 크기 체크
-    if (req.headers['content-length']) {
-      const uploadSize = parseInt(req.headers['content-length']);
-      
-      // 업로드 후 용량 초과 확인
-      if (diskUsage.used + uploadSize > MAX_STORAGE_SIZE) {
-        return res.status(507).json({
-          error: '저장 공간 부족',
-          message: '저장 공간이 부족합니다. 파일을 삭제하고 다시 시도해 주세요.',
-          diskUsage
-        });
-      }
-    }
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://itsmyzone.iptime.org',
+    'https://webdav.netlify.app'  // Netlify 도메인
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
   }
-  */
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
   
   next();
 });
+
 
 // Express 내장 body-parser 설정 (크기 제한 증가)
 app.use(express.json({ limit: '50mb' }));
