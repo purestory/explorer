@@ -935,6 +935,13 @@ function initShortcuts() {
     }
     
     document.addEventListener('keydown', (e) => {
+        // 모달이 열려 있는지 확인 (이 부분 추가)
+        const isModalOpen = document.querySelector('.modal[style*="display: flex"]') !== null;
+        
+        // 모달이 열려 있을 때는 Delete 키 이벤트 처리 건너뛰기 (이 부분 추가)
+        if (isModalOpen && (e.key === 'Delete' || e.key === 'Backspace')) {
+            return;
+        }        
         // F2: 이름 변경
         if (e.key === 'F2' && selectedItems.size === 1) {
             e.preventDefault();
@@ -5124,7 +5131,7 @@ function checkServerStatus() {
 document.addEventListener('DOMContentLoaded', function() {
     checkServerStatus();
     // 주기적으로 서버 상태 확인 (예: 30초마다)
-    setInterval(checkServerStatus, 30000);
+    setInterval(checkServerStatus, 5000);
 });
 
 
