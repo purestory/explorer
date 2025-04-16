@@ -2,10 +2,11 @@
 // URL 경로에 따라 적절한 API 베이스 URL 설정
 const minDragDistance = 10; // Minimum pixels to start drag selection
 // 수정할 코드:
+// 수정 후 (Option 1):
 const API_BASE_URL = window.location.hostname === 'itsmyzone.iptime.org' ? 
-  'https://itsmyzone.iptime.org/api' : // HTTP를 HTTPS로 변경
+  'https://itsmyzone.iptime.org' : 
   (window.location.hostname.includes('netlify.app') ? 
-    'https://itsmyzone.iptime.org/api' : '/api'); // HTTP를 HTTPS로 변경
+    'https://itsmyzone.iptime.org' : '');
 let currentPath = '';
 let selectedItems = new Set();
 let clipboardItems = [];
