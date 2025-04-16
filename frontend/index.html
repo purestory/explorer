@@ -9,20 +9,50 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text x=%2250%22 y=%22.9em%22 font-size=%2290%22 text-anchor=%22middle%22>☁️</text></svg>">
 </head>
 <body>
+    <style>
+        #ssdStatus {
+            display: none !important; /* SSD 정보 영구 숨김 */
+        }
+        
+        #serverStatus {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        
+        #systemResources {
+            display: none; /* 기본적으로 숨기고 서버가 켜졌을 때만 표시 */
+        }
+    </style>
+    
     <div class="main-container" style="max-width: 1200px; margin: 0 auto; padding: 0 5px;">
     <div class="header-container" style="margin: 0 auto; padding: 0 5px;">
-    <header style="max-width: 1200px; margin: 0 auto; padding: 10px 5px; display: flex; justify-content: space-between; align-items: center;">
-        <h2 style="margin-left: 30px;"><i class="fas fa-cloud"></i> WebDAV 파일 서버</h2>
-        <div class="header-right">
-            <div class="storage-info">
-                <i class="fas fa-database"></i><div id="storageInfoText"><span>0B / 0B (0%)</span><div class="storage-bar-container"><div class="storage-bar"></div></div></div>
+        <header style="max-width: 1200px; margin: 0 auto; padding: 10px 5px; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin-left: 30px;"><i class="fas fa-cloud"></i> WebDAV 파일 서버</h2>
+            <div id="header-right">
+                <div id="serverStatus">
+                    <span id="serverStatusIcon"></span> <span id="serverStatusText">서버 확인 중...</span>                        
+                </div>
+                <div id="systemResources" style="margin-right: 50px;">
+                    <!-- CPU 및 메모리 정보 -->
+                    <div id="cpuStatus">
+                        <i class="fas fa-tachometer-alt"></i> CPU: <span id="cpuSpeed">0GHz</span>, <span id="cpuUsage">0%</span>
+                    </div>
+                    <div id="memoryStatus">
+                        <i class="fas fa-memory"></i> RAM: <span id="memoryUsage">0GB/0GB</span>
+                    </div>
+                    <!-- 저장공간 정보 (추가) -->
+                    <div class="storage-info">
+                        <i class="fas fa-database"></i>SSD:
+                        <div id="storageInfoText">
+                            <div class="storage-info-text"><span>0B / 0B (0%)</span></div>
+                            <div class="storage-bar-container"><div class="storage-bar"></div></div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
-            <div id="serverStatus"><span id="serverStatusIcon"></span> <span id="serverStatusText"></span></div>
-        </div>
-   
-    </div>        
-    </header>
+        </header>
     </div>
 
     
@@ -81,7 +111,7 @@
         </div>
     </div>
     <div id="rules-container">
-            <button id="modeToggleBtn" title="모드 전환 (현재: 운영)" style="margin-left: 10px;"><i class="fas fa-cog"></i></button>
+            <button id="modeToggleBtn" title="모드 전환 (현재: 운영)" style="margin-left: 100px;"><i class="fas fa-cog"></i></button>
             <button id="rulesBtn" title="이용규칙" style="margin-left: 5px;"><i class="fas fa-book">이용규칙</i></button>
     </div>     
     </div>  

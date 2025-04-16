@@ -11,7 +11,9 @@ const app = express();
 const PORT = process.env.PORT || 3333;
 const archiver = require('archiver');
 const { promisify } = require('util');
-const fs_stream = require('fs');
+//const fs_stream = require('fs');
+const os = require('os'); // 추가: os 모듈
+
 
 
 const session = require('express-session');
@@ -948,7 +950,7 @@ app.post('/api/compress', bodyParser.json(), async (req, res) => { // *** async 
     
     // archiver를 사용한 압축 구현
     // 압축 파일 스트림 생성
-    const output = fs_stream.createWriteStream(zipFilePath);
+    const output = fs.createWriteStream(zipFilePath);
     const archive = archiver('zip', {
       zlib: { level: 0 } // 압축률 (0: 저장만 하기, 9: 최대 압축)
     });
@@ -2069,6 +2071,59 @@ app.post('/api/unlock', (req, res) => {
 app.get('/api/status', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Server is running' });
     logWithIP('Server status checked', req, 'info');
+});
+
+// CPU 및 메모리 사용량 API 추가
+// 시스템 리소스(CPU/메모리/SSD) 정보를 제공하는 API 엔드포인트
+// 시스템 리소스(CPU/메모리) 정보를 제공하는 API 엔드포인트
+app.get('/api/system-resources', (req, res) => {
+  try {
+    logWithIP('[API] 시스템 리소스 확인 요청', req, requestLogLevel);
+    
+    // CPU 정보 계산
+    const cpus = os.cpus();
+    let totalIdle = 0;
+    let totalTick = 0;
+    
+    // CPU 속도 (GHz) - 첫 번째 CPU 코어의 속도 정보 사용
+    const cpuSpeedMHz = cpus[0].speed; // MHz 단위
+    const cpuSpeedGHz = (cpuSpeedMHz / 1000).toFixed(2); // GHz로 변환
+    
+    cpus.forEach(cpu => {
+      for (const type in cpu.times) {
+        totalTick += cpu.times[type];
+      }
+      totalIdle += cpu.times.idle;
+    });
+    
+    const cpuUsage = Math.round((1 - totalIdle / totalTick) * 100);
+    
+    // 메모리 정보 계산
+    const totalMemory = os.totalmem();
+    const freeMemory = os.freemem();
+    const usedMemory = totalMemory - freeMemory;
+    
+    // GB 단위로 변환
+    const totalMemoryGB = (totalMemory / (1024 * 1024 * 1024)).toFixed(2);
+    const usedMemoryGB = (usedMemory / (1024 * 1024 * 1024)).toFixed(2);
+    
+    res.json({
+      cpu: {
+        usage: cpuUsage,
+        speed: cpuSpeedGHz  // CPU 속도 정보 추가 (GHz)
+      },
+      memory: {
+        total: totalMemoryGB,
+        used: usedMemoryGB,
+        usage: Math.round((usedMemory / totalMemory) * 100)
+      }
+    });
+  } catch (error) {
+    errorLogWithIP('시스템 리소스 정보 조회 오류', error, req);
+    res.status(500).json({
+      error: '시스템 리소스 정보를 가져오는 중 오류가 발생했습니다.'
+    });
+  }
 });
 
 // 폴더별 암호 인증 미들웨어 (기존 lockedFolders 변수를 재사용)

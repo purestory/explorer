@@ -333,7 +333,7 @@ h1 {
     padding-left: 0; /* 왼쪽 여백 제거 */
     color: #6c757d;
     font-size: 0.95rem;
-    white-space: nowrap;
+    overflow: hidden;
 }
 
 /* === 제목 행 스타일 (3:1:1) === */
@@ -938,7 +938,7 @@ h1 {
     }
 }
 
-/* 저장소 정보 스타일 */
+/* 저장소 정보 스타일 수정 */
 .storage-info {
     display: flex;
     align-items: center;
@@ -959,35 +959,6 @@ h1 {
     background-color: #4a6278;
 }
 
-#storageInfoText {
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.storage-bar-container {
-    width: 150px;
-    height: 8px;
-    background-color: #ecf0f1;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.storage-bar {
-    height: 100%;
-    background-color: #2ecc71;
-    border-radius: 4px;
-    transition: width 0.3s ease;
-}
-
-.storage-bar.warning {
-    background-color: #f39c12;
-}
-
-.storage-bar.danger {
-    background-color: #e74c3c;
-}
 
 .drop-zone-info {
     font-size: 14px;
@@ -1628,26 +1599,60 @@ h1 {
     border-color: #007bff;
     box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
 }
-/* 서버 상태 표시 개선 스타일 */
-#serverStatusIcon {
-    margin-right: 10px;
-    font-size: 1em;
-    transition: all 0.3s ease;
-}
 
-#serverStatusText {
+#systemResources {
     font-size: 0.8em;
-    vertical-align: middle;
+    display: flex;
+    flex-direction: column;
+    gap: 0; /* gap 제거 */
 }
 
-#serverStatus {
+#cpuStatus, #memoryStatus, .storage-info {
     display: flex;
     align-items: center;
-    margin-right: 15px;
+    gap: 5px;
+    margin: 0; /* 모든 마진 제거 */
+    padding: 0; /* 패딩도 제거 */
+    line-height: 1.2; /* 줄 간격 최소화 */
+}
+
+#cpuStatus i, #memoryStatus i, .storage-info i {
+    color: #ffffff; /* 흰색으로 변경 (기존값: #4dabf7) */
+    width: 14px;
+    text-align: center;
+    margin: 0; /* 아이콘 마진 제거 */
 }
 
 
 
+#storageInfoText {
+    display: flex;
+    flex-direction: column;
+    gap: 1px; /* 저장소 정보 내부 간격 최소화 */
+}
+
+.storage-info-text {
+    color: #ffffff;
+    font-weight:normal;
+    margin: 0; /* 텍스트 마진 제거 */
+    padding: 0; /* 텍스트 패딩 제거 */
+}
+
+.storage-bar-container {
+    width: 120px;
+    height: 4px; /* 높이 줄임 */
+    background-color: #ecf0f1;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 1px; /* 바 위쪽 간격 최소화 */
+}
+
+.storage-bar {
+    height: 100%;
+    background-color: #2ecc71;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
 /* 빛나는 전구 효과 */
 .glowing-bulb {
     color: #ffee58;

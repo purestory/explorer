@@ -5085,25 +5085,41 @@ async function handleInternalFileDrop(draggedItemPaths, targetFolderItem) {
 function checkServerStatus() {
     fetch(`${API_BASE_URL}/api/status`)
         .then(response => {
+            const serverStatus = document.getElementById('serverStatus');
             const serverStatusIcon = document.getElementById('serverStatusIcon');
             const serverStatusText = document.getElementById('serverStatusText');
+            const systemResources = document.getElementById('systemResources');
+            
             if (response.ok) {
-                serverStatusIcon.className = 'fas fa-lightbulb glowing-bulb';
-                serverStatusText.innerHTML = '<span class="status-text status-on">서버 On</span>';
+                // 서버가 켜져 있는 경우
+                serverStatus.style.display = 'none'; // 서버 상태 아이콘 숨김
+                systemResources.style.display = 'flex'; // 시스템 리소스 정보 표시
+                
+                // 리소스 정보 업데이트
+                checkSystemResources();
             } else {
+                // 서버가 꺼져 있는 경우
+                serverStatus.style.display = 'flex'; // 서버 상태 아이콘 표시
                 serverStatusIcon.className = 'fas fa-lightbulb off-bulb';
                 serverStatusText.innerHTML = '<span class="status-text status-off">서버 Off</span>';
+                systemResources.style.display = 'none'; // 시스템 리소스 정보 숨김
             }
         })
         .catch(error => {
+            const serverStatus = document.getElementById('serverStatus');
             const serverStatusIcon = document.getElementById('serverStatusIcon');
             const serverStatusText = document.getElementById('serverStatusText');
+            const systemResources = document.getElementById('systemResources');
+            
+            // 오류 발생 시 (서버가 꺼져 있는 것으로 간주)
+            serverStatus.style.display = 'flex'; // 서버 상태 아이콘 표시
             serverStatusIcon.className = 'fas fa-lightbulb off-bulb';
             serverStatusText.innerHTML = '<span class="status-text status-off">서버 Off</span>';
+            systemResources.style.display = 'none'; // 시스템 리소스 정보 숨김
+            
             console.error('서버 상태 확인 오류:', error);
         });
 }
-
 // 페이지 로드 시 서버 상태 확인
 document.addEventListener('DOMContentLoaded', function() {
     checkServerStatus();
@@ -5338,5 +5354,75 @@ function convertMarkdownToHtml(markdown) {
     return html;
 }
 
+function checkSystemResources() {
+    fetch(`${API_BASE_URL}/api/system-resources`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('서버 리소스 정보 가져오기 실패');
+        }
+        return response.json();
+      })
+      .then(data => {
+        // CPU 속도 업데이트
+        const cpuSpeedElement = document.getElementById('cpuSpeed');
+        if (cpuSpeedElement) {
+          cpuSpeedElement.textContent = `${data.cpu.speed}GHz`;
+        }
+        
+        // CPU 사용량 업데이트
+        const cpuUsageElement = document.getElementById('cpuUsage');
+        if (cpuUsageElement) {
+          cpuUsageElement.textContent = `${data.cpu.usage}%`;
+          
+          // CPU 사용량에 따라 색상 변경
+          if (data.cpu.usage > 80) {
+            cpuUsageElement.style.color = '#e74c3c'; // 빨간색 (위험)
+          } else if (data.cpu.usage > 60) {
+            cpuUsageElement.style.color = '#f39c12'; // 주황색 (경고)
+          } else {
+            cpuUsageElement.style.color = '#ffffff'; // 흰색 (정상)
+          }
+        }
+        
+        // 메모리 사용량 업데이트
+        const memoryUsageElement = document.getElementById('memoryUsage');
+        if (memoryUsageElement) {
+          memoryUsageElement.textContent = `${data.memory.used}/${data.memory.total}GB`;
+          
+          // 메모리 사용량에 따라 색상 변경
+          if (data.memory.usage > 80) {
+            memoryUsageElement.style.color = '#e74c3c'; // 빨간색 (위험)
+          } else if (data.memory.usage > 60) {
+            memoryUsageElement.style.color = '#f39c12'; // 주황색 (경고)
+          } else {
+            memoryUsageElement.style.color = '#ffffff'; // 흰색 (정상)
+          }
+        }
+      })
+      .catch(error => {
+        console.error('시스템 리소스 정보 가져오기 오류:', error);
+        
+        // 오류 발생 시 표시를 초기화
+        const cpuSpeedElement = document.getElementById('cpuSpeed');
+        const cpuUsageElement = document.getElementById('cpuUsage');
+        const memoryUsageElement = document.getElementById('memoryUsage');
+        
+        if (cpuSpeedElement) cpuSpeedElement.textContent = '0GHz';
+        if (cpuUsageElement) cpuUsageElement.textContent = '0%';
+        if (memoryUsageElement) memoryUsageElement.textContent = '정보 없음';
+      });
+}
+  
+  // 기존 DOMContentLoaded 이벤트 핸들러 수정
+  document.addEventListener('DOMContentLoaded', function() {
+    checkServerStatus();
+    checkSystemResources(); // 시스템 리소스 확인 추가
+    
+    // 주기적으로 서버 상태와 시스템 리소스 확인 (30초마다)
+    setInterval(() => {
+      checkServerStatus();
+      checkSystemResources();
+    }, 30000);
+  });
 // init() 함수 내에 이 코드를 추가해야 합니다:
 // initRules();
