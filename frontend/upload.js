@@ -307,7 +307,7 @@ async function uploadFilesSequentially(filesWithPaths, uploadTargetPath, isResum
 
     logLog(`[Upload Parallel] 총 ${totalFiles}개 파일 병렬 업로드 시작 (남은 파일: ${filesWithPaths.length}, 완료: ${completedFilesCount}). 대상 경로: ${targetPath}`);
 
-    let CONCURRENT_UPLOADS = 2;
+    let CONCURRENT_UPLOADS = 3;
     const queue = [...filesWithPaths];
     const activeUploads = [];
     const results = [];
@@ -323,6 +323,8 @@ async function uploadFilesSequentially(filesWithPaths, uploadTargetPath, isResum
         CONCURRENT_UPLOADS = 1;
     } else if (maxFileSize > 100 * 1024 * 1024) { // 100MB 이상
         CONCURRENT_UPLOADS = 2;
+    } else{ // 100MB 이상
+        CONCURRENT_UPLOADS = 3;
     }
 
     logLog(`[Upload] 최대 파일 크기 ${formatFileSize(maxFileSize)}, 동시 업로드 수: ${CONCURRENT_UPLOADS}`);
