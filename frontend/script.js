@@ -2217,11 +2217,20 @@ function handleFileDblClick(e, fileItem) {
 function showRenameDialog() {
     if (selectedItems.size !== 1) return;
 
+    // 선택된 항목이 없으면 종료=
     const selectedItem = document.querySelector('.file-item.selected, .file-item-grid.selected');
     if (!selectedItem) return;
 
     const currentName = selectedItem.getAttribute('data-name');
     const isFolder = selectedItem.getAttribute('data-is-folder') === 'true';
+    
+    // 폴더가 잠겨있는지 확인
+    const itemPath = currentPath ? `${currentPath}/${currentName}` : currentName;
+    if (isFolder && isFolderLocked(itemPath)) {
+        logLog('[Rename] Cannot rename locked folder');
+        showToast('잠긴 폴더는 이름을 변경할 수 없습니다.', 'warning');
+        return;
+    }
 
     const renameModal = document.getElementById('renameModal');
     const newNameInput = document.getElementById('newName');
