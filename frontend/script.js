@@ -1550,165 +1550,165 @@ function initDragAndDrop() {
         // 3. 드롭존 비활성화
         dropZone.classList.remove('active');
     }
-    
-// 모든 drag-over 클래스를 제거하는 함수
-function clearAllDragOverClasses() {
-    document.querySelectorAll('.file-item.drag-over').forEach(item => {
-        item.classList.remove('drag-over');
-    });
-}
+        
+    // 모든 drag-over 클래스를 제거하는 함수
+    function clearAllDragOverClasses() {
+        document.querySelectorAll('.file-item.drag-over').forEach(item => {
+            item.classList.remove('drag-over');
+        });
+    }
 
-function handleFileDragEnter(e) {
-    const fileItem = e.target.closest('.file-item');
-    if (!fileItem) {
-        // 파일 항목이 없으면 모든 강조 제거
-        clearAllDragOverClasses();
-        return;
-    }
-    
-    // 상위 폴더인 경우 드래그 오버 스타일 적용하지 않음
-    if (fileItem.getAttribute('data-parent-dir') === 'true') {
-        clearAllDragOverClasses();
-        return;
-    }
-    
-    // 폴더인 경우에만 처리하고 시각적 표시
-    if (fileItem.getAttribute('data-is-folder') === 'true') {
-        // 선택된 폴더에 대한 드래그는 무시
-        if (fileItem.classList.contains('selected')) {
-            logLog('자기 자신이나 하위 폴더에 드래그 불가: ', fileItem.getAttribute('data-name'));
+    function handleFileDragEnter(e) {
+        const fileItem = e.target.closest('.file-item');
+        if (!fileItem) {
+            // 파일 항목이 없으면 모든 강조 제거
             clearAllDragOverClasses();
             return;
         }
         
-        // 다른 폴더들의 강조 제거
-        clearAllDragOverClasses();
+        // 상위 폴더인 경우 드래그 오버 스타일 적용하지 않음
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
+            clearAllDragOverClasses();
+            return;
+        }
         
-        logLog('드래그 진입:', fileItem.getAttribute('data-name'));
-        // 현재 폴더에만 드래그 오버 스타일 적용
-        fileItem.classList.add('drag-over');
-    } else {
-        // 파일인 경우 모든 강조 제거
-        clearAllDragOverClasses();
+        // 폴더인 경우에만 처리하고 시각적 표시
+        if (fileItem.getAttribute('data-is-folder') === 'true') {
+            // 선택된 폴더에 대한 드래그는 무시
+            if (fileItem.classList.contains('selected')) {
+                logLog('자기 자신이나 하위 폴더에 드래그 불가: ', fileItem.getAttribute('data-name'));
+                clearAllDragOverClasses();
+                return;
+            }
+            
+            // 다른 폴더들의 강조 제거
+            clearAllDragOverClasses();
+            
+            logLog('드래그 진입:', fileItem.getAttribute('data-name'));
+            // 현재 폴더에만 드래그 오버 스타일 적용
+            fileItem.classList.add('drag-over');
+        } else {
+            // 파일인 경우 모든 강조 제거
+            clearAllDragOverClasses();
+        }
     }
-}
-    
-function handleFileDragOver(e) {
-    e.preventDefault(); // 드롭 허용
-    e.stopPropagation(); // 이벤트 버블링 방지
-    
-    const fileItem = e.target.closest('.file-item');
-    
-    // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
-    if (!fileItem || e.target === fileList || e.target === fileView) {
-        clearAllDragOverClasses();
-        return;
-    }
-    
-    // 상위 폴더인 경우 드래그 오버 처리하지 않음
-    if (fileItem.getAttribute('data-parent-dir') === 'true') {
-        e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
-        clearAllDragOverClasses();
-        return;
-    }
-    
-    // 폴더인 경우에만 처리
-    if (fileItem.getAttribute('data-is-folder') === 'true') {
-        // 선택된 폴더에 대한 드래그는 무시
-        if (fileItem.classList.contains('selected')) {
+        
+    function handleFileDragOver(e) {
+        e.preventDefault(); // 드롭 허용
+        e.stopPropagation(); // 이벤트 버블링 방지
+        
+        const fileItem = e.target.closest('.file-item');
+        
+        // 파일 항목이 없거나 드래그 타겟이 파일 리스트인 경우
+        if (!fileItem || e.target === fileList || e.target === fileView) {
+            clearAllDragOverClasses();
+            return;
+        }
+        
+        // 상위 폴더인 경우 드래그 오버 처리하지 않음
+        if (fileItem.getAttribute('data-parent-dir') === 'true') {
             e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
             clearAllDragOverClasses();
             return;
         }
         
-        // 드롭존 비활성화 - 폴더에 드래그할 때는 전체 드롭존이 아닌 폴더 자체에 표시
-        if (dropZone) {
-            dropZone.classList.remove('active');
-        }
-        
-        // 다른 요소의 강조 모두 제거하고 현재 폴더만 강조
-        clearAllDragOverClasses();
-        fileItem.classList.add('drag-over');
-        
-        // 기본 드롭 효과 설정 (드롭 후 판단)
-        const hasExternalFiles = e.dataTransfer.files && e.dataTransfer.files.length > 0;
-        e.dataTransfer.dropEffect = hasExternalFiles ? 'copy' : 'move';
-    } else {
-        // 파일 항목인 경우 모든 강조 제거
-        clearAllDragOverClasses();
-        e.dataTransfer.dropEffect = 'none'; // 파일에는 드롭 불가
-    }
-}
-    
-function handleFileDragLeave(e) {
-    // 이 함수는 필요 없음 - dragover 이벤트에서 모든 처리를 수행
-    // 빈 함수로 남겨둠
-}
-
-// 이벤트 리스너 등록
-fileList.addEventListener('dragenter', handleFileDragEnter);
-fileList.addEventListener('dragover', handleFileDragOver);
-fileList.addEventListener('dragleave', handleFileDragLeave);
-fileList.addEventListener('drop', handleFileDrop);
-
-// 전체 영역 드롭존 이벤트 함수들
-function handleDropZoneDragEnter(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-        // 모든 드래그 이벤트에 대해 드롭존 활성화
-        // 드롭 시점에 내부/외부 판단
-        if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('text/plain')) {
-            dropZone.classList.add('active');
-        }
-    }
-    
-function handleDropZoneDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // 모든 드래그 이벤트에 대해 드롭존 유지
-        // 드롭 시점에 내부/외부 판단
-        if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('text/plain')) {
+        // 폴더인 경우에만 처리
+        if (fileItem.getAttribute('data-is-folder') === 'true') {
+            // 선택된 폴더에 대한 드래그는 무시
+            if (fileItem.classList.contains('selected')) {
+                e.dataTransfer.dropEffect = 'none'; // 드롭 불가능 표시
+                clearAllDragOverClasses();
+                return;
+            }
+            
+            // 드롭존 비활성화 - 폴더에 드래그할 때는 전체 드롭존이 아닌 폴더 자체에 표시
+            if (dropZone) {
+                dropZone.classList.remove('active');
+            }
+            
+            // 다른 요소의 강조 모두 제거하고 현재 폴더만 강조
+            clearAllDragOverClasses();
+            fileItem.classList.add('drag-over');
+            
             // 기본 드롭 효과 설정 (드롭 후 판단)
             const hasExternalFiles = e.dataTransfer.files && e.dataTransfer.files.length > 0;
             e.dataTransfer.dropEffect = hasExternalFiles ? 'copy' : 'move';
-            dropZone.classList.add('active');
+        } else {
+            // 파일 항목인 경우 모든 강조 제거
+            clearAllDragOverClasses();
+            e.dataTransfer.dropEffect = 'none'; // 파일에는 드롭 불가
         }
     }
-    
-function handleDropZoneDragLeave(e) {
-        // relatedTarget이 null이거나 dropZone의 자식 요소가 아닌 경우에만 비활성화
-    if (!dropZone.contains(e.relatedTarget)) {
-        dropZone.classList.remove('active');
+        
+    function handleFileDragLeave(e) {
+        // 이 함수는 필요 없음 - dragover 이벤트에서 모든 처리를 수행
+        // 빈 함수로 남겨둠
     }
-}
 
-function handleDropZoneDrop(e) {
-    logLog('드롭존에 파일 드롭됨');
-    preventDefaults(e);
-    
-    // 드래그 상태 초기화
-    window.draggingInProgress = false;
-    
-    // 내부/외부 파일 판단
-    const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
-    
-    // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리
-    if (isExternalDrop) {
-        logLog('드롭존 드롭 - 외부 파일 드롭 처리');
-        handleExternalFileDrop(e, currentPath);
-    } 
-    // 내부 파일이라도 경로가 비어있으면 오류 처리
-    else if (isInternalDrop && draggedPaths.length > 0) {
-        logLog('드롭존 드롭 - 내부 파일 이동 처리:', draggedPaths);
-        // 현재 드롭존의 경로로 파일 이동
-        handleInternalFileDrop(draggedPaths, { path: currentPath });
+    // 이벤트 리스너 등록
+    fileList.addEventListener('dragenter', handleFileDragEnter);
+    fileList.addEventListener('dragover', handleFileDragOver);
+    fileList.addEventListener('dragleave', handleFileDragLeave);
+    fileList.addEventListener('drop', handleFileDrop);
+
+    // 전체 영역 드롭존 이벤트 함수들
+    function handleDropZoneDragEnter(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+            // 모든 드래그 이벤트에 대해 드롭존 활성화
+            // 드롭 시점에 내부/외부 판단
+            if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('text/plain')) {
+                dropZone.classList.add('active');
+            }
+        }
+        
+    function handleDropZoneDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // 모든 드래그 이벤트에 대해 드롭존 유지
+            // 드롭 시점에 내부/외부 판단
+            if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('text/plain')) {
+                // 기본 드롭 효과 설정 (드롭 후 판단)
+                const hasExternalFiles = e.dataTransfer.files && e.dataTransfer.files.length > 0;
+                e.dataTransfer.dropEffect = hasExternalFiles ? 'copy' : 'move';
+                dropZone.classList.add('active');
+            }
+        }
+        
+    function handleDropZoneDragLeave(e) {
+            // relatedTarget이 null이거나 dropZone의 자식 요소가 아닌 경우에만 비활성화
+        if (!dropZone.contains(e.relatedTarget)) {
+            dropZone.classList.remove('active');
+        }
     }
-    // 판단 불가능한 경우
-    else {
-        logLog('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
-        showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
+
+    function handleDropZoneDrop(e) {
+        logLog('드롭존에 파일 드롭됨');
+        preventDefaults(e);
+        
+        // 드래그 상태 초기화
+        window.draggingInProgress = false;
+        
+        // 내부/외부 파일 판단
+        const { isExternalDrop, isInternalDrop, draggedPaths, reason } = determineDropType(e);
+        
+        // 최종 판단: 외부 파일이 있으면 외부 드롭으로 처리
+        if (isExternalDrop) {
+            logLog('드롭존 드롭 - 외부 파일 드롭 처리');
+            handleExternalFileDrop(e, currentPath);
+        } 
+        // 내부 파일이라도 경로가 비어있으면 오류 처리
+        else if (isInternalDrop && draggedPaths.length > 0) {
+            logLog('드롭존 드롭 - 내부 파일 이동 처리:', draggedPaths);
+            // 현재 드롭존의 경로로 파일 이동
+            handleInternalFileDrop(draggedPaths, { path: currentPath });
+        }
+        // 판단 불가능한 경우
+        else {
+            logLog('드롭존 드롭 - 처리할 수 없는 드롭 데이터');
+            showToast('처리할 수 없는 드롭 데이터입니다.', 'error');
         }
     }
     

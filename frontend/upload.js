@@ -320,11 +320,11 @@ async function uploadFilesSequentially(filesWithPaths, uploadTargetPath, isResum
 
     const maxFileSize = Math.max(...filesWithPaths.map(f => f.file.size));
     if (maxFileSize > 500 * 1024 * 1024) { // 500MB 이상
-        CONCURRENT_UPLOADS = 1;
-    } else if (maxFileSize > 100 * 1024 * 1024) { // 100MB 이상
         CONCURRENT_UPLOADS = 2;
-    } else{ // 100MB 이상
+    } else if (maxFileSize > 100 * 1024 * 1024) { // 100MB 이상
         CONCURRENT_UPLOADS = 3;
+    } else{ // 100MB 이상
+        CONCURRENT_UPLOADS = 4;
     }
 
     logLog(`[Upload] 최대 파일 크기 ${formatFileSize(maxFileSize)}, 동시 업로드 수: ${CONCURRENT_UPLOADS}`);
