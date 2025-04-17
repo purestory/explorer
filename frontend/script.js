@@ -4412,6 +4412,14 @@ function initDropZone() {
         return;
     }
     
+    const dropZone = document.getElementById('dropZone');
+    const fileView = document.getElementById('fileView');
+    
+    if (!dropZone || !fileView) {
+        logError('드래그앤드롭 초기화 중 필수 DOM 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
     // 기본 동작 방지 함수 (드래그 앤 드롭 이벤트에서 사용)
     function preventDefaults(e) {
         e.preventDefault();
@@ -4428,7 +4436,7 @@ function initDropZone() {
             if (fileItem) {
                 // 폴더인 경우에만 타겟으로 반환
                 if (fileItem.getAttribute('data-is-folder') === 'true') {
-    // 상위 폴더(..)는 제외
+                    // 상위 폴더(..)는 제외
                     if (fileItem.getAttribute('data-parent-dir') !== 'true') {
                         return fileItem;
                     }
@@ -4441,13 +4449,17 @@ function initDropZone() {
     }
     
     // 이전에 등록된 이벤트 핸들러 제거 (중복 방지)
-    dropZone.removeEventListener('dragover', handleDragOver);
-    dropZone.removeEventListener('dragleave', handleDragLeave);
-    dropZone.removeEventListener('drop', handleDrop);
-    fileView.removeEventListener('dragover', handleDragOver);
-    fileView.removeEventListener('dragleave', handleDragLeave);
-    fileView.removeEventListener('drop', handleDrop);
-    fileView.removeEventListener('drop', handleFileDrop); // 추가: 파일뷰의 파일드롭 핸들러도 제거
+    if (dropZone) {
+        dropZone.removeEventListener('dragover', handleDragOver);
+        dropZone.removeEventListener('dragleave', handleDragLeave);
+        dropZone.removeEventListener('drop', handleDrop);
+    }
+    if (fileView) {
+        fileView.removeEventListener('dragover', handleDragOver);
+        fileView.removeEventListener('dragleave', handleDragLeave);
+        fileView.removeEventListener('drop', handleDrop);
+        fileView.removeEventListener('drop', handleFileDrop); // 추가: 파일뷰의 파일드롭 핸들러도 제거
+    }
     document.body.removeEventListener('dragover', preventDefaults);
     document.body.removeEventListener('drop', preventDefaults);
     
@@ -4518,10 +4530,10 @@ function initDropZone() {
         // 외부 파일 처리
         if (isExternalDrop) {
             logLog('[initDropZone] 외부 파일 드롭 처리');
-        if (folderItem) {
-            handleExternalFileDrop(e, folderItem);
-        } else {
-            handleExternalFileDrop(e);
+            if (folderItem) {
+                handleExternalFileDrop(e, folderItem);
+            } else {
+                handleExternalFileDrop(e);
             }
         }
         // 내부 파일 이동 처리
@@ -4544,19 +4556,30 @@ function initDropZone() {
     }
     
     // 새 이벤트 핸들러 등록
-    dropZone.addEventListener('dragover', handleDragOver);
-    dropZone.addEventListener('dragleave', handleDragLeave);
-    dropZone.addEventListener('drop', handleDrop);
-    fileView.addEventListener('dragover', handleDragOver);
-    fileView.addEventListener('dragleave', handleDragLeave);
-    fileView.addEventListener('drop', handleDrop);
+    if (dropZone) {
+        dropZone.addEventListener('dragover', handleDragOver);
+        dropZone.addEventListener('dragleave', handleDragLeave);
+        dropZone.addEventListener('drop', handleDrop);
+    }
+    if (fileView) {
+        fileView.addEventListener('dragover', handleDragOver);
+        fileView.addEventListener('dragleave', handleDragLeave);
+        fileView.addEventListener('drop', handleDrop);
+    }
     document.body.addEventListener('dragover', preventDefaults);
     document.body.addEventListener('drop', preventDefaults);
+    document.body.addEventListener('dragover', handleDragOver);
+    document.body.addEventListener('dragleave', handleDragLeave);
+    document.body.addEventListener('drop', handleDrop);
     
     // 페이지 로드 시 드래그 클래스 초기화
-    dropZone.classList.remove('dragging');
-    fileView.classList.remove('dragging');
-    dropZone.style.display = 'none';
+    if (dropZone) {
+        dropZone.classList.remove('dragging');
+        dropZone.style.display = 'none';
+    }
+    if (fileView) {
+        fileView.classList.remove('dragging');
+    }
     
     logLog('드롭존 초기화 완료, 중복 등록 방지 플래그 설정');
     window.dropZoneInitialized = true;  // 초기화 완료 플래그 설정
