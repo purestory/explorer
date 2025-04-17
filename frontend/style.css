@@ -308,6 +308,8 @@ h1 {
     padding-right: 15px;
     text-align: left; /* 내용: 이름 왼쪽 정렬 유지 */
     font-size: 0.95rem;
+    white-space: nowrap;      /* 텍스트가 한 줄로 표시되도록 강제 */
+
 
 }
 
@@ -321,6 +323,8 @@ h1 {
     padding-left: 0; /* 왼쪽 여백 제거 */
     color: #6c757d;
     font-size: 0.95rem;
+    white-space: nowrap;      /* 텍스트가 한 줄로 표시되도록 강제 */
+
 }
 
 .file-view.list-view .file-item .file-date {
@@ -334,6 +338,8 @@ h1 {
     color: #6c757d;
     font-size: 0.95rem;
     overflow: hidden;
+    white-space: nowrap;      /* 텍스트가 한 줄로 표시되도록 강제 */
+
 }
 
 /* === 제목 행 스타일 (3:1:1) === */
@@ -950,6 +956,10 @@ h1 {
     
     .modal-content {
         width: 90%;
+    }
+
+    .header-container {
+        display: none; /* 모바일에서는 header-container 숨기기 */
     }
 }
 
@@ -1708,4 +1718,47 @@ h1 {
     100% {
         text-shadow: 0 0 10px #ffee58, 0 0 20px #ffee58, 0 0 30px #ffee58;
     }
+}
+
+
+
+
+/* 주요 액션 버튼 크기 통일 (새폴더, 업로드, 다운로드, 삭제) */
+#createFolder,
+#uploadFileBtn,
+#downloadBtn,
+#deleteBtn {
+    min-width: 110px;         /* 최소 너비 지정 (텍스트 길이에 맞춰 조절) */
+    padding: 8px 12px;        /* 내부 여백 통일 */
+    text-align: center;       /* 텍스트 가운데 정렬 */
+    display: inline-flex;     /* 아이콘과 텍스트 정렬을 위해 */
+    align-items: center;      /* 수직 가운데 정렬 */
+    justify-content: center;  /* 수평 가운데 정렬 */
+    box-sizing: border-box;   /* 패딩과 테두리를 너비에 포함 */
+    /* margin-right: 5px; */ /* 버튼 스타일은 .btn 클래스에서 이미 처리하고 있을 수 있으므로 주석 처리 */
+    vertical-align: middle;   /* 다른 인라인 요소와 정렬 */
+}
+
+/* 모바일 화면에서 버튼 크기 조정 (선택 사항) */
+@media (max-width: 768px) {
+    .header-container {
+        display: none; /* 모바일에서는 main-container 숨기기 */
+    }
+
+    #createFolder,
+    #uploadFileBtn,
+    #downloadBtn,
+    #deleteBtn {
+        min-width: 60px; /* 모바일 최소 너비 약간 더 줄임 */
+        padding: 6px 8px; /* 모바일 패딩 약간 더 줄임 */
+        font-size: 0.85em; /* 모바일 폰트 크기 약간 더 줄임 */
+    }
+    /* 모바일에서 버튼 아이콘 숨기기 */
+    #createFolder i,
+    #uploadFileBtn i,
+    #downloadBtn i,
+    #deleteBtn i {
+        display: none;
+    }
+
 }
