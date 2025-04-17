@@ -1751,12 +1751,10 @@ h1 {
     
     .search-box {
         width: 100%;
-    }
+        display: none;
     
-    .search-box input {
-        flex-grow: 1; /* 입력창이 남은 공간을 채우도록 */
     }
-    
+        
     .modal-content {
         width: 90%;
     }
