@@ -299,13 +299,13 @@ h1 {
 
 /* === 내용 행 스타일 (5:1:1) ===  */
 .file-view.list-view .file-item .file-name {
-    flex-grow: 3; 
+    flex-grow: 2; 
     flex-shrink: 1;
     flex-basis: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding-right: 15px;
+    padding-right: 0px;
     text-align: left; /* 내용: 이름 왼쪽 정렬 유지 */
     font-size: 0.95rem;
     white-space: nowrap;      /* 텍스트가 한 줄로 표시되도록 강제 */
@@ -318,8 +318,8 @@ h1 {
     flex-shrink: 0;
     flex-basis: 0;
     min-width: 80px;
-    text-align: left; /* 내용: 크기 왼쪽 정렬로 변경 */
-    padding-right: 15px; /* 왼쪽 정렬 시 우측 여백 추가 */
+    text-align: center; /* 내용: 크기 왼쪽 정렬로 변경 */
+    padding-right: 0px; /* 왼쪽 정렬 시 우측 여백 추가 */
     padding-left: 0; /* 왼쪽 여백 제거 */
     color: #6c757d;
     font-size: 0.95rem;
@@ -332,8 +332,8 @@ h1 {
     flex-shrink: 0;
     flex-basis: 0;
     min-width: 120px;
-    text-align:left; /* 내용: 날짜 왼쪽 정렬로 변경 */
-    padding-right: 10px; /* 왼쪽 정렬 시 우측 여백 추가 */
+    text-align:center; /* 내용: 날짜 왼쪽 정렬로 변경 */
+    padding-right: 0px; /* 왼쪽 정렬 시 우측 여백 추가 */
     padding-left: 0; /* 왼쪽 여백 제거 */
     color: #6c757d;
     font-size: 0.95rem;
@@ -1140,26 +1140,8 @@ h1 {
     right: 30px;
 }
 
-.file-size {
-    flex: 1;
-    text-align: right;
-    color: #666;
-    font-size: 0.8rem;
-    display: flex;
-    align-items: center;
-    height: 100%;
-}
 
-.file-date {
-    flex: 1.5;
-    text-align: right;
-    color: #666;
-    font-size: 0.8rem;
-    margin-left: 10px;
-    display: flex;
-    align-items: center;
-    height: 100%;
-}
+
 
 .files-container {
     width: 100%;
@@ -1266,19 +1248,8 @@ h1 {
     background-color: #e9ecef;
 }
 
-.list-view .header-size,
-.list-view .file-size {
-    width: 100px; /* 크기 열 너비 */
-    text-align: right;
-    padding-right: 15px; /* 오른쪽 정렬 시 약간의 여백 */
-}
 
-.list-view .header-date,
-.list-view .file-date {
-    width: 150px; /* 수정일 열 너비 */
-    text-align: right;
-    padding-right: 15px; /* 오른쪽 정렬 시 약간의 여백 */
-}
+
 
 /* === Upload Progress Modal Styling === */
 /* === Upload Progress Modal Styling === */
@@ -1739,10 +1710,25 @@ h1 {
     vertical-align: middle;   /* 다른 인라인 요소와 정렬 */
 }
 
-/* 모바일 화면에서 버튼 크기 조정 (선택 사항) */
+/* 버튼 내 아이콘 뒤에 공백 추가 */
+#createFolder i,
+#uploadFileBtn i,
+#downloadBtn i,
+#deleteBtn i {
+    margin-right: 5px; /* 아이콘 오른쪽 여백 추가 (값 조절 가능) */
+}
+
+/* 모바일 화면에서 버튼 크기 조정 및 아이콘 숨김 */
 @media (max-width: 768px) {
-    .header-container {
-        display: none; /* 모바일에서는 main-container 숨기기 */
+    .file-actions {
+        flex-direction: column; /* 버튼과 검색창을 세로로 배치 */
+        gap: 10px;
+    }
+
+    .action-buttons {
+        flex-wrap: wrap; /* 버튼들이 넘칠 경우 다음 줄로 이동 */
+        justify-content: flex-start; /* 버튼들을 왼쪽부터 정렬 */
+        gap: 5px; /* 버튼 사이 간격 약간 줄임 */
     }
 
     #createFolder,
@@ -1752,7 +1738,9 @@ h1 {
         min-width: 60px; /* 모바일 최소 너비 약간 더 줄임 */
         padding: 6px 8px; /* 모바일 패딩 약간 더 줄임 */
         font-size: 0.85em; /* 모바일 폰트 크기 약간 더 줄임 */
+        justify-content: center; /* 아이콘 숨김 시 텍스트 중앙 정렬 */
     }
+
     /* 모바일에서 버튼 아이콘 숨기기 */
     #createFolder i,
     #uploadFileBtn i,
@@ -1760,5 +1748,20 @@ h1 {
     #deleteBtn i {
         display: none;
     }
+    
+    .search-box {
+        width: 100%;
+    }
+    
+    .search-box input {
+        flex-grow: 1; /* 입력창이 남은 공간을 채우도록 */
+    }
+    
+    .modal-content {
+        width: 90%;
+    }
 
+    .header-container {
+        display: none; /* 모바일에서는 header-container 숨기기 */
+    }
 }
