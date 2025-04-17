@@ -42,7 +42,7 @@ h1 {
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 150px);
+    height: calc(100vh - 120px);
 }
 
 .navigation-bar {
@@ -633,7 +633,7 @@ h1 {
 
 
 .drop-zone {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
@@ -642,7 +642,7 @@ h1 {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(33, 150, 243, 0.15);
     color: white;
     font-size: 1.5em;
     z-index: 1000;
@@ -657,15 +657,17 @@ h1 {
 }
 
 .drop-zone i {
-    font-size: 4rem;
+    font-size: 5rem;
     color: #2196F3;
     margin-bottom: 1rem;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
 }
 
 .drop-zone p {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     color: #333;
     margin: 0.5rem 0;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.9);
 }
 
 .drop-zone-info {
