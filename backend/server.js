@@ -233,7 +233,7 @@ function errorLogWithIP(message, error, req) { // 오류 로그는 항상 기록
 
 
 // 최대 저장 용량 설정 (100GB)
-const MAX_STORAGE_SIZE = 500 * 1024 * 1024 * 1024; // 100GB in bytes
+const MAX_STORAGE_SIZE = 300 * 1024 * 1024 * 1024; // 100GB in bytes
 
 // 최대 파일명/경로 길이 제한 설정 (전역으로 이동)
 const MAX_FILENAME_BYTES = 229;
