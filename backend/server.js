@@ -895,17 +895,57 @@ app.get('/webdav-api/disk-usage', async (req, res) => { // *** async 추가 ***
   }
 });
 
-// 파일 압축 API (비동기화)
-// 파일 압축 API (비동기화)
-app.post('/webdav-api/compress', bodyParser.json(), async (req, res) => { // *** async 추가 ***
+// 압축 API 수정
+app.post('/webdav-api/compress', express.json(), async (req, res) => {
   try {
     const { files, targetPath, zipName, forDownload } = req.body;
     
-    logWithIP(`[Compress Request] ${files.length}개 파일 '${zipName}'으로 압축 요청 (${targetPath || '루트'})`, req, 'info'); // 레벨 변경: minimal -> info
-
+    // 파일 목록이 없는 경우
     if (!files || !Array.isArray(files) || files.length === 0) {
       return res.status(400).json({ error: '압축할 파일이 선택되지 않았습니다.' });
     }
+    
+    // 총 파일 크기 합계 계산
+    const MAX_TOTAL_SIZE = 20 * 1024 * 1024 * 1024; // 20GB
+    let totalSize = 0;
+    const filePaths = [];
+    
+    for (const file of files) {
+      const filePath = path.join(ROOT_DIRECTORY, targetPath || '', file);
+      filePaths.push(filePath);
+      
+      try {
+        const stats = await fs.promises.stat(filePath);
+        totalSize += stats.size;
+        
+        // 개별 파일 크기 로깅
+        logWithIP(`압축 파일 크기 확인: ${file}, 크기: ${formatBytes(stats.size)}`, req, 'debug');
+        
+        // 디렉토리인 경우, 재귀적으로 모든 파일 크기 합산
+        if (stats.isDirectory()) {
+          const dirSize = await calculateDirectorySize(filePath);
+          totalSize += dirSize - stats.size; // 디렉토리 자체 크기는 이미 더했으므로 빼줌
+          logWithIP(`폴더 내부 파일 크기 합계: ${file}, 크기: ${formatBytes(dirSize)}`, req, 'debug');
+        }
+      } catch (error) {
+        errorLogWithIP(`파일/폴더 정보 확인 실패: ${filePath}`, error, req);
+        if (error.code === 'ENOENT') {
+          return res.status(404).json({ error: `'${file}' 파일 또는 폴더를 찾을 수 없습니다.` });
+        }
+        throw error;
+      }
+      
+      // 중간에 용량 초과 확인
+      if (totalSize > MAX_TOTAL_SIZE) {
+        errorLogWithIP(`압축 용량 초과: 총 ${formatBytes(totalSize)}, 제한: 20GB`, null, req);
+        return res.status(413).json({ 
+          error: `파일 총 크기가 20GB를 초과하여 압축 및 다운로드할 수 없습니다. (현재 크기: ${formatBytes(totalSize)})` 
+        });
+      }
+    }
+    
+    // 최종 용량 로그
+    logWithIP(`압축 요청 총 파일 크기: ${formatBytes(totalSize)}, 파일 수: ${files.length}개`, req, 'info');
     
     if (!zipName) {
       return res.status(400).json({ error: '압축 파일 이름이 필요합니다.' });
@@ -918,7 +958,7 @@ app.post('/webdav-api/compress', bodyParser.json(), async (req, res) => { // ***
       ? path.join(__dirname, 'tmp') 
       : (targetPath ? path.join(ROOT_DIRECTORY, targetPath) : ROOT_DIRECTORY);
     
-    // 임시 폴더가 없으면 생성
+    // 임시 폴더가 없으면 생성  
     if (forDownload) {
       try {
         await fs.promises.mkdir(path.join(__dirname, 'tmp'), { recursive: true, mode: 0o777 });
@@ -1020,6 +1060,32 @@ app.post('/webdav-api/compress', bodyParser.json(), async (req, res) => { // ***
     res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
   }
 });
+
+
+// 디렉토리 크기 계산 함수 (재귀적)
+async function calculateDirectorySize(dirPath) {
+  let totalSize = 0;
+  
+  try {
+    const files = await fs.promises.readdir(dirPath);
+    
+    for (const file of files) {
+      const filePath = path.join(dirPath, file);
+      const stats = await fs.promises.stat(filePath);
+      
+      totalSize += stats.size;
+      
+      if (stats.isDirectory()) {
+        totalSize += await calculateDirectorySize(filePath);
+      }
+    }
+  } catch (error) {
+    errorLog(`디렉토리 크기 계산 중 오류: ${dirPath}`, error);
+  }
+  
+  return totalSize;
+}
+
 
 
 app.get('/webdav-api/lock-status', (req, res) => {

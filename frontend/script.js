@@ -3388,21 +3388,7 @@ async function compressSelectedItems() {
     const selectedItemsArray = Array.from(selectedItems);
     const firstItemName = selectedItemsArray[0];
     
-    // 파일 크기 확인 (500MB 제한)
-    const MAX_FILE_SIZE = 500 * 1024 * 1024;
-    let hasLargeFile = false;
-    for (const item of selectedItemsArray) {
-        const fileInfo = fileInfoMap.get(item);
-        if (fileInfo && fileInfo.type === 'file' && fileInfo.size > MAX_FILE_SIZE) {
-            hasLargeFile = true;
-            break;
-        }
-    }
-    
-    if (hasLargeFile) {
-        showToast('500MB 이상의 파일이 포함되어 있어 압축할 수 없습니다.', 'error');
-        return;
-    }
+
     
     // 기본 압축 파일 이름 설정 (첫 번째 선택 항목 + 날짜시간)
     const now = new Date();
