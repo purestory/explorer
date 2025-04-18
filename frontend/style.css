@@ -1763,3 +1763,8 @@ h1 {
         display: none; /* 모바일에서는 header-container 숨기기 */
     }
 }
+
+/* 추가된 스타일 */
+#serverStatusIcon {
+    margin-right: 10px; /* 아이콘과 텍스트 사이 간격 */
+}
