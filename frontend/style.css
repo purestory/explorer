@@ -1661,6 +1661,11 @@ h1 {
     opacity: 0.7;
 }
 
+/* 추가된 스타일 */
+#serverStatusIcon {
+    margin-right: 10px; /* 아이콘과 텍스트 사이 간격 */
+}
+
 /* 상태 텍스트 스타일 */
 .status-text {
 /*    font-weight: bold;*/
@@ -1764,7 +1769,4 @@ h1 {
     }
 }
 
-/* 추가된 스타일 */
-#serverStatusIcon {
-    margin-right: 10px; /* 아이콘과 텍스트 사이 간격 */
-}
+
