@@ -1723,6 +1723,8 @@ h1 {
     margin-right: 5px; /* 아이콘 오른쪽 여백 추가 (값 조절 가능) */
 }
 
+
+
 /* 모바일 화면에서 버튼 크기 조정 및 아이콘 숨김 */
 @media (max-width: 768px) {
     .file-actions {

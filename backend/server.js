@@ -2117,18 +2117,11 @@ app.post('/webdav-api/unlock', (req, res) => {
     });
 });
 
-// 서버 상태 확인 API
-app.get('/webdav-api/status', (req, res) => {
-    res.status(200).json({ status: 'ok', message: 'Server is running' });
-    logWithIP('Server status checked', req, 'info');
-});
 
-// CPU 및 메모리 사용량 API 추가
-// 시스템 리소스(CPU/메모리/SSD) 정보를 제공하는 API 엔드포인트
-// 시스템 리소스(CPU/메모리) 정보를 제공하는 API 엔드포인트
-app.get('/webdav-api/system-resources', (req, res) => {
+// 서버 상태 및 시스템 리소스 통합 API 엔드포인트
+app.get('/webdav-api/system-status', async (req, res) => {
   try {
-    logWithIP('[API] 시스템 리소스 확인 요청', req, requestLogLevel);
+    logWithIP('[API] 통합 시스템 상태 및 리소스 확인 요청', req, 'info');
     
     // CPU 정보 계산
     const cpus = os.cpus();
@@ -2136,7 +2129,7 @@ app.get('/webdav-api/system-resources', (req, res) => {
     let totalTick = 0;
     
     // CPU 속도 (GHz) - 첫 번째 CPU 코어의 속도 정보 사용
-    const cpuSpeedMHz = cpus[0].speed; // MHz 단위
+    const cpuSpeedMHz = cpus[0].speed; // MHz
     const cpuSpeedGHz = (cpuSpeedMHz / 1000).toFixed(2); // GHz로 변환
     
     cpus.forEach(cpu => {
@@ -2157,24 +2150,46 @@ app.get('/webdav-api/system-resources', (req, res) => {
     const totalMemoryGB = (totalMemory / (1024 * 1024 * 1024)).toFixed(2);
     const usedMemoryGB = (usedMemory / (1024 * 1024 * 1024)).toFixed(2);
     
+    // 디스크 사용량 정보 가져오기
+    const diskInfo = await getDiskUsage();
+    const diskUsed = diskInfo.used || 0;
+    const diskTotal = diskInfo.size || 0;
+    const diskUsedGB = (diskUsed / (1024 * 1024 * 1024)).toFixed(2);
+    const diskTotalGB = (diskTotal / (1024 * 1024 * 1024)).toFixed(2);
+    const diskUsage = diskTotal > 0 ? Math.round((diskUsed / diskTotal) * 100) : 0;
+    
+    // 통합된 응답 데이터 구성
     res.json({
-      cpu: {
-        usage: cpuUsage,
-        speed: cpuSpeedGHz  // CPU 속도 정보 추가 (GHz)
+      server: {
+        status: 'ok',
+        message: 'Server is running'
       },
-      memory: {
-        total: totalMemoryGB,
-        used: usedMemoryGB,
-        usage: Math.round((usedMemory / totalMemory) * 100)
+      system: {
+        cpu: {
+          usage: cpuUsage,
+          speed: cpuSpeedGHz  // CPU 속도 정보
+        },
+        memory: {
+          total: totalMemoryGB,
+          used: usedMemoryGB,
+          usage: Math.round((usedMemory / totalMemory) * 100)
+        },
+        disk: {
+          total: diskTotalGB,
+          used: diskUsedGB,
+          usage: diskUsage
+        }
       }
     });
   } catch (error) {
-    errorLogWithIP('시스템 리소스 정보 조회 오류', error, req);
+    errorLogWithIP('통합 시스템 상태 정보 조회 오류', error, req);
     res.status(500).json({
-      error: '시스템 리소스 정보를 가져오는 중 오류가 발생했습니다.'
+      error: '시스템 상태 정보를 가져오는 중 오류가 발생했습니다.'
     });
   }
 });
+
+
 
 // 폴더별 암호 인증 미들웨어 (기존 lockedFolders 변수를 재사용)
 app.use('/locked-folder', (req, res, next) => {
