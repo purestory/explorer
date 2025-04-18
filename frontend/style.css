@@ -712,13 +712,10 @@ h1 {
 
 /* 폴더에 드래그 오버 시 강조 효과 강화 */
 .file-item[data-is-folder="true"].drag-over {
-    /* background-color: rgba(33, 150, 243, 0.3); */ /* 배경색 제거 */
     border: 2px dashed #0056b3 !important;
-    box-shadow: none; /* 그림자 제거: 좌우 스크롤 방지 */
-    /* transform: scale(1.08); */ /* 스케일 제거: 좌우 스크롤 방지 */
+    box-shadow: none;
     transition: border-color 0.2s ease;
     z-index: 20;
-    /* animation: folderPulse 1.2s infinite; */ /* 애니메이션 제거: 좌우 스크롤 방지 */
     position: relative;
 }
 
@@ -738,50 +735,16 @@ h1 {
 /* 외부 파일을 폴더에 드래그할 때 아이콘 색상 변경 및 효과 강화 */
 .file-item[data-is-folder="true"].drag-over .file-icon {
     color: #0056b3;
-    /* transform: scale(1.2); */ /* 스케일 속성 제거: 좌우 스크롤 방지 */
     transition: color 0.2s ease;
-    text-shadow: none; /* 텍스트 그림자 제거: 좌우 스크롤 방지 */
 }
 
 /* 폴더 아이콘 색상 강화 */
 .file-item[data-is-folder="true"].drag-over .file-icon i.fas.fa-folder {
     color: #2196F3;
-    /* animation: iconPulse 1.2s infinite; */ /* 애니메이션 제거: 좌우 스크롤 방지 */
-}
-
-@keyframes iconPulse {
-    0% {
-        color: #ffc107;
-    }
-    50% {
-        color: #2196F3;
-    }
-    100% {
-        color: #ffc107;
-    }
-}
-
-@keyframes folderPulse {
-    0% {
-        border-color: #0056b3;
-        /* background-color: rgba(33, 150, 243, 0.2); */ /* 배경색 제거 */
-        box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
-    }
-    50% {
-        border-color: #2196F3;
-        /* background-color: rgba(33, 150, 243, 0.4); */ /* 배경색 제거 */
-        box-shadow: 0 0 25px rgba(0, 123, 255, 0.8);
-    }
-    100% {
-        border-color: #0056b3;
-        /* background-color: rgba(33, 150, 243, 0.2); */ /* 배경색 제거 */
-        box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
-    }
 }
 
 /* 리스트 뷰에서 폴더 드래그 오버 스타일 보완 */
 .list-view .file-item[data-is-folder="true"].drag-over {
-    /* background-color: rgba(0, 123, 255, 0.2); */ /* 배경색 제거 */
     border-left: 4px solid #0056b3 !important;
     border-top: 1px solid #e0e0e0 !important;
     border-right: 1px solid #e0e0e0 !important;
@@ -1509,31 +1472,41 @@ h1 {
 
 /* === Upload Progress Modal Layout Adjustments === */
 #upload-progress-modal .modal-content p {
-    margin: 5px 0; /* الفقرات بين الهوامش */
+    margin: 5px 0;
 }
 
 #upload-progress-modal .progress-time-group,
 #upload-progress-modal .speed-size-group {
     display: flex;
-    justify-content: space-between; /* 양쪽 끝으로 배치 */
+    justify-content: space-between;
     align-items: center;
 }
 
 #upload-progress-modal #current-file-info {
-    margin-top: 10px; /* 현재 파일 정보 위쪽 여백 추가 */
+    margin-top: 10px;
     font-size: 0.9em;
     color: #555;
-    word-break: break-all; /* 긴 경로 줄바꿈 */
+    word-break: break-all;
 }
 /* === End of Upload Progress Modal Layout Adjustments === */
 
 /* 잠금 모달 스타일 */
-.modal input[type="password"] {
+.modal input[type="password"],
+.modal input[type="text"] {
     width: 100%;
-    padding: 8px;
-    border: 1px solid #ddd;
+    padding: 10px;
+    border: 1px solid #ccc;
     border-radius: 4px;
     margin-bottom: 15px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.modal input[type="password"]:focus,
+.modal input[type="text"]:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
 }
 
 .modal-buttons {
@@ -1569,31 +1542,6 @@ h1 {
 
 .modal-buttons button:last-child:hover {
     background-color: #c82333;
-}
-
-.modal input[type="password"]:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-
-.modal input[type="password"],
-.modal input[type="text"] {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    margin-bottom: 15px;
-    font-size: 16px;
-    box-sizing: border-box;
-}
-
-.modal input[type="password"]:focus,
-.modal input[type="text"]:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
 }
 
 #systemResources {
@@ -1689,10 +1637,16 @@ h1 {
 /* 전구 깜빡임 애니메이션 */
 @keyframes glowPulse {
     0% {
-        text-shadow: 0 0 5px #ffee58, 0 0 10px #ffee58;
+        color: #28a745;
+        text-shadow: 0 0 5px rgba(40, 167, 69, 0.5);
+    }
+    50% {
+        color: #28a745;
+        text-shadow: 0 0 15px rgba(40, 167, 69, 0.8);
     }
     100% {
-        text-shadow: 0 0 10px #ffee58, 0 0 20px #ffee58, 0 0 30px #ffee58;
+        color: #28a745;
+        text-shadow: 0 0 5px rgba(40, 167, 69, 0.5);
     }
 }
 
@@ -1704,70 +1658,61 @@ h1 {
 #uploadFileBtn,
 #downloadBtn,
 #deleteBtn {
-    min-width: 110px;         /* 최소 너비 지정 (텍스트 길이에 맞춰 조절) */
-    padding: 8px 12px;        /* 내부 여백 통일 */
-    text-align: center;       /* 텍스트 가운데 정렬 */
-    display: inline-flex;     /* 아이콘과 텍스트 정렬을 위해 */
-    align-items: center;      /* 수직 가운데 정렬 */
-    justify-content: center;  /* 수평 가운데 정렬 */
-    box-sizing: border-box;   /* 패딩과 테두리를 너비에 포함 */
-    /* margin-right: 5px; */ /* 버튼 스타일은 .btn 클래스에서 이미 처리하고 있을 수 있으므로 주석 처리 */
-    vertical-align: middle;   /* 다른 인라인 요소와 정렬 */
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-right: 5px;
 }
 
-/* 버튼 내 아이콘 뒤에 공백 추가 */
 #createFolder i,
 #uploadFileBtn i,
 #downloadBtn i,
 #deleteBtn i {
-    margin-right: 5px; /* 아이콘 오른쪽 여백 추가 (값 조절 가능) */
+    margin-right: 5px;
+    font-size: 16px;
 }
 
-
-
-/* 모바일 화면에서 버튼 크기 조정 및 아이콘 숨김 */
 @media (max-width: 768px) {
     .file-actions {
-        flex-direction: column; /* 버튼과 검색창을 세로로 배치 */
+        flex-direction: column;
         gap: 10px;
     }
-
+    
     .action-buttons {
-        flex-wrap: wrap; /* 버튼들이 넘칠 경우 다음 줄로 이동 */
-        justify-content: flex-start; /* 버튼들을 왼쪽부터 정렬 */
-        gap: 5px; /* 버튼 사이 간격 약간 줄임 */
+        width: 100%;
+        justify-content: space-between;
     }
-
+    
     #createFolder,
     #uploadFileBtn,
     #downloadBtn,
     #deleteBtn {
-        min-width: 60px; /* 모바일 최소 너비 약간 더 줄임 */
-        padding: 6px 8px; /* 모바일 패딩 약간 더 줄임 */
-        font-size: 0.85em; /* 모바일 폰트 크기 약간 더 줄임 */
-        justify-content: center; /* 아이콘 숨김 시 텍스트 중앙 정렬 */
+        flex: 1;
+        margin: 0 2px;
+        padding: 8px 5px;
+        font-size: 0.8rem;
     }
-
-    /* 모바일에서 버튼 아이콘 숨기기 */
+    
     #createFolder i,
     #uploadFileBtn i,
     #downloadBtn i,
     #deleteBtn i {
-        display: none;
+        margin-right: 3px;
+        font-size: 14px;
     }
     
     .search-box {
         width: 100%;
-        display: none;
+    }
     
-    }
-        
     .modal-content {
-        width: 90%;
+        width: 95%;
     }
-
+    
     .header-container {
-        display: none; /* 모바일에서는 header-container 숨기기 */
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 
