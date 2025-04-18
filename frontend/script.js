@@ -3220,7 +3220,37 @@ function compressAndDownload(itemList) {
         }
         return response.json();
     })
+// 압축 성공 후 다운로드 시작 부분 (script.js 약 3220-3260줄)
     .then(data => {
+        // 새로운 downloadUrl이 있으면 그것을 사용하고, 없으면 기존 방식 사용
+        if (data.downloadUrl) {
+            // 새 API 경로 사용
+            const link = document.createElement('a');
+            link.href = data.downloadUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            // 기존 방식 (바꾸지 않음)
+            const zipPath = data.zipPath ? `${data.zipPath}/${data.zipFile}` : data.zipFile;
+            const encodedZipPath = encodeURIComponent(zipPath);
+            const zipUrl = `${API_BASE_URL}/webdav-api/files/${encodedZipPath}`;
+
+            const link = document.createElement('a');
+            link.href = zipUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // 상태 업데이트
+        statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 시작...`;
+        hideLoading();
+
+        // 서버에서 알아서 처리하므로 별도 삭제 요청 불필요
+    })
+
+/*
         // 압축 성공 후 다운로드 시작
         const zipPath = data.zipPath ? `${data.zipPath}/${data.zipFile}` : data.zipFile;
         const encodedZipPath = encodeURIComponent(zipPath);
@@ -3261,6 +3291,7 @@ function compressAndDownload(itemList) {
             }
         }, 10000); // 10초 후 삭제
     })
+        */
     .catch(error => {
         hideLoading();
         showToast(`압축 오류: ${error.message}`, 'error');

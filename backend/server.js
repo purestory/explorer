@@ -913,15 +913,15 @@ app.post('/webdav-api/compress', bodyParser.json(), async (req, res) => { // ***
     
     log(`압축 요청: ${files.length}개 파일, 대상 경로: ${targetPath || '루트'}, 압축파일명: ${zipName}`, 'info');
     
-    // 다운로드용 압축인 경우 임시 폴더에 생성, 그렇지 않으면 기존 방식대로 현재 경로에 생성
+    // 다운로드용 압축인 경우 백엔드 tmp 폴더에 생성, 그렇지 않으면 기존 방식대로 현재 경로에 생성
     const basePath = forDownload 
-      ? path.join(ROOT_DIRECTORY, 'tmp') 
+      ? path.join(__dirname, 'tmp') 
       : (targetPath ? path.join(ROOT_DIRECTORY, targetPath) : ROOT_DIRECTORY);
     
     // 임시 폴더가 없으면 생성
     if (forDownload) {
       try {
-        await fs.promises.mkdir(path.join(ROOT_DIRECTORY, 'tmp'), { recursive: true, mode: 0o777 });
+        await fs.promises.mkdir(path.join(__dirname, 'tmp'), { recursive: true, mode: 0o777 });
       } catch (error) {
         if (error.code !== 'EEXIST') {
           errorLog('임시 폴더 생성 오류:', error);
@@ -931,7 +931,7 @@ app.post('/webdav-api/compress', bodyParser.json(), async (req, res) => { // ***
     }
     
     const zipFilePath = path.join(basePath, zipName.endsWith('.zip') ? zipName : `${zipName}.zip`);
-    
+    console.log('zipFilePath', zipFilePath);
     // *** 중복 확인 (비동기) ***
     try {
       await fs.promises.access(zipFilePath);
@@ -960,11 +960,13 @@ app.post('/webdav-api/compress', bodyParser.json(), async (req, res) => { // ***
         await fs.promises.chmod(zipFilePath, 0o666);
         
         log(`압축 완료: ${zipFilePath} (크기: ${archive.pointer()} bytes)`, 'info');
+        // 압축 완료 후 반환하는 경로 부분(server.js의 약 966라인)
         res.status(200).json({ 
           success: true, 
           message: '압축이 완료되었습니다.',
           zipFile: path.basename(zipFilePath),
-          zipPath: forDownload ? 'tmp' : (targetPath || ''),
+          downloadUrl: forDownload ? `/webdav-api/download-tmp/${encodeURIComponent(path.basename(zipFilePath))}` : null,
+          zipPath: forDownload ? null : (targetPath || ''),
           forDownload: forDownload || false
         });
       } catch (error) {
@@ -1131,6 +1133,50 @@ app.post('/webdav-api/lock/:path(*)', express.json(), async (req, res) => { // *
     res.status(500).send('서버 오류가 발생했습니다.');
   }
 });
+
+// 임시 압축 파일 다운로드 전용 API
+app.get('/webdav-api/download-tmp/:filename', async (req, res) => {
+  try {
+    // URL 디코딩하여 한글 파일명 처리
+    const filename = decodeURIComponent(req.params.filename || '');
+    const fullPath = path.join(__dirname, 'tmp', filename);
+    
+    logWithIP(`임시 압축 파일 다운로드 요청: ${filename}`, req, 'info');
+
+    // 파일 존재 확인
+    try {
+      await fs.promises.access(fullPath, fs.constants.F_OK);
+    } catch (error) {
+      errorLogWithIP(`임시 파일을 찾을 수 없습니다: ${fullPath}`, error, req);
+      return res.status(404).send('요청한 파일을 찾을 수 없습니다.');
+    }
+    
+    // 파일 다운로드
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.download(fullPath, filename, (err) => {
+      if (err) {
+        errorLogWithIP(`임시 파일 다운로드 중 오류: ${fullPath}`, err, req);
+      } else {
+        logWithIP(`임시 파일 다운로드 완료: ${fullPath}`, req, 'info');
+        
+        // 다운로드 후 임시 파일 삭제 (선택 사항)
+        setTimeout(() => {
+          fs.unlink(fullPath, (unlinkErr) => {
+            if (unlinkErr) {
+              errorLog(`임시 파일 삭제 실패: ${fullPath}`, unlinkErr);
+            } else {
+              log(`임시 파일 삭제 완료: ${fullPath}`, 'info');
+            }
+          });
+        }, 1000); // 1초 후 삭제 (다운로드 완료 시간 고려)
+      }
+    });
+  } catch (error) {
+    errorLogWithIP('임시 파일 다운로드 API 오류:', error, req);
+    res.status(500).send('서버 오류가 발생했습니다.');
+  }
+});
+
 
 // 파일 목록 조회 또는 파일 다운로드
 app.get('/webdav-api/files/*', async (req, res) => {
