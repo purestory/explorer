@@ -3250,48 +3250,6 @@ function compressAndDownload(itemList) {
         // 서버에서 알아서 처리하므로 별도 삭제 요청 불필요
     })
 
-/*
-        // 압축 성공 후 다운로드 시작
-        const zipPath = data.zipPath ? `${data.zipPath}/${data.zipFile}` : data.zipFile;
-        const encodedZipPath = encodeURIComponent(zipPath);
-        const zipUrl = `${API_BASE_URL}/webdav-api/files/${encodedZipPath}`;
-
-        // a 태그를 이용한 다운로드 방식
-        const link = document.createElement('a');
-        link.href = zipUrl;
-        // download 속성은 서버 헤더에 의존하므로 여기서는 설정하지 않음
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        // 상태 업데이트
-        statusInfo.textContent = `${itemList.length}개 항목 압축 다운로드 시작...`;
-        hideLoading();
-
-        // 임시 압축 파일 삭제 (다운로드 시작 후 10초 후)
-        setTimeout(() => {
-            fetch(`${API_BASE_URL}/webdav-api/files/${encodedZipPath}`, {
-                method: 'DELETE'
-            })
-            .then(response => { // 응답 상태 확인
-                if (!response.ok) {
-                     logWarn(`임시 압축 파일 삭제 요청 실패 (${response.status}): ${zipPath}`);
-                } else {
-                     logLog(`임시 압축 파일 삭제됨: ${zipPath}`);
-                }
-            })
-            .catch(err => {
-                logError('임시 압축 파일 삭제 중 네트워크 오류:', err);
-            });
-
-            // 상태 메시지 업데이트 (일정 시간 후 완료 메시지로)
-            // 완료 시점을 정확히 알 수 없으므로, 시작 메시지 유지 또는 일반 완료 메시지로 변경 고려
-            if (statusInfo.textContent === `${itemList.length}개 항목 압축 다운로드 시작...`) {
-                 statusInfo.textContent = `다운로드 완료`;
-            }
-        }, 10000); // 10초 후 삭제
-    })
-        */
     .catch(error => {
         hideLoading();
         showToast(`압축 오류: ${error.message}`, 'error');

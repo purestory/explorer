@@ -13,7 +13,7 @@ const archiver = require('archiver');
 const { promisify } = require('util');
 //const fs_stream = require('fs');
 const os = require('os'); // 추가: os 모듈
-
+const iconv = require('iconv-lite');
 
 
 const session = require('express-session');
@@ -1242,12 +1242,18 @@ app.get('/webdav-api/files/*', async (req, res) => {
         'xml': 'application/xml'
       };
       
-      // 직접 볼 수 있는 파일인지 확인
+      // backend/server.js 파일을 수정 (약 1245줄)
       if (viewableTypes.includes(fileExt)) {
-        res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
+        // 텍스트 파일인 경우 UTF-8 인코딩 명시
+        if (['txt', 'TXT', 'html', 'htm', 'css', 'js', 'json', 'xml'].includes(fileExt)) {
+          res.setHeader('Content-Type', `${mimeTypes[fileExt] || 'text/plain'}; charset=UTF-8`);
+        } else {
+          res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
+        }
         res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
         fs.createReadStream(fullPath).pipe(res); // 스트림 방식은 비동기
       } else {
+        // 원래 코드...
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
         res.download(fullPath, fileName, (err) => { // res.download도 비동기 처리
           if (err) {
