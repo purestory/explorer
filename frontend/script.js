@@ -1810,11 +1810,17 @@ function init() {
     // 파일 업로드 초기화 (upload.js 기능 사용)
 
     // 파일 업로드 초기화 (upload.js 기능 사용)
-    const uploadButton = document.querySelector('.btn-success');
-    if (uploadButton) {
-        uploadButton.addEventListener('click', () => document.getElementById('fileUpload').click());
+    // const uploadButton = document.querySelector('.btn-success');
+    // if (uploadButton) {
+    //     uploadButton.addEventListener('click', () => fileUploadInput.click());
+    // }
+
+    
+    // 기존에 작동하던 방식 - querySelector 대신 getElementById 사용
+    const uploadButton = document.querySelector('.btn-success'); // 실제 존재하는 선택자
+    if (uploadButton && fileUploadInput) {
+        uploadButton.addEventListener('click', () => fileUploadInput.click());
     }
-   
 
     // upload.js의 초기화 함수 호출
     if (typeof window.initializeUploader === 'function') {

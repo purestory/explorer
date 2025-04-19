@@ -1690,6 +1690,15 @@ h1 {
         flex-direction: column;
         align-items: flex-start;
     }
+
+    .search-box {
+        display: none !important;
+      }
+      
+      /* 모바일에서 버튼 아이콘 숨기기 */
+      .btn i {
+        display: none !important;
+      }
 }
 
 
