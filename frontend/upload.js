@@ -181,10 +181,12 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
         formData.append('file_0', file, encodeURIComponent(relativePath));
         formData.append('path', encodeURIComponent(targetPath));
         
+        // 원본 파일 날짜 정보 추가
         const fileInfo = [{
             originalName: file.name,
             relativePath: relativePath,
             size: file.size,
+            lastModified: file.lastModified, // 파일 수정 시간 추가
             index: 0
         }];
         formData.append('fileInfo', JSON.stringify(fileInfo));

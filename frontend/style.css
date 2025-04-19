@@ -1725,7 +1725,7 @@ h1 {
         width: 80%;
     }
 
-    .header-container {
+    .header-right {
         display: none; /* 모바일에서는 header-container 숨기기 */
     }
 

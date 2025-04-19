@@ -1853,7 +1853,7 @@ function init() {
             uploadOptions.classList.remove('show-dropdown'); // 메뉴 닫기
         });
     }
-    
+
     folderUploadInput.addEventListener('change', (event) => {
         if (event.target.files.length > 0) {
             // upload.js의 업로드 함수 활용
@@ -5166,7 +5166,7 @@ function initRules() {
     
     // 모달 헤더 스타일
     const modalHeader = rulesModal.querySelector('.modal-header');
-    modalHeader.style.padding = '15px 20px';
+    modalHeader.style.padding = '5px 5px';
     modalHeader.style.borderBottom = '1px solid #e9ecef';
     modalHeader.style.backgroundColor = '#f8f9fa';
     modalHeader.style.position = 'relative';
@@ -5181,7 +5181,7 @@ function initRules() {
     
     // 모달 푸터 스타일
     const modalFooter = rulesModal.querySelector('.modal-footer');
-    modalFooter.style.padding = '15px 20px';
+    modalFooter.style.padding = '5px 5px';
     modalFooter.style.borderTop = '1px solid #e9ecef';
     modalFooter.style.backgroundColor = '#f8f9fa';
     modalFooter.style.textAlign = 'right';
@@ -5325,7 +5325,7 @@ function convertMarkdownToHtml(markdown) {
                 html += '</ul>\n';
                 inList = false;
             }
-            html += `<h1>${line.substring(2)}</h1>\n`;
+            html += `<h2>${line.substring(2)}</h2>\n`;
         } 
         else if (line.startsWith('## ')) {
             if (inList) {

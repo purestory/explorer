@@ -686,9 +686,26 @@ app.post('/webdav-api/upload', uploadMiddleware.any(), async (req, res) => {
               throw renameError;
             }
           }
+
           // *** 파일 이동/복사 후에는 임시 파일이 없으므로 unlink 호출 제거 ***
           // await fs.promises.unlink(uploadedFile.path);
           // logWithIP(`[Upload Loop] 임시 파일 삭제 완료: ${uploadedFile.path}`, req, 'debug');
+                // 파일이 이동된 후 원본 수정 시간 설정
+          if (fileInfo.lastModified) {
+            try {
+                const lastModifiedDate = new Date(fileInfo.lastModified);
+                await fs.promises.utimes(
+                    targetFilePath, 
+                    lastModifiedDate, // 접근 시간
+                    lastModifiedDate  // 수정 시간
+                );
+                logWithIP(`[Upload] 파일 타임스탬프 복원: ${targetFilePath}`, req, 'debug');
+            } catch (timeError) {
+                errorLogWithIP(`[Upload] 파일 타임스탬프 설정 실패: ${targetFilePath}`, timeError, req);
+                // 타임스탬프 설정 실패는 치명적인 오류가 아니므로 계속 진행
+            }
+          }
+
 
           // 성공 결과 반환
           return {
@@ -700,6 +717,13 @@ app.post('/webdav-api/upload', uploadMiddleware.any(), async (req, res) => {
             truncated: pathCheckResult.truncated,
             isFolder: false  // 업로드된 파일은 항상 폴더가 아닙니다
           };
+
+
+
+
+
+
+
         } catch (writeError) {
           const errorMessage = `[Upload Loop] 파일 처리 오류 (${fileInfo.originalName}): ${writeError.message}`;
           errorLogWithIP(errorMessage, writeError, req);
