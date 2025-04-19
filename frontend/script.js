@@ -85,6 +85,16 @@ const gridViewBtn = document.getElementById('gridViewBtn');
 const listViewBtn = document.getElementById('listViewBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 
+
+// 업로드 드롭다운 메뉴 처리
+const uploadMainBtn = document.getElementById('uploadMainBtn');
+const uploadOptions = document.getElementById('uploadOptions');
+// const uploadFileBtn = document.getElementById('uploadFileBtn');
+// const uploadFolderBtn = document.getElementById('uploadFolderBtn');
+// const fileUploadInput = document.getElementById('fileUpload');
+// const folderUploadInput = document.getElementById('folderUpload');
+
+
 // UI에서 잘라내기, 붙여넣기, 이름변경 버튼 숨기기
 cutBtn.style.display = 'none';
 pasteBtn.style.display = 'none';
@@ -1809,41 +1819,9 @@ function init() {
     
     // 이름 변경 초기화
     initRenaming();
-    /*    
-    // 폴더 업로드 버튼 이벤트 처리
-    const folderUploadInput = document.getElementById('folderUpload');
-    const uploadFolderBtn = document.getElementById('uploadFolderBtn');
 
-    if (uploadFolderBtn) {
-        uploadFolderBtn.addEventListener('click', () => {
-            if (folderUploadInput) {
-                folderUploadInput.click();
-            }
-        });
-    }
 
-    // 폴더 업로드 input 변경 이벤트 (upload.js의 기능 활용)
-    if (folderUploadInput) {
-        folderUploadInput.addEventListener('change', (event) => {
-            if (event.target.files.length > 0) {
-                // upload.js의 업로드 함수 활용
-                const filesWithPaths = Array.from(event.target.files).map(file => {
-                    const relativePath = file.webkitRelativePath;
-                    return { file, relativePath };
-                });
-                
-                uploadFilesSequentially(filesWithPaths, currentPath);
-                event.target.value = null;
-            }
-        });
-    }
-
-    */
-    // 기존에 작동하던 방식 - querySelector 대신 getElementById 사용
-    // const uploadButton = document.querySelector('.btn-success'); // 실제 존재하는 선택자
-    // if (uploadButton && fileUploadInput) {
-    //     uploadButton.addEventListener('click', () => fileUploadInput.click());
-    // }
+    /*
     folderUploadInput.addEventListener('change', (event) => {
         if (event.target.files.length > 0) {
             // upload.js의 업로드 함수 활용
@@ -1858,6 +1836,53 @@ function init() {
     });    
     uploadFolderBtn.addEventListener('click', () => folderUploadInput.click());
     uploadFileBtn.addEventListener('click', () => fileUploadInput.click());
+    */
+
+    // 메인 업로드 버튼 클릭 시 드롭다운 표시
+    if (uploadMainBtn && uploadOptions) {
+        uploadMainBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 이벤트 버블링 방지
+            uploadOptions.classList.toggle('show-dropdown');
+        });
+    }
+
+    // 파일 업로드 버튼 클릭 처리
+    if (uploadFileBtn && fileUploadInput) {
+        uploadFileBtn.addEventListener('click', () => {
+            fileUploadInput.click();
+            uploadOptions.classList.remove('show-dropdown'); // 메뉴 닫기
+        });
+    }
+    
+    folderUploadInput.addEventListener('change', (event) => {
+        if (event.target.files.length > 0) {
+            // upload.js의 업로드 함수 활용
+            const filesWithPaths = Array.from(event.target.files).map(file => {
+                const relativePath = file.webkitRelativePath;
+                return { file, relativePath };
+            });
+            
+            uploadFilesSequentially(filesWithPaths, currentPath);
+            event.target.value = null;
+        }
+    });  
+    // 폴더 업로드 버튼 클릭 처리
+    if (uploadFolderBtn && folderUploadInput) {
+        uploadFolderBtn.addEventListener('click', () => {
+            folderUploadInput.click();
+            uploadOptions.classList.remove('show-dropdown'); // 메뉴 닫기
+        });
+    }
+
+    // 문서 클릭 시 드롭다운 닫기
+    document.addEventListener('click', (e) => {
+        if (uploadOptions && uploadOptions.classList.contains('show-dropdown')) {
+            if (!uploadOptions.contains(e.target) && e.target !== uploadMainBtn) {
+                uploadOptions.classList.remove('show-dropdown');
+            }
+        }
+    });
+
     // upload.js의 초기화 함수 호출
     if (typeof window.initializeUploader === 'function') {
         logLog('[Script] upload.js 초기화 함수 호출');

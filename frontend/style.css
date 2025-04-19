@@ -80,16 +80,7 @@ h1 {
     gap: 10px;
 }
 
-.btn {
-    padding: 8px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: background-color 0.2s;
-    position: relative;
-    z-index: 0;
-}
+
 
 .btn-primary {
     background-color: #007bff;
@@ -874,33 +865,6 @@ h1 {
     border-color: #007bff;
 }
 
-/* 모바일 반응형 */
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-    
-    .file-actions {
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    .search-box {
-        width: 100%;
-    }
-    
-    .search-box input {
-        width: 100%;
-    }
-    
-    .modal-content {
-        width: 90%;
-    }
-
-    .header-container {
-        display: none; /* 모바일에서는 header-container 숨기기 */
-    }
-}
 
 /* 저장소 정보 스타일 수정 */
 .storage-info {
@@ -1629,76 +1593,142 @@ h1 {
 
 
 
-/* 주요 액션 버튼 크기 통일 (새폴더, 업로드, 다운로드, 삭제) */
-#createFolder,
-#uploadFileBtn,
-#downloadBtn,
-#deleteBtn {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
+/* 모든 버튼에 동일한 크기 및 스타일 적용 */
+.btn {
+    border: none;
     border-radius: 4px;
-    margin-right: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+    position: relative;
+    z-index: 0;
+    min-width: 80px; /* 모든 버튼에 최소 너비 설정 */
+    text-align: center;
+    height: 38px; /* 모든 버튼에 고정 높이 설정 */
+    line-height: 1.5;
 }
 
-#createFolder i,
-#uploadFileBtn i,
-#downloadBtn i,
-#deleteBtn i {
-    margin-right: 5px;
-    font-size: 16px;
+.upload-dropdown {
+    position: relative;
+    display: flex; /* inline-block에서 flex로 변경 */
+    flex: 1; /* 부모의 flex 컨테이너 속성 상속 */
+}
+
+.upload-dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #fff;
+    min-width: 80px;
+    text-align: center;
+
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1000;
+    border-radius: 4px;
+    top: 100%;
+    left: 0;
+}
+
+.upload-dropdown-content button {
+    padding: 8px 12px;
+    width: 100%;
+    text-align: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: block;
+}
+
+.upload-dropdown-content button:hover {
+    background-color: #f1f1f1;
+}
+
+/* 드롭다운 표시 클래스 */
+.show-dropdown {
+    display: block;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 모바일에서도 아이콘과 메뉴 표시 */
+
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+
 }
 
 @media (max-width: 768px) {
-    .file-actions {
-        flex-direction: column;
-        gap: 10px;
-    }
-    
     .action-buttons {
         width: 100%;
+        display: flex;
         justify-content: space-between;
+        gap: 2px;
+
     }
     
-    #createFolder,
-    #uploadFileBtn,
-    #downloadBtn,
-    #deleteBtn {
-        flex: 1;
+
+    
+    #uploadMainBtn {
+        flex: 1 !important; /* 강제 적용 */
+        min-width: 60px;
+        height: 38px;
+        font-size: 0.85rem;
+    }
+
+    /* 모바일에서도 모든 버튼 크기 통일 */
+    .btn, .upload-dropdown button {
+        min-width: 60px;
+        height: 38px;
+        text-align: center;
+
+        font-size: 0.85rem;
         margin: 0 2px;
-        padding: 8px 5px;
-        font-size: 0.8rem;
+        flex: 1;
+        white-space: nowrap;
     }
     
-    #createFolder i,
-    #uploadFileBtn i,
-    #downloadBtn i,
-    #deleteBtn i {
-        margin-right: 3px;
-        font-size: 14px;
+    /* 드롭다운 메뉴 위치 조정 */
+    .upload-dropdown-content {
+        right: 0;
+        left: auto;
     }
     
-    .search-box {
-        width: 100%;
+    /* 드롭다운 내 버튼은 flex 속성 제거 */
+    .upload-dropdown-content button {
+        flex: none;
+        min-width: 80px;
     }
     
-    .modal-content {
-        width: 95%;
+    /* 모바일에서 버튼 아이콘 숨김, 드롭다운 내 아이콘 표시 */
+    .btn i {
+        display: none !important;
     }
     
-    .header-container {
-        flex-direction: column;
-        align-items: flex-start;
+    .upload-dropdown-content button i {
+        display: inline-block !important;
+        margin-right: 8px;
     }
+    
+    
 
     .search-box {
         display: none !important;
       }
-      
-      /* 모바일에서 버튼 아이콘 숨기기 */
-      .btn i {
-        display: none !important;
-      }
+
+    
+
+    
+    .modal-content {
+        width: 80%;
+    }
+
+    .header-container {
+        display: none; /* 모바일에서는 header-container 숨기기 */
+    }
+
 }
 
 
