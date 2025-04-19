@@ -58,7 +58,10 @@ const folderModal = document.getElementById('folderModal');
 const folderNameInput = document.getElementById('folderName');
 const createFolderConfirmBtn = document.getElementById('createFolderBtn');
 const cancelFolderBtn = document.getElementById('cancelFolderBtn');
+const uploadFileBtn = document.getElementById('uploadFileBtn');
 const fileUploadInput = document.getElementById('fileUpload');
+const uploadFolderBtn = document.getElementById('uploadFolderBtn');
+const folderUploadInput = document.getElementById('folderUpload');
 const cutBtn = document.getElementById('cutBtn');
 const pasteBtn = document.getElementById('pasteBtn');
 const renameBtn = document.getElementById('renameBtn');
@@ -1806,22 +1809,55 @@ function init() {
     
     // 이름 변경 초기화
     initRenaming();
-    
-    // 파일 업로드 초기화 (upload.js 기능 사용)
+    /*    
+    // 폴더 업로드 버튼 이벤트 처리
+    const folderUploadInput = document.getElementById('folderUpload');
+    const uploadFolderBtn = document.getElementById('uploadFolderBtn');
 
-    // 파일 업로드 초기화 (upload.js 기능 사용)
-    // const uploadButton = document.querySelector('.btn-success');
-    // if (uploadButton) {
-    //     uploadButton.addEventListener('click', () => fileUploadInput.click());
-    // }
-
-    
-    // 기존에 작동하던 방식 - querySelector 대신 getElementById 사용
-    const uploadButton = document.querySelector('.btn-success'); // 실제 존재하는 선택자
-    if (uploadButton && fileUploadInput) {
-        uploadButton.addEventListener('click', () => fileUploadInput.click());
+    if (uploadFolderBtn) {
+        uploadFolderBtn.addEventListener('click', () => {
+            if (folderUploadInput) {
+                folderUploadInput.click();
+            }
+        });
     }
 
+    // 폴더 업로드 input 변경 이벤트 (upload.js의 기능 활용)
+    if (folderUploadInput) {
+        folderUploadInput.addEventListener('change', (event) => {
+            if (event.target.files.length > 0) {
+                // upload.js의 업로드 함수 활용
+                const filesWithPaths = Array.from(event.target.files).map(file => {
+                    const relativePath = file.webkitRelativePath;
+                    return { file, relativePath };
+                });
+                
+                uploadFilesSequentially(filesWithPaths, currentPath);
+                event.target.value = null;
+            }
+        });
+    }
+
+    */
+    // 기존에 작동하던 방식 - querySelector 대신 getElementById 사용
+    // const uploadButton = document.querySelector('.btn-success'); // 실제 존재하는 선택자
+    // if (uploadButton && fileUploadInput) {
+    //     uploadButton.addEventListener('click', () => fileUploadInput.click());
+    // }
+    folderUploadInput.addEventListener('change', (event) => {
+        if (event.target.files.length > 0) {
+            // upload.js의 업로드 함수 활용
+            const filesWithPaths = Array.from(event.target.files).map(file => {
+                const relativePath = file.webkitRelativePath;
+                return { file, relativePath };
+            });
+            
+            uploadFilesSequentially(filesWithPaths, currentPath);
+            event.target.value = null;
+        }
+    });    
+    uploadFolderBtn.addEventListener('click', () => folderUploadInput.click());
+    uploadFileBtn.addEventListener('click', () => fileUploadInput.click());
     // upload.js의 초기화 함수 호출
     if (typeof window.initializeUploader === 'function') {
         logLog('[Script] upload.js 초기화 함수 호출');

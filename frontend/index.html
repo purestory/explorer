@@ -68,11 +68,12 @@
             <div class="file-actions">
                 <div class="action-buttons">
                     <button id="createFolder" class="btn btn-primary"><i class="fas fa-folder-plus"></i> 새폴더</button>
-          
-                            <button id="uploadFileBtn" class="btn btn-success"><i class="fas fa-file-upload"></i> 업로드</button>
-                            <input type="file" id="fileUpload" multiple style="display: none;">
-                
-               
+                    <button id="uploadFileBtn" class="btn btn-success"><i class="fas fa-file-upload"></i> 업로드</button>
+                    <input type="file" id="fileUpload" multiple style="display: none;">
+                    
+                    <!-- 폴더 업로드 버튼 추가 -->
+                    <button id="uploadFolderBtn" class="btn btn-success"><i class="fas fa-folder-upload"></i> 폴더</button>
+                    <input type="file" id="folderUpload" webkitdirectory directory multiple style="display: none;">
                     <button id="cutBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-cut"></i> 잘라내기</button>
                     <button id="pasteBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-paste"></i> 붙여넣기</button>
                     <button id="renameBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-edit"></i> 이름 변경</button>
