@@ -43,12 +43,12 @@ function showUploadModal(totalFiles = 0, completedFiles = 0) {
     if (!totalUploadSizeEl) totalUploadSizeEl = document.getElementById('total-upload-size');
     if (!resumeUploadBtn) resumeUploadBtn = document.getElementById('resumeUploadBtn');
     if (!cancelUploadBtn) cancelUploadBtn = document.getElementById('cancelUploadBtn');
-    
+    /*
     if (!uploadProgressModal || !overallProgressBar || !overallProgressText || !currentFileInfo || !uploadSpeed || !uploadTimeRemaining || !totalUploadSizeEl || !resumeUploadBtn || !cancelUploadBtn) {
         logError('[Upload] 필수 모달 요소(#upload-progress-modal, ...)를 찾을 수 없습니다.');
         return;
     }
-
+*/
     isCancelled = false;
     isPaused = false;
     cancelledFiles = [];

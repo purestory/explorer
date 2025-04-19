@@ -1808,26 +1808,14 @@ function init() {
     initRenaming();
     
     // 파일 업로드 초기화 (upload.js 기능 사용)
-    // initFileUpload(); // 기존 코드 주석 처리
-    
-    // 대신 업로드 버튼에 클릭 이벤트 추가
-    const uploadButton = document.querySelector('.upload-form .btn-success');
-    if (uploadButton) {
-        uploadButton.addEventListener('click', () => {
-            const fileUploadInput = document.getElementById('fileUpload');
-            if (fileUploadInput) {
-                showToast('업로드는 드래그 앤 드롭으로 하시는 것을 권장합니다.', 'info');
-                fileUploadInput.click(); // 파일 선택 창 열기
-                logLog('[Script] 업로드 버튼 클릭 - 파일 선택 대화상자 열기');
 
-            } else {
-                logError('[Script] 파일 업로드 입력 요소를 찾을 수 없습니다.');
-            }
-        });
-    } else {
-        logError('[Script] 업로드 버튼을 찾을 수 없습니다.');
+    // 파일 업로드 초기화 (upload.js 기능 사용)
+    const uploadButton = document.querySelector('.btn-success');
+    if (uploadButton) {
+        uploadButton.addEventListener('click', () => document.getElementById('fileUpload').click());
     }
-    
+   
+
     // upload.js의 초기화 함수 호출
     if (typeof window.initializeUploader === 'function') {
         logLog('[Script] upload.js 초기화 함수 호출');

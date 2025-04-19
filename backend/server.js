@@ -120,11 +120,8 @@ function setupLogStreams() {
   errorLogFile = fs.createWriteStream(path.join(LOGS_DIRECTORY, 'error.log'), { flags: 'a' });
 }
 
-// --- 로그 함수 수정 ---
-function log(message, levelName = 'debug') {
-  const level = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.debug;
-  if (level > currentLogLevel) return; // 현재 레벨보다 높은 레벨의 로그는 기록하지 않음
-
+// KST 타임스탬프 생성 함수 (중복 코드 제거)
+function getKSTTimestamp() {
   const now = new Date();
   const kstOffset = 9 * 60 * 60 * 1000;
   const kstDate = new Date(now.getTime() + kstOffset);
@@ -134,13 +131,20 @@ function log(message, levelName = 'debug') {
   const hours = kstDate.getUTCHours().toString().padStart(2, '0');
   const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
   const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
-  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
+}
 
-  // 로그 레벨 태그 제거
+// 로그 함수 개선
+function log(message, levelName = 'debug') {
+  const level = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.debug;
+  if (level > currentLogLevel) return; // 현재 레벨보다 높은 레벨의 로그는 기록하지 않음
+
+  const timestamp = getKSTTimestamp();
   const logMessage = `${timestamp} - ${message}\n`;
   logFile.write(logMessage);
 }
 
+// IP 정보 포함 로그 함수 개선
 function logWithIP(message, req, levelName = 'debug') {
   const level = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.debug;
   if (level > currentLogLevel) return;
@@ -155,37 +159,14 @@ function logWithIP(message, req, levelName = 'debug') {
          'unknown';
   }
 
-  const now = new Date();
-  const kstOffset = 9 * 60 * 60 * 1000;
-  const kstDate = new Date(now.getTime() + kstOffset);
-  const year = kstDate.getUTCFullYear();
-  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
-  const day = kstDate.getUTCDate().toString().padStart(2, '0');
-  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
-  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
-  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
-  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
-
-  // 로그 레벨 태그 제거, IP 정보는 유지
+  const timestamp = getKSTTimestamp();
   const logMessage = `${timestamp} - [IP: ${ip}] ${message}\n`;
   logFile.write(logMessage);
 }
 
-// errorLog 함수는 이제 setupLogStreams 호출 후 안전하게 errorLogFile 사용 가능
-function errorLog(message, error) { // 오류 로그는 항상 기록
-  const now = new Date();
-  // *** 누락된 timestamp 생성 로직 추가 ***
-  const kstOffset = 9 * 60 * 60 * 1000;
-  const kstDate = new Date(now.getTime() + kstOffset);
-  const year = kstDate.getUTCFullYear();
-  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
-  const day = kstDate.getUTCDate().toString().padStart(2, '0');
-  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
-  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
-  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
-  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
-  // *** 로직 추가 끝 ***
-  
+// 오류 로그 함수 개선
+function errorLog(message, error) {
+  const timestamp = getKSTTimestamp();
   const logMessage = `${timestamp} - ERROR: ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
   
   if (errorLogFile && errorLogFile.writable) { 
@@ -195,8 +176,8 @@ function errorLog(message, error) { // 오류 로그는 항상 기록
   }
 }
 
-function errorLogWithIP(message, error, req) { // 오류 로그는 항상 기록
-  // ... (ip 생성 로직) ...
+// IP 정보 포함 오류 로그 함수 개선
+function errorLogWithIP(message, error, req) {
   let ip = 'unknown';
   if (req && req.headers) {
       ip = req.headers['x-forwarded-for'] ||
@@ -207,19 +188,7 @@ function errorLogWithIP(message, error, req) { // 오류 로그는 항상 기록
            'unknown';
   }
 
-  const now = new Date();
-  // *** 누락된 timestamp 생성 로직 추가 ***
-  const kstOffset = 9 * 60 * 60 * 1000;
-  const kstDate = new Date(now.getTime() + kstOffset);
-  const year = kstDate.getUTCFullYear();
-  const month = (kstDate.getUTCMonth() + 1).toString().padStart(2, '0');
-  const day = kstDate.getUTCDate().toString().padStart(2, '0');
-  const hours = kstDate.getUTCHours().toString().padStart(2, '0');
-  const minutes = kstDate.getUTCMinutes().toString().padStart(2, '0');
-  const seconds = kstDate.getUTCSeconds().toString().padStart(2, '0');
-  const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} KST`;
-  // *** 로직 추가 끝 ***
-
+  const timestamp = getKSTTimestamp();
   const logMessage = `${timestamp} - ERROR: [IP: ${ip}] ${message} - ${error ? (error.stack || error.message || error) : 'Unknown error'}\n`;
 
   if (errorLogFile && errorLogFile.writable) {
@@ -228,8 +197,6 @@ function errorLogWithIP(message, error, req) { // 오류 로그는 항상 기록
     console.error(`[IP: ${ip}] ${message}`, error);
   }
 }
-
-
 
 
 // 최대 저장 용량 설정 (100GB)
@@ -241,41 +208,29 @@ const MAX_PATH_BYTES = 3800; // 일반적인 최대값보다 안전한 값으로
 const TRUNCATE_MARKER = '...'; // *** 누락된 상수 정의 추가 ***
 
 async function getDiskUsage() {
-  // const forceLogLevel = 'minimal'; // 로그 레벨 무시하고 항상 출력 <- 제거
-  let commandOutput = null; // exec 결과 저장 변수
+  let commandOutput = null;
 
   try {
     const command = `du -sb ${ROOT_DIRECTORY}`;
-    log(`[DiskUsage] Executing command: ${command}`, 'debug'); // 레벨 변경
+    log(`[DiskUsage] Executing command: ${command}`, 'debug');
 
-    // *** exec 결과 전체 로깅 ***
     commandOutput = await exec(command);
-    log(`[DiskUsage] exec result: ${JSON.stringify(commandOutput)}`, 'debug'); // 레벨 변경
-
     const { stdout, stderr } = commandOutput;
-    const stdoutTrimmed = stdout ? stdout.trim() : ''; // stdout이 null/undefined일 경우 대비
+    const stdoutTrimmed = stdout ? stdout.trim() : '';
 
-    log(`[DiskUsage] Raw stdout: [${stdoutTrimmed}]`, 'debug'); // 레벨 변경
     if (stderr) {
-      // Optional chaining 추가
-      errorLog(`[DiskUsage] du command stderr: [${stderr?.trim()}]`); 
+      errorLog(`[DiskUsage] du command stderr: [${stderr?.trim()}]`);
     }
 
-    // 파싱 시도
-    const outputString = stdoutTrimmed;
-    const match = outputString.match(/^(\d+)/); 
-    const parsedValue = match ? match[1] : null; // 파싱된 숫자 문자열
-    log(`[DiskUsage] Parsed value string: ${parsedValue}`, 'debug'); // 레벨 변경
-
-    const usedBytes = parsedValue ? parseInt(parsedValue, 10) : NaN;
-    log(`[DiskUsage] Parsed usedBytes (number): ${usedBytes}`, 'debug'); // 레벨 변경
+    const match = stdoutTrimmed.match(/^(\d+)/);
+    const usedBytes = match ? parseInt(match[1], 10) : NaN;
 
     if (isNaN(usedBytes)) {
-      errorLog('[DiskUsage] 디스크 사용량 파싱 오류: 숫자로 변환 실패', { stdout: outputString });
+      errorLog('[DiskUsage] 디스크 사용량 파싱 오류: 숫자로 변환 실패', { stdout: stdoutTrimmed });
       throw new Error('Failed to parse disk usage output.');
     }
 
-    log(`[DiskUsage] 디스크 사용량 조회 (파싱 성공): ${usedBytes} bytes`, 'info'); // 최종 결과는 info 레벨로 유지
+    log(`[DiskUsage] 디스크 사용량 조회: ${usedBytes} bytes`, 'info');
 
     return {
       used: usedBytes,
@@ -287,7 +242,7 @@ async function getDiskUsage() {
     errorLog('[DiskUsage] 디스크 사용량 확인 오류:', { 
         message: error.message, 
         stack: error.stack,
-        execResult: commandOutput // 오류 발생 시 exec 결과도 로깅
+        execResult: commandOutput
     });
     return {
       used: 0,
@@ -297,7 +252,6 @@ async function getDiskUsage() {
     };
   }
 }
-
 
 // WebDAV 서버 설정
 const server = new webdav.WebDAVServer({
@@ -313,35 +267,24 @@ const server = new webdav.WebDAVServer({
 const fileSystem = new webdav.PhysicalFileSystem(ROOT_DIRECTORY);
 server.setFileSystem('/', fileSystem);
 
-// CORS 설정
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Destination, Overwrite');
-  
-  // OPTIONS 요청 처리
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-  
-  next();
-});
-
-// backend/server.js
+// CORS 설정 통합
 app.use((req, res, next) => {
   const allowedOrigins = [
     'http://localhost:3000',
     'http://itsmyzone.iptime.org',
-    'https://webdav.netlify.app'  // Netlify 도메인
+    'https://webdav.netlify.app'
   ];
   
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    // origin이 허용 목록에 없으면 '*'로 설정하거나, 아래 라인을 제거하여 거부할 수 있음
+    res.header('Access-Control-Allow-Origin', '*');
   }
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Destination, Overwrite');
   
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -538,89 +481,98 @@ app.post('/webdav-api/upload', uploadMiddleware.any(), async (req, res) => {
     const processedFiles = [];
     const errors = [];
 
-    // 파일명 길이 제한 함수 (바이트 기준)
     function truncateFileName(filename) {
-      // !!!! 수정: 백슬래시도 경로 구분 문자로 처리 !!!!
-      const sanitizedFilename = filename.replace(/[\\/]/g, '_'); // <- 정규식 수정 (백슬래시 이스케이프)
-
+      // 백슬래시 및 슬래시를 모두 치환
+      const sanitizedFilename = filename.replace(/[\\/]/g, '_');
+    
       const originalBytes = Buffer.byteLength(sanitizedFilename);
-      log(`[Filename Check] 파일명 길이 확인 시작: ${sanitizedFilename} (${originalBytes} bytes)`, 'debug');
+      
+      // 이미 길이 제한 내에 있으면 그대로 반환
       if (originalBytes <= MAX_FILENAME_BYTES) {
         return sanitizedFilename;
       }
-      const extension = sanitizedFilename.lastIndexOf('.') > 0 ? sanitizedFilename.substring(sanitizedFilename.lastIndexOf('.')) : '';
-      const nameWithoutExt = sanitizedFilename.substring(0, sanitizedFilename.lastIndexOf('.') > 0 ? sanitizedFilename.lastIndexOf('.') : sanitizedFilename.length);
-      let truncatedName = nameWithoutExt;
-      while (Buffer.byteLength(truncatedName + '...' + extension) > MAX_FILENAME_BYTES) {
-        truncatedName = truncatedName.slice(0, -1);
-        if (truncatedName.length === 0) break;
+      
+      // 확장자 분리
+      const lastDotIndex = sanitizedFilename.lastIndexOf('.');
+      const extension = lastDotIndex > 0 ? sanitizedFilename.substring(lastDotIndex) : '';
+      const nameWithoutExt = lastDotIndex > 0 ? sanitizedFilename.substring(0, lastDotIndex) : sanitizedFilename;
+      
+      // 마커와 확장자가 차지하는 바이트 계산
+      const markerBytes = Buffer.byteLength(TRUNCATE_MARKER, 'utf8');
+      const extBytes = Buffer.byteLength(extension, 'utf8');
+      
+      // 이름 부분에 사용 가능한 최대 바이트
+      const maxNameBytes = MAX_FILENAME_BYTES - markerBytes - extBytes;
+      
+      // 이름이 너무 긴 경우 자르기
+      if (maxNameBytes <= 0) {
+        // 확장자가 너무 길어서 이름을 넣을 공간이 없는 경우
+        return TRUNCATE_MARKER + truncateBytes(extension, MAX_FILENAME_BYTES - markerBytes);
       }
-      const newFileName = truncatedName + '...' + extension;
-      log(`[Filename Check] 파일명 길이 제한 결과: '${newFileName}' (${Buffer.byteLength(newFileName)} bytes)`, 'debug');
-      return newFileName;
+      
+      // 이름 부분을 적절히 자름
+      const truncatedName = truncateBytes(nameWithoutExt, maxNameBytes);
+      
+      return truncatedName + TRUNCATE_MARKER + extension;
     }
 
-    // 경로 길이 확인 및 제한 함수
     function checkAndTruncatePath(fullPath) {
       const fullPathBytes = Buffer.byteLength(fullPath);
-      log(`[Path Check] 경로 길이 확인 시작: ${fullPath} (${fullPathBytes} bytes)`, 'debug');
+      
+      // 경로 길이가 제한 내에 있으면 그대로 반환
       if (fullPathBytes <= MAX_PATH_BYTES) {
         return { path: fullPath, truncated: false };
       }
-      log(`[Path Check] 경로가 너무 깁니다(Bytes: ${fullPathBytes}): ${fullPath}`);
+      
+      // 경로를 구성 요소로 분리
       const pathParts = fullPath.split(path.sep);
-      const driveOrRoot = pathParts[0] || '/';
-      const lastElement = pathParts[pathParts.length - 1];
-      const isLastElementFile = lastElement.includes('.');
-      const fileNameBytes = isLastElementFile ? Buffer.byteLength(lastElement) : 0;
-      const rootBytes = Buffer.byteLength(driveOrRoot);
-      const separatorBytes = (pathParts.length - 1) * Buffer.byteLength(path.sep);
-      const totalDirBytes = MAX_PATH_BYTES - fileNameBytes - rootBytes - separatorBytes;
-      const dirCount = isLastElementFile ? pathParts.length - 2 : pathParts.length - 1;
-      const avgMaxBytes = Math.max(20, Math.floor(totalDirBytes / (dirCount > 0 ? dirCount : 1)));
-      const truncatedParts = [driveOrRoot];
-      let bytesUsed = rootBytes + separatorBytes;
-      for (let i = 1; i < pathParts.length; i++) {
-        let part = pathParts[i];
-        const partBytes = Buffer.byteLength(part);
-        if (i === pathParts.length - 1 && isLastElementFile) {
-          if (partBytes > MAX_FILENAME_BYTES) {
-            part = truncateFileName(part);
-          }
-          truncatedParts.push(part);
-          continue;
-        }
-        if (partBytes > avgMaxBytes) {
-          let truncatedPart = '';
-          for (let j = 0; j < part.length; j++) {
-            const nextChar = part[j];
-            const potentialNew = truncatedPart + nextChar;
-            if (Buffer.byteLength(potentialNew + '...') <= avgMaxBytes) {
-              truncatedPart = potentialNew;
+      const rootPart = pathParts[0] || path.sep;
+      const fileName = pathParts[pathParts.length - 1];
+      
+      // 파일명과 루트 부분은 최대한 보존
+      const isFile = fileName.includes('.');
+      const preservedFileName = isFile ? truncateFileName(fileName) : fileName;
+      
+      // 중간 디렉토리 처리
+      const truncatedPath = [rootPart];
+      let bytesUsed = Buffer.byteLength(rootPart) + Buffer.byteLength(preservedFileName) + Buffer.byteLength(path.sep);
+      
+      // 중간 경로 항목을 적절히 줄이기
+      const middleParts = pathParts.slice(1, -1);
+      const availableBytes = MAX_PATH_BYTES - bytesUsed;
+      
+      if (middleParts.length > 0) {
+        // 각 중간 경로 항목에 할당할 수 있는 최대 바이트
+        const bytesPerPart = Math.floor(availableBytes / middleParts.length);
+        
+        if (bytesPerPart <= 5) {
+          // 중간 경로 항목을 전부 줄이기 어려운 경우, 일부만 유지
+          truncatedPath.push('...');
+        } else {
+          // 각 중간 경로 항목을 적절히 줄임
+          for (const part of middleParts) {
+            const partBytes = Buffer.byteLength(part);
+            if (partBytes <= bytesPerPart) {
+              truncatedPath.push(part);
             } else {
-              break;
+              truncatedPath.push(truncateBytes(part, bytesPerPart - 3) + '...');
             }
           }
-          if (truncatedPart.length === 0 && part.length > 0) {
-            truncatedPart = part.substring(0, 1);
-          }
-          part = truncatedPart + '...';
         }
-        truncatedParts.push(part);
-        bytesUsed += Buffer.byteLength(part) + Buffer.byteLength(path.sep);
       }
-      const truncatedPath = truncatedParts.join(path.sep);
-      const finalPathBytes = Buffer.byteLength(truncatedPath);
-      log(`[Path Check] 경로 길이 제한 결과: '${truncatedPath}' (${finalPathBytes} bytes)`, 'debug');
-      if (finalPathBytes > MAX_PATH_BYTES) {
-        const rootAndFile = isLastElementFile ? 
-          [driveOrRoot, truncateFileName(lastElement)] : 
-          [driveOrRoot, truncatedParts[truncatedParts.length - 1]];
-        const emergencyPath = rootAndFile.join(path.sep + '...' + path.sep);
-        log(`[Path Check] 비상 경로 축소: ${truncatedPath} → ${emergencyPath}`);
+      
+      truncatedPath.push(preservedFileName);
+      const result = truncatedPath.join(path.sep);
+      
+      // 최종 경로 길이 확인
+      const resultBytes = Buffer.byteLength(result);
+      if (resultBytes > MAX_PATH_BYTES) {
+        // 최대한 줄였지만 여전히 너무 긴 경우 비상 조치
+        const emergencyPath = [rootPart, '...', preservedFileName].join(path.sep);
         return { path: emergencyPath, truncated: true, emergency: true };
       }
-      return { path: truncatedPath, truncated: true };
+      
+      return { path: result, truncated: true };
     }
 
     // 4. 파일 처리 루프 (내부 비동기화 및 병렬 처리 제한)
@@ -1989,104 +1941,57 @@ app.post('/webdav-api/items/delete', async (req, res) => {
   // ... 기존 삭제 로직 (워커 사용) ...
 });
 
-// --- 폴더 잠금 관련 전역 변수 및 함수 --- 
-let lockedFolders = []; // 잠긴 폴더 경로 목록 (메모리 저장)
-const LOCK_FILE_PATH = path.join(__dirname, 'lockedFolders.json'); // !!!! 파일 이름 수정 !!!!
+// 전역 변수 선언 (배열 대신 Set 사용)
+let lockedFoldersSet = new Set();
+const LOCK_FILE_PATH = path.join(__dirname, 'lockedFolders.json');
 
-
-
-// 잠금 파일 로드 함수
+// 잠금 파일 로드 함수 개선
 async function loadLockedFolders() {
-  const filePath = path.join(__dirname, 'lockedFolders.json');
   try {
-      const data = await fs.promises.readFile(filePath, 'utf8');
-      const jsonData = JSON.parse(data);
-      lockedFolders = jsonData.lockState || [];
-      log(`잠금 폴더 로드됨: ${lockedFolders.length}개`, 'info');
+    const data = await fs.promises.readFile(LOCK_FILE_PATH, 'utf8');
+    const jsonData = JSON.parse(data);
+    
+    // 배열을 Set으로 변환
+    lockedFoldersSet = new Set(jsonData.lockState || []);
+    log(`잠금 폴더 로드됨: ${lockedFoldersSet.size}개`, 'info');
   } catch (error) {
-      if (error.code === 'ENOENT') {
-          log('잠금 폴더 파일이 없습니다. 새 파일을 생성합니다.', 'info');
-          lockedFolders = [];
-          await saveLockedFolders();
-      } else {
-          errorLog('잠금 폴더 로드 오류:', error);
-          lockedFolders = [];
-      }
-  }
-}
-// 잠금 파일 저장 함수
-async function saveLockedFolders() {
-  const filePath = path.join(__dirname, 'lockedFolders.json');
-  try {
-      await fs.promises.writeFile(filePath, JSON.stringify({ lockState: lockedFolders }, null, 2), 'utf8');
-      log('잠금 폴더 저장됨', 'info');
-  } catch (error) {
-      errorLog('잠금 폴더 저장 오류:', error);
-      throw error;
-  }
-}
-
-
-
-// *** isFolderLocked 함수 정의 추가 ***
-// 주어진 경로가 직접 잠겨 있는지만 확인하는 함수
-function isFolderLocked(targetPath) {
-  if (!targetPath) return false; // 빈 경로는 잠기지 않음
-  const normalizedTargetPath = targetPath.replace(/^\/+/, '').replace(/\/+$/, ''); // 정규화
-
-  // lockedFolders가 배열인지 확인
-  if (!Array.isArray(lockedFolders)) {
-    errorLog('lockedFolders가 배열이 아님:', lockedFolders);
-    return false;
-  }
-
-  if (lockedFolders.length === 0) {
-    return false;
-  }
-
-  // 주어진 경로가 잠긴 폴더 목록에 정확히 포함되는지만 확인
-  return lockedFolders.some(lockedPath => {
-    if (typeof lockedPath !== 'string') {
-      errorLog('lockedPath가 문자열이 아님:', lockedPath);
-      return false;
+    if (error.code === 'ENOENT') {
+      log('잠금 폴더 파일이 없습니다. 새 파일을 생성합니다.', 'info');
+      lockedFoldersSet = new Set();
+      await saveLockedFolders();
+    } else {
+      errorLog('잠금 폴더 로드 오류:', error);
+      lockedFoldersSet = new Set();
     }
-    const normalizedLockedPath = lockedPath.replace(/^\/+/, '').replace(/\/+$/, '');
-    return normalizedTargetPath === normalizedLockedPath;
-  });
+  }
 }
-// *** 함수 정의 끝 ***
 
-
-
-
-// ===== 테스트용 파일 업로드 라우트 시작 =====
-const testUploadStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const testUploadDir = path.join(ROOT_DIRECTORY, 'test-uploads');
-    // 테스트 디렉토리 생성 (없으면)
-    fs.promises.mkdir(testUploadDir, { recursive: true })
-      .then(() => cb(null, testUploadDir))
-      .catch(err => cb(err));
-  },
-  filename: function (req, file, cb) {
-    // 원본 파일명 사용 (테스트 목적)
-    cb(null, file.originalname);
+// 잠금 파일 저장 함수 개선
+async function saveLockedFolders() {
+  try {
+    // Set을 배열로 변환하여 저장
+    const lockArray = Array.from(lockedFoldersSet);
+    await fs.promises.writeFile(LOCK_FILE_PATH, JSON.stringify({ lockState: lockArray }, null, 2), 'utf8');
+    log('잠금 폴더 저장됨', 'info');
+  } catch (error) {
+    errorLog('잠금 폴더 저장 오류:', error);
+    throw error;
   }
-});
+}
 
-const testUploadMiddleware = multer({ storage: testUploadStorage });
+// 폴더 잠금 확인 함수 개선
+function isFolderLocked(targetPath) {
+  if (!targetPath) return false;
+  
+  // 경로 정규화
+  const normalizedPath = targetPath.replace(/^\/+/, '').replace(/\/+$/, '');
+  
+  // Set을 사용하여 O(1) 시간 복잡도로 확인
+  return lockedFoldersSet.has(normalizedPath);
+}
 
-app.post('/webdav-api/upload/test', testUploadMiddleware.single('testFile'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).send('테스트 파일이 업로드되지 않았습니다.');
-  }
-  logWithIP(`[Test Upload] 파일 '${req.file.originalname}'이(가) test-uploads 폴더에 저장되었습니다.`, req, 'info');
-  res.status(200).json({ 
-    message: '테스트 파일 업로드 성공', 
-    filename: req.file.originalname,
-    path: req.file.path 
-  });
-});
+
+
 // ===== 테스트용 파일 업로드 라우트 끝 =====
 
 // --- 서버 시작 전 임시 디렉토리 정리 함수 (추가) ---
