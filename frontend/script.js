@@ -1407,15 +1407,22 @@ function renderFiles(files) {
 
 // 폴더 탐색
 
-// 파일 다운로드
+// 파일 다운로드 함수 수정 - 강제 다운로드 실행
 function downloadFile(fileName) {
     const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
     // 경로에 한글이 포함된 경우를 위해 인코딩 처리
     const encodedPath = encodeURIComponent(filePath);
-    const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}`;
     
-    // 다운로드 링크를 새 창에서 열기
-    window.open(fileUrl, '_blank');
+    // 다운로드 모드로 파일을 요청하는 URL (download=true 쿼리 파라미터)
+    const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}?download=true`;
+    
+    // 다운로드 링크를 새 창에서 열지 않고 링크 엘리먼트 만들어 자동 클릭
+    const downloadLink = document.createElement('a');
+    downloadLink.href = fileUrl;
+    downloadLink.download = fileName; // 브라우저가 다운로드 모드로 처리하도록 download 속성 설정
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
     
     statusInfo.textContent = `${fileName} 다운로드 중...`;
     setTimeout(() => {
@@ -2163,15 +2170,17 @@ function handleFileClick(e, fileItem) {
 
 
 
+// 더블클릭 이벤트 핸들러 수정
 function handleFileDblClick(e, fileItem) {
     // 이벤트 버블링 방지
     e.preventDefault();
     e.stopPropagation();
     
-    // 컨텍스트 메뉴가 열려있으면 닫기 - 여기에 추가
+    // 컨텍스트 메뉴가 열려있으면 닫기
     if (contextMenu.style.display === 'block') {
         contextMenu.style.display = 'none';
     }
+    
     // 더블클릭 이벤트가 비활성화된 상태이면 무시
     if (window.doubleClickEnabled === false) {
         logLog('더블클릭 이벤트가 비활성화 상태입니다.');
@@ -2184,7 +2193,7 @@ function handleFileDblClick(e, fileItem) {
     
     logLog(`더블클릭 이벤트 발생: ${fileName}, 폴더: ${isFolder}, 상위폴더: ${isParentDir}`);
     
-    // 폴더 또는 상위 폴더인 경우 탐색 로직 통합
+    // 폴더 또는 상위 폴더인 경우 탐색
     if (isFolder) {
         // 더블클릭 이벤트를 비활성화하고 탐색 진행
         window.doubleClickEnabled = false;
@@ -2238,25 +2247,7 @@ function handleFileDblClick(e, fileItem) {
     }
     // 파일 처리 로직 (기존과 동일)
     else {
-        // 파일 확장자에 따라 처리
-        const fileExt = fileName.split('.').pop().toLowerCase();
-        const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
-        const encodedPath = encodeURIComponent(filePath);
-        
-        // 이미지, 비디오, PDF 등 브라우저에서 열 수 있는 파일 형식
-        const viewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
-                              'mp4', 'webm', 'ogg', 'mp3', 'wav', 
-                              'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'];
-        
-        if (viewableTypes.includes(fileExt)) {
-            // 직접 보기 모드로 URL 생성 (view=true 쿼리 파라미터 추가)
-            const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}?view=true`;
-            // 새 창에서 파일 열기
-            window.open(fileUrl, '_blank');
-    } else {
-            // 다운로드
-            downloadFile(fileName);
-        }
+        openFile(fileName);
         
         // 드래그 선택 상태 초기화
         resetDragSelectState();
@@ -2376,7 +2367,7 @@ async function deleteSelectedItems() {
         return;
     }
 
-    if (!confirm(`선택한 ${itemCount}개 항목을 삭제하시겠습니까?\n(대용량 폴더는 백그라운드에서 처리됩니다.)`)) {
+    if (!confirm(`선택한 ${itemCount}개 항목을 삭제하시겠습니까?\n(완전히 삭제되어 복구할 수 없습니다.)`)) {
         return;
     }
 
@@ -3160,7 +3151,7 @@ function initSearch() {
     });
 }
 
-// 선택된 파일 다운로드
+// 선택된 파일 다운로드 함수 수정
 function downloadSelectedItems() {
     if (selectedItems.size === 0) return;
     
@@ -3170,30 +3161,58 @@ function downloadSelectedItems() {
         const element = document.querySelector(`.file-item[data-id="${itemId}"]`);
         const isFolder = element.getAttribute('data-is-folder') === 'true';
         
-        // 단일 파일 경로 생성
-        const filePath = currentPath ? `${currentPath}/${itemId}` : itemId;
-        const encodedPath = encodeURIComponent(filePath);
-        const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}`;
-        
-        // 폴더인 경우에도 압축하여 다운로드
+        // 폴더인 경우에는 압축하여 다운로드
         if (isFolder) {
             compressAndDownload([itemId]);
             return;
         }
         
-        // 일반 파일은 다운로드 - 새 창에서 열기
-        window.open(fileUrl, '_blank');
-        
-        statusInfo.textContent = `${itemId} 다운로드 중...`;
-        setTimeout(() => {
-            statusInfo.textContent = `${itemId} 다운로드 완료`;
-        }, 1000);
-        
+        // 일반 파일은 강제 다운로드 모드로 처리
+        downloadFile(itemId);
         return;
     }
     
     // 여러 항목 선택 시 압축하여 다운로드
     compressAndDownload([...selectedItems]);
+}
+
+
+
+// 파일 열기 함수 구현 (더블클릭 시 사용)
+function openFile(fileName) {
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    const encodedPath = encodeURIComponent(filePath);
+    
+    // 브라우저에서 볼 수 있는 파일 확장자 목록
+    const viewableExtensions = [
+        // 이미지
+        'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 
+        // 비디오
+        'mp4', 'webm', 'ogg',
+        // 오디오
+        'mp3', 'wav', 
+        // 문서
+        'pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'xml'
+    ];
+    
+    // 파일 확장자 확인
+    const fileExt = fileName.split('.').pop().toLowerCase();
+    
+    // 뷰어로 파일 열기 URL
+    const fileUrl = `${API_BASE_URL}/webdav-api/files/${encodedPath}?view=true`;
+    
+    // 브라우저에서 열 수 있는 파일이면 새 창에서 열기
+    if (viewableExtensions.includes(fileExt)) {
+        window.open(fileUrl, '_blank');
+        
+        statusInfo.textContent = `${fileName} 열기...`;
+        setTimeout(() => {
+            statusInfo.textContent = `${fileName} 열기 완료`;
+        }, 1000);
+    } else {
+        // 열 수 없는 파일은 다운로드
+        downloadFile(fileName);
+    }
 }
 
 // (로그 기능 추가됨)
@@ -5174,7 +5193,7 @@ function initRules() {
     
     // 모달 바디 스타일 (스크롤 명시적 적용)
     const modalBody = rulesModal.querySelector('.modal-body');
-    modalBody.style.padding = '20px';
+    modalBody.style.padding = '5px';
     modalBody.style.overflow = 'auto';
     modalBody.style.flex = '1';
     modalBody.style.maxHeight = 'calc(90vh - 140px)'; // 헤더와 푸터 공간 감안

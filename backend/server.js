@@ -1284,27 +1284,35 @@ app.get('/webdav-api/files/*', async (req, res) => {
         'xml': 'application/xml'
       };
       
-      // backend/server.js 파일을 수정 (약 1245줄)
-      if (viewableTypes.includes(fileExt)) {
-        // 텍스트 파일인 경우 UTF-8 인코딩 명시
-        if (['txt', 'TXT', 'html', 'htm', 'css', 'js', 'json', 'xml'].includes(fileExt)) {
-          res.setHeader('Content-Type', `${mimeTypes[fileExt] || 'text/plain'}; charset=UTF-8`);
-        } else {
-          res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
-        }
-        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        fs.createReadStream(fullPath).pipe(res); // 스트림 방식은 비동기
+      // 다운로드 모드인지 확인 (쿼리 파라미터로 전달)
+      const forceDownload = req.query.download === 'true';
+      const viewMode = req.query.view === 'true';
+      
+      // 텍스트 파일인 경우 UTF-8 인코딩 명시
+      if (['txt', 'TXT', 'html', 'htm', 'css', 'js', 'json', 'xml'].includes(fileExt)) {
+        res.setHeader('Content-Type', `${mimeTypes[fileExt] || 'text/plain'}; charset=UTF-8`);
       } else {
-        // 원래 코드...
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        res.download(fullPath, fileName, (err) => { // res.download도 비동기 처리
-          if (err) {
-            errorLogWithIP(`파일 다운로드 중 오류: ${fullPath}`, err, req);
-          } else {
-            logWithIP(`파일 다운로드 완료: ${fullPath}`, req, 'info');
-          }
-        });
+        res.setHeader('Content-Type', mimeTypes[fileExt] || 'application/octet-stream');
       }
+      
+      // Content-Disposition 헤더 설정
+      if (forceDownload) {
+        // 강제 다운로드 모드
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+      } else if (viewMode && viewableTypes.includes(fileExt)) {
+        // 브라우저에서 열기 모드 (뷰어블 타입인 경우만)
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+      } else if (viewableTypes.includes(fileExt)) {
+        // 뷰어블 타입인 경우 기본적으로 인라인 표시
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+      } else {
+        // 나머지는 기본적으로 다운로드
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+      }
+      
+      // 스트림으로 파일 전송
+      fs.createReadStream(fullPath).pipe(res);
+      
       return;
     }
 
@@ -1425,6 +1433,9 @@ app.post('/webdav-api/files/:folderPath(*)', async (req, res) => {
     }
   }
 });
+
+
+
 
 // 파일/폴더 이름 변경 또는 이동 (시스템 명령어로 재수정)
 app.put('/webdav-api/files/*', express.json(), async (req, res) => {
