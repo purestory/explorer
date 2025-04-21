@@ -191,7 +191,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
         }];
         formData.append('fileInfo', JSON.stringify(fileInfo));
         
-        const uploadUrl = `${API_BASE_URL}/webdav-api/upload`;
+        const uploadUrl = `${API_BASE_URL}/explorer-api/upload`;
 
         let fileBytesUploaded = 0;
 

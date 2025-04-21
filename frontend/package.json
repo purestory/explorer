@@ -1,14 +1,13 @@
 {
-  "name": "webdav-explorer-frontend",
+  "name": "explorer-frontend",
   "version": "1.2.0",
-  "description": "WebDAV 파일 탐색기 프론트엔드",
+  "description": "파일 탐색기 프론트엔드",
   "scripts": {
     "start": "serve -s .",
     "dev": "serve -s . -l 3000"
   },
   "keywords": [
-    "webdav",
-    "file-explorer",
+    "explorer",
     "frontend"
   ],
   "author": "purestory",

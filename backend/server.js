@@ -1,5 +1,4 @@
 const express = require('express');
-const explorer = require('webdav-server').v2;
 const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
@@ -253,19 +252,7 @@ async function getDiskUsage() {
   }
 }
 
-// explorer 서버 설정
-const server = new explorer.WebDAVServer({
-  httpAuthentication: new explorer.HTTPBasicAuthentication(
-    async (username, password) => {
-      // 간단한 사용자 인증 (실제 서비스에서는 보안을 강화해야 함)
-      return username === 'admin' && password === 'admin';
-    }
-  )
-});
 
-// explorer 파일시스템 설정
-const fileSystem = new explorer.PhysicalFileSystem(ROOT_DIRECTORY);
-server.setFileSystem('/', fileSystem);
 
 // CORS 설정 통합
 app.use((req, res, next) => {
@@ -851,9 +838,6 @@ function formatDate(dateString) {
   const date = new Date(dateString);
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
 }
-
-// explorer 서버 구성
-app.use('/explorer', explorer.extensions.express('/explorer', server));
 
 // 디스크 사용량 확인 API
 app.get('/explorer-api/disk-usage', async (req, res) => { // *** async 추가 ***
