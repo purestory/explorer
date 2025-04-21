@@ -270,7 +270,7 @@ async function uploadSingleFile(file, targetPath, relativePath, totalFiles, uplo
     });
 }
 
-// --- 병렬 파일 업로드 관리 함수 (Netlify 환경에서는 순차 처리) ---
+// --- 병렬 파일 업로드 관리 함수 ---
 async function uploadFilesSequentially(filesWithPaths, uploadTargetPath, isResume = false) {
     targetPath = uploadTargetPath;
 
@@ -307,226 +307,157 @@ async function uploadFilesSequentially(filesWithPaths, uploadTargetPath, isResum
         totalUploadSizeEl.textContent = `업로드: ${formatFileSize(totalBytesUploaded)} / ${formatFileSize(initialTotalBytesToUpload)}`;
     }
 
-    logLog(`[Upload Manager] 총 ${totalFiles}개 파일 업로드 시작 (남은 파일: ${filesWithPaths.length}, 완료: ${completedFilesCount}). 대상 경로: ${targetPath}`);
+    logLog(`[Upload Parallel] 총 ${totalFiles}개 파일 병렬 업로드 시작 (남은 파일: ${filesWithPaths.length}, 완료: ${completedFilesCount}). 대상 경로: ${targetPath}`);
 
-    let CONCURRENT_UPLOADS = 3; // 기본값
+    let CONCURRENT_UPLOADS = 3;
     const queue = [...filesWithPaths];
     const activeUploads = [];
     const results = [];
-
-    // Netlify 환경 감지 및 동시 업로드 수 조정
-    const isNetlify = window.location.hostname.includes('netlify.app');
-    if (isNetlify) {
-        logLog('[Upload] Netlify 환경 감지됨. 동시 업로드 수를 1로 제한합니다.');
-        CONCURRENT_UPLOADS = 1;
-    } else {
-        // Netlify가 아닌 경우 기존 로직 적용 (파일 크기 기반 동시 업로드 수 결정)
-        if (filesWithPaths.length > 0) { // 파일이 있을 때만 maxFileSize 계산
-            try {
-                const maxFileSize = Math.max(...filesWithPaths.map(f => f.file.size));
-                if (maxFileSize > 500 * 1024 * 1024) { // 500MB 이상
-                    CONCURRENT_UPLOADS = 2;
-                } else if (maxFileSize > 100 * 1024 * 1024) { // 100MB 이상
-                    CONCURRENT_UPLOADS = 3;
-                } else { // 100MB 미만
-                    CONCURRENT_UPLOADS = 4;
-                }
-                logLog(`[Upload] 최대 파일 크기 ${formatFileSize(maxFileSize)}, 동시 업로드 수: ${CONCURRENT_UPLOADS}`);
-            } catch (e) {
-                logError('[Upload] maxFileSize 계산 오류:', e);
-                CONCURRENT_UPLOADS = 3; // 오류 발생 시 기본값 사용
-            }
-        } else {
-            CONCURRENT_UPLOADS = 1; // 업로드할 파일이 없으면 1로 설정 (무의미하지만 안전)
-        }
-    }
-
 
     let finishCallback = null;
     const allUploadsFinishedPromise = new Promise(resolve => {
         finishCallback = resolve;
     });
 
+
+    const maxFileSize = Math.max(...filesWithPaths.map(f => f.file.size));
+    if (maxFileSize > 500 * 1024 * 1024) { // 500MB 이상
+        CONCURRENT_UPLOADS = 2;
+    } else if (maxFileSize > 100 * 1024 * 1024) { // 100MB 이상
+        CONCURRENT_UPLOADS = 3;
+    } else{ // 100MB 이상
+        CONCURRENT_UPLOADS = 4;
+    }
+
+    logLog(`[Upload] 최대 파일 크기 ${formatFileSize(maxFileSize)}, 동시 업로드 수: ${CONCURRENT_UPLOADS}`);
+
     async function runNextUpload() {
-        if (isCancelled || isPaused) { // || queue.length === 0 <- 이 조건은 checkCompletion에서 처리
+        if (isCancelled || isPaused || queue.length === 0) {
             if (isPaused) {
                 // 중지 시 대기열과 진행 중인 파일을 cancelledFiles에 저장
-                cancelledFiles = [...queue]; // 남은 대기열 추가
-                logLog(`[Upload] 중지됨. 대기열 ${queue.length}개 저장됨.`);
-                // 활성 업로드 중단 시도는 uploadSingleFile의 onabort/onload에서 처리
-
-                // 활성 업로드 작업들이 완료되거나 중단될 때까지 기다릴 필요는 없음
-                // 중지 버튼 누르면 즉시 상태 업데이트하고 모달 유지
-
+                cancelledFiles = [...queue];
+                for (const uploadPromise of activeUploads) {
+                    const result = await uploadPromise;
+                    if (result.status === 'cancelled' && result.file) {
+                        const originalFile = filesWithPaths.find(f => f.relativePath === result.file);
+                        if (originalFile) {
+                            cancelledFiles.push(originalFile);
+                        }
+                    }
+                }
+                logLog(`[Upload] 중지됨. 완료: ${completedFilesCount}/${initialTotalFiles}, cancelledFiles에 ${cancelledFiles.length}개 파일 저장: ${cancelledFiles.map(f => f.relativePath).join(', ')}`);
                 if (typeof showToast === 'function') {
                     showToast('업로드가 중지되었습니다.', 'info');
                 }
-                // 중지 상태에서는 checkCompletion을 호출하여 Promise를 resolve하지 않음
-                return; // 여기서 중지
             }
-
-            // 취소된 경우 (isCancelled = true)
-             logLog(`[Upload] 취소됨. 활성 업로드 ${activeUploads.length}개, 대기열 ${queue.length}개 남음.`);
-             // 취소 시에도 진행 중인 XHR은 abort() 호출 (cancelUpload 함수에서 처리)
-             checkCompletion(); // 취소 시에는 완료 처리 로직으로 넘어감
-             return;
+            checkCompletion();
+            return;
         }
 
-
-        // 동시성 제어 및 큐 소모
-        while (activeUploads.length < CONCURRENT_UPLOADS && queue.length > 0) {
-            const { file, relativePath } = queue.shift();
-
-            const uploadPromise = uploadSingleFile(file, targetPath, relativePath, totalFiles, uploadedFileCounter)
-                .then(result => {
-                    results.push(result);
-                    if (result.status === 'success') {
-                        // uploadedFileCounter.count++; // uploadSingleFile 내부에서 처리하도록 이동 고려
-                        completedFilesCount++; // 성공 시 전역 카운터 증가
-                    }
-                    return result;
-                })
-                .catch(errorResult => {
-                    results.push(errorResult); // 실패 결과도 저장
-                    failedCount++; // 실패 카운터 증가
-                    failedFiles.push(errorResult.file || '알 수 없는 파일');
-                    logError(`[Upload Manager] 파일 업로드 실패 처리: ${errorResult.file}`, errorResult.error);
-                    // completedFilesCount는 증가시키지 않음
-                    return errorResult; // Promise 체인을 위해 결과 반환
-                })
-                .finally(() => {
-                    // Promise 완료 시 activeUploads에서 제거
-                    const index = activeUploads.findIndex(p => p === uploadPromise); // 정확한 promise 비교
-                    if (index > -1) {
-                        activeUploads.splice(index, 1);
-                    } else {
-                         logWarn('[Upload Manager] 완료된 Promise를 activeUploads에서 찾지 못했습니다.');
-                    }
-                     // 다음 작업 시작 또는 완료 확인
-                    checkCompletion(); // 완료 후 즉시 다음 작업 확인
-                    runNextUpload(); // 재귀 호출 대신 checkCompletion 후에 호출
-                });
-
-            activeUploads.push(uploadPromise);
+        if (activeUploads.length >= CONCURRENT_UPLOADS) {
+            return;
         }
-         // 추가: activeUploads가 비어있고 queue도 비어있으면 완료 처리
-         if (activeUploads.length === 0 && queue.length === 0) {
-             checkCompletion();
-         }
+
+        const { file, relativePath } = queue.shift();
+
+        const uploadPromise = uploadSingleFile(file, targetPath, relativePath, totalFiles, uploadedFileCounter)
+            .then(result => {
+                results.push(result);
+                if (result.status === 'success') {
+                    uploadedFileCounter.count++;
+                    completedFilesCount++; // 성공 시 전역 카운터 증가
+                }
+                return result;
+            })
+            .catch(errorResult => {
+                results.push(errorResult);
+                return errorResult;
+            })
+            .finally(() => {
+                const index = activeUploads.indexOf(uploadPromise);
+                if (index > -1) {
+                    activeUploads.splice(index, 1);
+                }
+                runNextUpload();
+            });
+
+        activeUploads.push(uploadPromise);
+        setTimeout(runNextUpload, 0);
     }
 
+    for (let i = 0; i < Math.min(CONCURRENT_UPLOADS, queue.length); i++) {
+        runNextUpload();
+    }
 
     function checkCompletion() {
-        logLog(`[Upload Check] 활성: ${activeUploads.length}, 대기열: ${queue.length}, 취소됨: ${isCancelled}, 중지됨: ${isPaused}`);
-        // 중지 상태가 아니고, 활성 업로드와 대기열이 모두 비었을 때 완료 처리
-        if (!isPaused && activeUploads.length === 0 && queue.length === 0) {
-             logLog('[Upload Check] 모든 업로드 완료 또는 취소됨. finishCallback 호출.');
-            if (finishCallback) {
-                 finishCallback(); // Promise 해결
-                 finishCallback = null; // 중복 호출 방지
-            }
+        if (activeUploads.length === 0 && queue.length === 0) {
+            finishCallback();
         }
     }
 
+    await allUploadsFinishedPromise;
 
-    // 초기 업로드 시작
-    logLog(`[Upload Manager] 초기 업로드 시작 (동시 ${CONCURRENT_UPLOADS}개)`);
-    runNextUpload(); // 최초 실행
-
-
-    await allUploadsFinishedPromise; // 모든 작업이 완료될 때까지 대기 (중지 시에는 여기 도달 안 함)
-
-    logLog(`[Upload Manager] allUploadsFinishedPromise 해결됨. isPaused: ${isPaused}, isCancelled: ${isCancelled}`);
-
-
-    // --- 결과 처리 ---
-    // successCount는 results 배열을 기반으로 다시 계산하는 것이 더 정확할 수 있음
-    successCount = results.filter(r => r.status === 'success').length;
-    // failedCount 와 failedFiles 는 catch 블록에서 이미 처리됨
-    cancelledCount = results.filter(r => r.status === 'cancelled').length;
-
+    results.forEach(result => {
+        if (result.status === 'success') {
+            successCount++;
+            // completedFilesCount는 uploadPromise 내에서 이미 증가
+        } else if (result.status === 'failed') {
+            failedCount++;
+            failedFiles.push(result.file || '알 수 없는 파일');
+            logError(`[Upload Parallel] 파일 업로드 실패: ${result.file}`, result.error);
+        } else if (result.status === 'cancelled') {
+            cancelledCount++;
+        }
+    });
 
     if (isPaused) {
-        logLog('[Upload Manager] 업로드 중지 상태. 모달 유지.');
-        // 중지 상태에서는 추가 처리 없이 함수 종료 (모달은 열려 있음)
-        return;
+        return; // 모달 유지
     } else if (isCancelled) {
-         logLog('[Upload Manager] 업로드 취소됨.');
-         // 취소 시 남은 큐 아이템도 취소 카운트에 포함 (이미 XHR abort됨)
-         cancelledCount += queue.length; // queue는 비어있어야 하지만 안전하게 추가
-         cancelledFiles = []; // 정리
-         queue.length = 0; // 정리
-         // completedFilesCount는 성공한 파일 수 유지
-         initialTotalFiles = 0; // 초기화
-         initialTotalBytesToUpload = 0; // 초기화
-         totalBytesUploaded = 0; // 초기화
-         hideUploadModal(); // 모달 닫기
+        cancelledCount += queue.length;
+        cancelledFiles = [];
+        queue.length = 0;
+        // completedFilesCount는 유지
+        initialTotalFiles = 0;
+        initialTotalBytesToUpload = 0;
+        hideUploadModal();
     } else {
-         // 정상 완료 또는 실패 포함 완료
-         logLog('[Upload Manager] 업로드 완료됨.');
-         cancelledFiles = []; // 정리
-         hideUploadModal(); // 모달 닫기
+        cancelledFiles = [];
+        hideUploadModal();
     }
 
-
-    // --- 최종 메시지 표시 ---
     if (typeof showToast === 'function') {
         let finalMessage = '';
         let messageType = 'info';
 
-
-        // 시나리오별 메시지 구성
-        if (isCancelled) {
-            finalMessage = `업로드가 취소되었습니다. (${completedFilesCount}개 완료)`;
-            messageType = 'warning';
-        } else if (failedCount > 0) {
+        if (failedCount > 0) {
             finalMessage = `${successCount}개 성공, ${failedCount}개 실패.`;
-            // cancelledCount는 0이어야 함 (취소되지 않았으므로)
-            // finalMessage += ` 실패 목록: ${failedFiles.join(', ')}`.substring(0, 200);
+            if (cancelledCount > 0) finalMessage += ` ${cancelledCount}개 취소.`;
+            finalMessage += ` 실패 목록: ${failedFiles.join(', ')}`.substring(0, 200);
             messageType = 'warning';
-             // 실패 목록은 콘솔에서 확인 가능하도록 유도하거나, 별도 UI 필요
-             logError(`[Upload Result] 실패 파일 목록: ${failedFiles.join(', ')}`);
-        } else if (successCount === totalFiles && totalFiles > 0) {
+        } else if (cancelledCount > 0 && !isPaused) {
+            finalMessage = `업로드가 취소되었습니다. (${completedFilesCount}/${totalFiles} 완료)`;
+            messageType = 'warning';
+        } else if (completedFilesCount === totalFiles && totalFiles > 0) {
             finalMessage = `${totalFiles}개 파일 업로드를 완료했습니다.`;
             messageType = 'success';
-        } else if (totalFiles === 0 && !isResume) {
-             // 업로드할 파일이 애초에 없었던 경우 (위에서 return했지만 방어 코드)
-             finalMessage = '업로드할 파일이 없습니다.';
-             messageType = 'info';
-        } else if (successCount < totalFiles && successCount > 0) {
-             // 일부만 성공하고 나머지는 알 수 없는 이유로 누락된 경우 (이론상 없어야 함)
-             finalMessage = `일부 파일(${successCount}/${totalFiles})만 업로드되었습니다.`;
-             messageType = 'warning';
-        } else if (successCount === 0 && failedCount === 0 && cancelledCount === 0 && totalFiles > 0) {
-             // 아무 일도 일어나지 않은 경우?
-             finalMessage = '업로드 작업 상태를 알 수 없습니다.';
-             messageType = 'error';
+        } else {
+            finalMessage = `업로드 작업 완료 (${successCount} 성공, ${failedCount} 실패, ${cancelledCount} 취소)`;
+            messageType = 'info';
         }
 
-
         if (finalMessage) {
-            logLog(`[Upload Result] 최종 메시지: "${finalMessage}" (type: ${messageType})`);
             showToast(finalMessage, messageType, failedCount > 0 ? 10000 : 5000);
-        } else {
-             logWarn('[Upload Result] 최종 메시지가 생성되지 않았습니다.');
         }
     }
 
-
-    // --- 파일 목록 새로고침 ---
-    // 성공 또는 실패한 파일이 하나라도 있으면 새로고침
-    if (!isCancelled && !isPaused && (successCount > 0 || failedCount > 0)) {
+    if (typeof loadFiles === 'function' && (successCount > 0 || failedCount > 0)) {
         let refreshDelay = totalFiles <= 100 ? 300 : totalFiles <= 1000 ? 1000 : 2000;
         setTimeout(() => {
             logLog(`[Upload] 업로드 완료/실패 후 파일 목록 새로고침 시작 (파일 수: ${totalFiles}, 대기 시간: ${refreshDelay}ms)`);
-            if (typeof loadFiles === 'function' && typeof currentPath !== 'undefined') {
-                loadFiles(currentPath);
-            } else {
-                 logWarn('[Upload] loadFiles 함수 또는 currentPath를 찾을 수 없어 새로고침을 건너<0xEB><0x9B><0x81>니다.');
-            }
+            loadFiles(typeof currentPath !== 'undefined' ? currentPath : '');
         }, refreshDelay);
     } else {
-        logLog(`[Upload] 파일 목록 새로고침 건너<0xEB><0x9B><0x81>니다 (취소됨: ${isCancelled}, 중지됨: ${isPaused}, 성공: ${successCount}, 실패: ${failedCount}).`);
+        logLog('[Upload] 파일 목록 새로고침 건너뜀 (성공/실패 파일 없음).');
     }
 }
 
