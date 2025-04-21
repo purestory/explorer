@@ -1,1 +1,1 @@
-/webdav-api/*  http://itsmyzone.iptime.org/webdav-api/:splat  200!
+/explorer-api/*  http://itsmyzone.iptime.org/explorer-api/:splat  200!
