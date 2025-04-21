@@ -106,7 +106,7 @@ if (!operation || !targetPath) {
       }
 
       // 임시 폴더 경로 설정 (수정된 부분 - 절대 경로 사용)
-      const tmpDir = '/home/purestory/webdav/backend/tmp';
+      const tmpDir = '/home/purestory/explorer/backend/tmp';
       
       log(`실제 임시 폴더 경로: ${tmpDir}`, 'info'); // 경로 로깅 추가
       

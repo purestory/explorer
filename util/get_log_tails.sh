@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # 로그 디렉토리 설정
-LOG_DIR="/home/purestory/webdav/backend/logs"
-TMP_DIR="/home/purestory/webdav/backend/tmp"
+LOG_DIR="/home/purestory/explorer/backend/logs"
+TMP_DIR="/home/purestory/explorer/backend/tmp"
 
 # tmp 디렉토리가 없으면 생성
 mkdir -p "$TMP_DIR"

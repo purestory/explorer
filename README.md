@@ -1,6 +1,6 @@
-# WebDAV 파일 탐색기
+# explorer 파일 탐색기
 
-Express.js와 WebDAV 서버를 기반으로 구현된 파일 탐색기 웹 애플리케이션입니다.
+Express.js와 explorer 서버를 기반으로 구현된 파일 탐색기 웹 애플리케이션입니다.
 
 ## 주요 기능
 
@@ -13,22 +13,22 @@ Express.js와 WebDAV 서버를 기반으로 구현된 파일 탐색기 웹 애�
 
 ## 구조
 
-- `backend/`: 서버 코드 (Express.js, WebDAV)
+- `backend/`: 서버 코드 (Express.js, explorer)
 - `frontend/`: 클라이언트 코드 (HTML, CSS, JavaScript)
 - `코드분석.md`: 프론트엔드 코드 분석 문서
 - `백엔드_코드분석.md`: 백엔드 코드 분석 문서
 
 ## 기술 스택
 
-- **백엔드**: Node.js, Express.js, webdav-server
+- **백엔드**: Node.js, Express.js, explorer-server
 - **프론트엔드**: HTML, CSS, JavaScript (바닐라)
 
 ## 설치 및 실행
 
 1. 저장소 클론
    ```
-   git clone https://github.com/purestory/webdav.git
-   cd webdav
+   git clone https://github.com/purestory/explorer.git
+   cd explorer
    ```
 
 2. 백엔드 설치 및 실행
@@ -42,8 +42,8 @@ Express.js와 WebDAV 서버를 기반으로 구현된 파일 탐색기 웹 애�
    ```
    
    http://itsmyzone.iptime.org:3333
-   http://itsmyzone.iptime.org/webdav
-   http://itsmyzone.iptime.org/webdav/
+   http://itsmyzone.iptime.org/explorer
+   http://itsmyzone.iptime.org/explorer/
    ```
 
 ## 특징
@@ -51,7 +51,7 @@ Express.js와 WebDAV 서버를 기반으로 구현된 파일 탐색기 웹 애�
 - 모놀리식 구조의 간단한 설계
 - 상세한 로깅 시스템
 - 복잡한 파일명 및 경로 처리 지원
-- WebDAV 프로토콜 지원
+- explorer 프로토콜 지원
 
 ## 기능
 
@@ -85,14 +85,14 @@ Express.js와 WebDAV 서버를 기반으로 구현된 파일 탐색기 웹 애�
 ## 기술 스택
 
 - **프론트엔드**: HTML, CSS, JavaScript
-- **백엔드**: Node.js, Express, WebDAV-Server
+- **백엔드**: Node.js, Express, explorer-Server
 - **웹 서버**: Nginx
-- **프로토콜**: WebDAV
+- **프로토콜**: explorer
 
 ## 프로젝트 구조
 
 ```
-webdav/
+explorer/
 ├── frontend/             # 프론트엔드 코드
 │   ├── index.html        # 메인 HTML 파일
 │   ├── style.css         # 스타일시트
@@ -117,12 +117,12 @@ webdav/
 
 1. 저장소 클론:
 ```
-git clone https://github.com/purestory/webdav.git
+git clone https://github.com/purestory/explorer.git
 ```
 
 2. 필요한 패키지 설치:
 ```
-cd webdav-explorer
+cd explorer-explorer
 npm run install-all
 ```
 
@@ -152,23 +152,23 @@ npm run frontend
 
 1. systemd 서비스 파일 생성:
 ```
-sudo nano /etc/systemd/system/webdav.service
+sudo nano /etc/systemd/system/explorer.service
 ```
 
 2. 다음 내용 작성:
 ```
 [Unit]
-Description=WebDAV Server
+Description=explorer Server
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/node /home/purestory/webdav/backend/server.js
+ExecStart=/usr/bin/node /home/purestory/explorer/backend/server.js
 Restart=always
 User=purestory
 Group=purestory
 Environment=PATH=/usr/bin:/usr/local/bin
 Environment=NODE_ENV=production
-WorkingDirectory=/home/purestory/webdav
+WorkingDirectory=/home/purestory/explorer
 
 [Install]
 WantedBy=multi-user.target
@@ -176,8 +176,8 @@ WantedBy=multi-user.target
 
 3. 서비스 활성화 및 시작:
 ```
-sudo systemctl enable webdav
-sudo systemctl start webdav
+sudo systemctl enable explorer
+sudo systemctl start explorer
 ```
 
 ## Nginx 연동 설정
@@ -208,7 +208,7 @@ server {
         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
     }
     
-    # WebDAV API 경로 프록시
+    # explorer API 경로 프록시
     location /api/ {
         proxy_pass http://localhost:3333/api/;
         proxy_http_version 1.1;
@@ -219,9 +219,9 @@ server {
         proxy_read_timeout 300s;
     }
     
-    # WebDAV 서버 경로 프록시
-    location /webdav/ {
-        proxy_pass http://localhost:3333/webdav/;
+    # explorer 서버 경로 프록시
+    location /explorer/ {
+        proxy_pass http://localhost:3333/explorer/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -229,19 +229,19 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
         
-        # WebDAV 메서드 지원
+        # explorer 메서드 지원
         proxy_pass_request_headers on;
         proxy_set_header Destination $http_destination;
         proxy_set_header Overwrite $http_overwrite;
         
-        # WebDAV 메서드 허용
+        # explorer 메서드 허용
         proxy_method $request_method;
         proxy_pass_request_body on;
     }
     
     # 정적 파일 서비스
     location /static/ {
-        alias /home/purestory/webdav/frontend/;
+        alias /home/purestory/explorer/frontend/;
         expires 1d;
         add_header Cache-Control "public";
     }
@@ -251,8 +251,8 @@ server {
 ## 주요 설정
 
 - **최대 업로드 크기**: 10GB
-- **공유 폴더 위치**: /home/purestory/webdav/backend/share-folder
-- **로그 파일 위치**: /home/purestory/webdav/backend/logs/
+- **공유 폴더 위치**: /home/purestory/explorer/backend/share-folder
+- **로그 파일 위치**: /home/purestory/explorer/backend/logs/
 
 ## 문제 해결
 
@@ -279,18 +279,18 @@ sudo kill <PID>
 
 서비스 상태 확인:
 ```
-systemctl status webdav
+systemctl status explorer
 ```
 
 서비스 로그 확인:
 ```
-journalctl -u webdav --since today
+journalctl -u explorer --since today
 ```
 
 ## 개발 정보
 
 - **개발자**: purestory
-- **GitHub**: https://github.com/purestory/webdav
+- **GitHub**: https://github.com/purestory/explorer
 - **라이선스**: MIT
 
 ## 주의사항
