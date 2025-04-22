@@ -2183,7 +2183,7 @@ app.get('/explorer-api/system-status', async (req, res) => {
 });
 
 
-
+/*
 // 폴더별 암호 인증 미들웨어 (기존 lockedFolders 변수를 재사용)
 app.use('/locked-folder', (req, res, next) => {
   const folderPath = req.path;  // 진입하려는 폴더 경로
@@ -2205,7 +2205,7 @@ app.post('/login', (req, res) => {
       res.status(401).send('잘못된 암호 또는 폴더');
   }
 });
-
+*/
 // 만약 lockedFolders가 아직 정의되지 않았다면, 여기에 로드 로직 추가 예시
 if (typeof lockedFolders === 'undefined') {
   const lockedFoldersData = require('./lockedFolders.json');  // 필요한 경우 로드
