@@ -423,10 +423,12 @@ app.use((req, res, next) => {
 
 // 메인 페이지
 app.get('/', (req, res) => {
-  // 이미 로그인 상태라면 /main으로 리디렉션 (선택 사항)
+  // <<<--- 바로 여기에서 세션 확인 후 리디렉션합니다! --->>>
   if (req.session.loggedIn) {
-    res.redirect('/main');
+    // 세션에 로그인 정보(loggedIn=true)가 있으면 /explorer/main 으로 리디렉션
+    res.redirect('/explorer/main'); // 경로 수정
   } else {
+    // 로그인 정보가 없으면 index.html(로그인 페이지) 전송
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
   }
 });
@@ -2300,11 +2302,31 @@ startServer(); // 서버 시작 함수 호출
 
 // <<<--- main.html 접근 제어 라우트 추가 --->>>
 app.get('/main', (req, res) => {
+  // <<<--- 바로 여기에서 세션을 확인합니다! --->>>
   if (req.session.loggedIn) {
-    // 세션에 로그인 정보가 있으면 main.html 파일 전송
+    // 세션에 로그인 정보(loggedIn=true)가 있으면 main.html 파일 전송
     res.sendFile(path.join(__dirname, '../frontend/main.html'));
   } else {
-    // 로그인 정보 없으면 로그인 페이지로 리디렉션
-    res.redirect('/'); 
+    // 로그인 정보 없으면 로그인 페이지('/explorer/')로 리디렉션
+    res.redirect('/explorer/'); // 경로 수정
   }
+});
+
+// <<<--- 로그아웃 라우트 추가 (/explorer/logout) --->>>
+app.get('/logout', (req, res) => {
+  req.session.destroy((err) => { // 세션 파괴 시도
+    if (err) {
+      // 에러 처리 (예: 로깅)
+      errorLog('세션 삭제 중 에러 발생:', err, req); // IP 로깅 추가
+      return res.status(500).send("로그아웃 처리 중 오류가 발생했습니다.");
+    }
+
+    // (선택 사항) 클라이언트 측 쿠키 삭제
+    // session 미들웨어 설정에서 name 옵션을 확인하세요.
+    const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'connect.sid';
+    res.clearCookie(sessionCookieName);
+
+    // 로그아웃 성공 후 로그인 페이지('/explorer/')로 리디렉션
+    res.redirect('/explorer/'); // 경로 수정
+  });
 });
