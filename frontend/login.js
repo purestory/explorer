@@ -30,8 +30,8 @@ loginForm.addEventListener('submit', async (event) => { // async 추가
         const data = await response.json();
 
         if (response.ok && data.success) {
-            // 성공 시 메인 페이지 라우트로 이동 (/main)
-            window.location.href = "/main"; // 경로 수정: /explorer/main -> /main
+            // 성공 시 메인 페이지 라우트로 이동 (상대 경로)
+            window.location.href = "main"; // 경로 수정: /main -> main (상대 경로)
         } else {
             // 실패 시 오류 메시지 표시
             errorMessage.textContent = data.message || '접근 코드가 유효하지 않습니다.';
