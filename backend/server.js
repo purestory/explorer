@@ -1,3 +1,6 @@
+// .env 파일 로드 (반드시 다른 코드보다 먼저 실행되어야 함)
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -2242,3 +2245,46 @@ app.post('/explorer-api/verify-folder-password', express.json(), async (req, res
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 });
+
+// <<<--- 새로운 로그인 접근 코드 검증 API 추가 --->>>
+app.post('/explorer-api/verify-access', express.json(), (req, res) => {
+  const { password } = req.body;
+
+  // !!! 중요: 실제 비밀번호는 환경 변수 등 안전한 곳에서 가져와야 합니다 !!!
+  const actualPassword = process.env.ACCESS_PASSWORD || "default_insecure_password"; // 예: 환경 변수 ACCESS_PASSWORD 사용
+
+  if (!actualPassword || actualPassword === "default_insecure_password") {
+    errorLog('보안 경고: 서버 접근 비밀번호가 환경 변수(ACCESS_PASSWORD)에 설정되지 않았습니다.');
+    // 실제 운영 환경에서는 기본 비밀번호 허용 대신 오류를 반환해야 할 수 있습니다.
+  }
+
+  if (!password) {
+    return res.status(400).json({ success: false, message: '비밀번호가 제공되지 않았습니다.' });
+  }
+
+  if (password === actualPassword) {
+    logWithIP('AI 포털 접근 코드 검증 성공', req, 'info');
+    res.json({ success: true });
+  } else {
+    logWithIP('AI 포털 접근 코드 검증 실패', req, 'warning');
+    res.status(401).json({ success: false, message: '접근 코드가 유효하지 않습니다.' });
+  }
+});
+// <<<--- API 추가 끝 --->>>
+
+// --- 서버 시작 로직 ---
+async function startServer() {
+  await initializeDirectories(); // 디렉토리 초기화 및 로그 스트림 설정 완료 대기
+  // setupLogStreams(); // 여기서 호출 제거
+
+  // *** 서버 시작 전 임시 디렉토리 정리 (추가) ***
+  await cleanupTmpDirectory(); 
+
+  // 서버 리스닝 시작
+  app.listen(PORT, () => {
+    log(`서버가 ${PORT} 포트에서 실행 중입니다. 로그 레벨: ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === currentLogLevel)}`, 'minimal');
+    log(`explorer 서버: http://localhost:${PORT}/explorer`, 'info');
+  });
+}
+
+startServer(); // 서버 시작 함수 호출

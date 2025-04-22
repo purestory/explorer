@@ -3,280 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>인터넷 탐색기</title>
-    <link rel="stylesheet" href="fontawesome/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text x=%2250%22 y=%22.9em%22 font-size=%2290%22 text-anchor=%22middle%22>☁️</text></svg>">
-</head>
-<body>
+    <title>AI Portal Access</title>
     <style>
-        
-        #serverStatus {
+        @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap");
+
+        :root {
+            --bg-color: #1a1a2e;
+            --primary-color: #e94560;
+            --secondary-color: #16213e;
+            --font-color: #e0e0e0;
+            --input-bg: #2a2a4e;
+            --button-bg: #0f3460;
+            --button-hover-bg: #1a5f7a;
+            --error-color: #ff6b6b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Noto Sans KR", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--font-color);
             display: flex;
+            justify-content: center;
             align-items: center;
-            margin-right: 15px;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(15, 52, 96, 0.3), transparent 60%),
+                radial-gradient(circle at 80% 70%, rgba(233, 69, 96, 0.2), transparent 60%);
+            z-index: 0;
+            animation: pulse 15s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.05); }
+        }
+
+        .login-container {
+            background-color: var(--secondary-color);
+            padding: 40px 50px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+            z-index: 1;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .login-container h1 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-weight: 700;
+            font-size: 1.8em;
+        }
+
+        .login-container p.description {
+            font-size: 0.95em;
+            margin-bottom: 30px;
+            color: #b0b0c0;
+            line-height: 1.6;
+        }
+
+        .login-form label {
+            display: block;
+            margin-bottom: 8px;
+            text-align: left;
+            font-weight: 400;
+            font-size: 0.9em;
+            color: #c0c0d0;
+        }
+
+        .login-form input[type="password"] {
+            width: 100%;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            background-color: var(--input-bg);
+            color: var(--font-color);
+            font-size: 1em;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .login-form input[type="password"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+        }
+
+        .login-form button {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 700;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+        }
+
+        .login-form button:hover {
+            background-color: var(--button-hover-bg);
         }
         
-        #systemResources {
-            display: none; /* 기본적으로 숨기고 서버가 켜졌을 때만 표시 */
+        .login-form button:active {
+            transform: scale(0.98);
+        }
+
+        #error-message {
+            color: var(--error-color);
+            margin-top: 15px;
+            font-size: 0.9em;
+            min-height: 1.2em; /* Prevent layout shift */
+            font-weight: 300;
         }
     </style>
-    
-    <div class="main-container" style="max-width: 1200px; margin: 0 auto; padding: 0 5px;">
-    <div class="header-container" style="margin: 0 auto; padding: 0 5px;">
-        <header style="max-width: 1200px; margin: 0 auto; padding: 10px 5px; display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin-left: 30px; white-space: nowrap;"><i class="fas fa-cloud"></i> 인터넷 탐색기</h2>
-            <div class="header-right">
-                <div id="serverStatus">
-                    <span id="serverStatusIcon"></span> <span id="serverStatusText">서버 확인 중...</span>                        
-                </div>
-                <div id="systemResources" style="margin-right: 50px;">
-                    <!-- CPU 및 메모리 정보 -->
-                    <div id="cpuStatus">
-                        <i class="fas fa-tachometer-alt"></i> CPU: <span id="cpuSpeed">0GHz</span><span id="cpuUsage"></span>
-                    </div>
-                    <div id="memoryStatus">
-                        <i class="fas fa-memory"></i> RAM: <span id="memoryUsage">0GB/0GB</span>
-                    </div>
-                    <!-- 저장공간 정보 (추가) -->
-                    <div class="storage-info">
-                        <i class="fas fa-database"></i>SSD:
-                        <div id="storageInfoText">
-                            <div class="storage-info-text"><span>0B / 0B (0%)</span></div>
-                            <div class="storage-bar-container"><div class="storage-bar"></div></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-        </header>
+</head>
+<body>
+    <div class="login-container">
+        <h1>AI 데이터 허브</h1>
+        <p class="description">인지 접근 시스템에 접속합니다.<br>지정된 접근 코드를 입력하십시오.</p>
+        <form id="login-form" class="login-form">
+            <label for="password">접근 코드:</label>
+            <input type="password" id="password" required>
+            <button type="submit">접속 승인</button>
+            <p id="error-message"></p>
+        </form>
     </div>
 
-    
-    <div class="container">
-        <div class="file-explorer">
-            <div class="navigation-bar">
-                <div class="breadcrumb" id="breadcrumb">
-                    <span data-path="">홈</span>
-                </div>
-                <div class="view-options">
-                    <button id="gridViewBtn" class="view-option active" title="아이콘 보기"><i class="fas fa-th"></i></button>
-                    <button id="listViewBtn" class="view-option" title="목록 보기"><i class="fas fa-list"></i></button>
-                </div>
-            </div>
-            
-            <div class="file-actions">
-                <div class="action-buttons">
-                    <button id="createFolder" class="btn btn-primary"><i class="fas fa-folder-plus"></i> 새폴더</button>
-<!-- 업로드 버튼과 서브메뉴 -->
-<div class="upload-dropdown">
-    <button id="uploadMainBtn" class="btn btn-success"><i class="fas fa-upload"></i> 업로드</button>
-    <div class="upload-dropdown-content" id="uploadOptions">
-        <button id="uploadFileBtn" class="btn btn-light"><i class="fas fa-file"></i> 파일</button>
-        <button id="uploadFolderBtn" class="btn btn-light"><i class="fas fa-folder"></i> 폴더</button>
-    </div>
-</div>
-
-<!-- 숨겨진 input 요소들 -->
-<input type="file" id="fileUpload" multiple style="display: none;">
-<input type="file" id="folderUpload" webkitdirectory directory multiple style="display: none;">
-                    <button id="cutBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-cut"></i> 잘라내기</button>
-                    <button id="pasteBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-paste"></i> 붙여넣기</button>
-                    <button id="renameBtn" class="btn btn-secondary" disabled style="display: none;"><i class="fas fa-edit"></i> 이름 변경</button>
-                    <button id="downloadBtn" class="btn btn-info" disabled><i class="fas fa-download"></i> 다운로드</button>
-                    <button id="deleteBtn" class="btn btn-danger" disabled><i class="fas fa-trash-alt"></i> 삭제</button>
-                    <button id="refreshBtn" title="새로고침"><i class="fas fa-sync-alt"></i></button>
-                </div>
-                
-                <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="파일/폴더 검색">
-                    <button class="btn btn-primary"><i class="fas fa-search"></i></button>
-                </div>
-            </div>
-            
-            <div class="file-container">
-                <div class="file-list" id="fileList">
-                    <div class="file-view" id="fileView">
-                        <!-- 파일 목록이 여기에 동적으로 로드됩니다 -->
-                    </div>
-                    <div class="selection-box" id="selectionBox" style="display: none;"></div>
-                </div>
-                
-                <div class="drop-zone" id="dropZone">
-                    <i class="fas fa-cloud-upload-alt"></i>
-                    <p>파일을 여기에 끌어다 놓으세요</p>
-                    <p class="drop-zone-info">최대 파일 크기: 10GB</p>
-                </div>
-            </div>
-            
-            <div class="statusbar" id="statusbar">
-                <div class="status-info">Ready</div>
-                <div class="selection-info">0개 선택됨</div>
-            </div>
-        </div>
-    </div>
-    <div id="rules-container">
-            <button id="modeToggleBtn" title="모드 전환 (현재: 운영)" style="margin-left: 20px;"><i class="fas fa-cog"></i></button>
-            <button id="rulesBtn" title="이용규칙" style="margin-left: 5px;"><i class="fas fa-book"></i>이용규칙</button>
-    </div>     
-    </div>  
-    
-    <!-- 새 폴더 생성 모달 -->
-    <div class="modal" id="folderModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>새폴더 만들기</h3>
-                <span class="modal-close">&times;</span>
-            </div>
-            <div class="form-group">
-                <label for="folderName">폴더 이름</label>
-                <input type="text" id="folderName" placeholder="폴더 이름 입력">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="cancelFolderBtn">취소</button>
-                <button class="btn btn-primary" id="createFolderBtn">생성</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 이름 변경 모달 -->
-    <div class="modal" id="renameModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>이름 변경</h3>
-                <span class="modal-close">&times;</span>
-            </div>
-            <div class="form-group">
-                <label for="newName">새 이름</label>
-                <input type="text" id="newName" placeholder="새 이름 입력">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="cancelRenameBtn">취소</button>
-                <button class="btn btn-primary" id="confirmRenameBtn">변경</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 압축 이름 지정 모달 -->
-    <div class="modal" id="compressModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>압축 파일 이름 지정</h3>
-                <span class="modal-close">&times;</span>
-            </div>
-            <div class="form-group">
-                <label for="compressName">압축 파일 이름 (.zip)</label>
-                <input type="text" id="compressName" placeholder="압축 파일 이름 입력 (확장자 제외)">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="cancelCompressBtn">취소</button>
-                <button class="btn btn-primary" id="confirmCompressBtn">압축</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 컨텍스트 메뉴 -->
-    <div id="contextMenu" class="context-menu">
-        <div id="ctxNewFolder" class="context-menu-item"><i class="fas fa-folder-plus"></i> 새폴더</div>
-        <div id="ctxLock" class="context-menu-item"><i class="fas fa-key"></i> 잠금</div>
-        <div id="ctxDownload" class="context-menu-item"><i class="fas fa-download"></i> 다운로드</div>
-        <div id="ctxCompress" class="context-menu-item"><i class="fas fa-file-archive"></i> 압축</div>
-        <div id="ctxCut" class="context-menu-item"><i class="fas fa-cut"></i> 잘라내기</div>
-        <div id="ctxPaste" class="context-menu-item"><i class="fas fa-paste"></i> 붙여넣기</div>
-        <div id="ctxRename" class="context-menu-item"><i class="fas fa-edit"></i> 이름 변경</div>
-        <div id="ctxDelete" class="context-menu-item danger"><i class="fas fa-trash-alt"></i> 삭제</div>
-    </div>
-    
-    <!-- 로딩 오버레이 -->
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="spinner"></div>
-    </div>
-    
-    <!-- 스크립트 로딩 (mode_logger.js를 먼저 로드) -->
-    <script src="mode_logger.js"></script>
-    <script src="upload.js?v=20250405_upload2"></script>
-    <script src="script.js?v=20250405"></script>
-
-    <!-- 업로드 진행률 모달 -->
-    <div id="upload-progress-modal" class="modal">
-        <div class="modal-content">
-            <h4>파일 업로드 중...</h4>
-            <div class="progress-time-group">
-                <p id="overall-progress-text"></p>
-                <p id="upload-time-remaining">남은 시간: 계산 중...</p>
-            </div>
-            <p id="current-file-info"></p>
-            <div id="overall-progress-bar-container" style="margin: 10px 0;">
-                <div id="overall-progress-bar"></div>
-            </div>
-            <div class="speed-size-group">
-                <p id="upload-speed">속도: 0 KB/s</p>
-                <p id="total-upload-size">업로드: 0 B / 0 B</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-danger" id="cancelUploadBtn">취소</button>
-                <button class="btn btn-primary" id="resumeUploadBtn">중지</button>
-            </div>
-        </div>
-    </div>
-
-<!-- 이용규칙 모달 -->
-<div id="rulesModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3><i class="fas fa-book"></i>  인터넷탐색기 서비스 이용 규칙 및 면책 조항</h3>
-            <span class="modal-close">&times;</span>
-        </div>
-        <div class="modal-body">
-            <div id="rulesContent"></div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn" id="closeRulesBtn">확인</button>
-        </div>
-    </div>
-</div>
-
-    <!-- 폴더 잠금 모달 -->
-    <div id="lockModal" class="modal">
-        <div class="modal-content">
-            <span class="modal-close">&times;</span>
-            <h2>폴더 잠금</h2>
-            <p>선택한 폴더를 잠급니다. 비밀번호를 설정할 수 있습니다 (선택 사항).</p>
-            <input type="text" id="lockPassword" placeholder="암호를 입력하세요 (선택 사항)">
-            <div class="modal-buttons">
-                <button id="confirmLock">잠금</button>
-                <button id="cancelLock">취소</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 폴더 잠금 해제 모달 -->
-    <div id="unlockModal" class="modal">
-        <div class="modal-content">
-            <span class="modal-close">&times;</span>
-            <h2>폴더 잠금 해제</h2>
-            <p>선택한 폴더의 잠금을 해제합니다. 비밀번호가 설정된 경우 입력하세요.</p>
-            <input type="text" id="unlockPassword" placeholder="암호를 입력하세요">
-            <div class="modal-buttons">
-                <button id="confirmUnlock">해제</button>
-                <button id="cancelUnlock">취소</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 폴더 비밀번호 입력 모달 -->
-    <div id="folderPasswordModal" class="modal">
-        <div class="modal-content">
-            <span class="modal-close">&times;</span>
-            <h2>폴더 접근 제한</h2>
-            <p>이 폴더는 비밀번호로 보호되어 있습니다.</p>
-            <input type="text" id="folderPasswordInput" placeholder="비밀번호를 입력하세요">
-            <div class="modal-buttons">
-                <button id="confirmFolderPassword">확인</button>
-                <button id="cancelFolderPassword">취소</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="login.js"></script>
 </body>
 </html>
