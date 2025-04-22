@@ -1,6 +1,6 @@
-# explorer 파일 탐색기
+# Explorer 파일 탐색기
 
-Express.js와 explorer 서버를 기반으로 구현된 파일 탐색기 웹 애플리케이션입니다.
+Express.js와 Explorer 서버를 기반으로 구현된 파일 탐색기 웹 애플리케이션입니다.
 
 ## 주요 기능
 
@@ -9,19 +9,26 @@ Express.js와 explorer 서버를 기반으로 구현된 파일 탐색기 웹 애
 - 드래그 앤 드롭 파일 업로드
 - 폴더 잠금 기능
 - 디스크 사용량 모니터링
-- 파일 압축 기능
+- 파일 압축/압축해제 기능
+- 세션 기반 인증 시스템
+- 로그 레벨 조정 기능
+- 비동기 파일 처리를 위한 백그라운드 워커
 
 ## 구조
 
-- `backend/`: 서버 코드 (Express.js, explorer)
+- `backend/`: 서버 코드 (Express.js, Explorer, 세션 관리)
 - `frontend/`: 클라이언트 코드 (HTML, CSS, JavaScript)
-- `코드분석.md`: 프론트엔드 코드 분석 문서
-- `백엔드_코드분석.md`: 백엔드 코드 분석 문서
+- `util/`: 유틸리티 스크립트 (로그 분석, 코드 수정 등)
+- `config/`: 설정 파일
+- `tmp/`: 임시 파일 디렉토리
 
 ## 기술 스택
 
-- **백엔드**: Node.js, Express.js, explorer-server
+- **백엔드**: Node.js, Express.js, Explorer-server
+  - 주요 패키지: express-session, archiver, body-parser, multer, iconv-lite
 - **프론트엔드**: HTML, CSS, JavaScript (바닐라)
+  - FontAwesome 아이콘 사용
+- **인프라**: Nginx, systemd
 
 ## 설치 및 실행
 
@@ -40,125 +47,82 @@ Express.js와 explorer 서버를 기반으로 구현된 파일 탐색기 웹 애
 
 3. 브라우저에서 접속
    ```
-   
    http://itsmyzone.iptime.org:3333
    http://itsmyzone.iptime.org/explorer
-   http://itsmyzone.iptime.org/explorer/
    ```
 
-## 특징
+## 보안 설정
 
-- 모놀리식 구조의 간단한 설계
-- 상세한 로깅 시스템
-- 복잡한 파일명 및 경로 처리 지원
-- explorer 프로토콜 지원
+프로젝트는 `.env` 파일을 통해 민감한 설정을 관리합니다:
 
-## 기능
+```
+# 환경 변수 설정 파일
+# 실제 운영 시에는 이 파일의 접근 권한을 제한해야 합니다.
 
-- 파일 및 폴더 탐색
-- 파일 업로드/다운로드
-- 폴더 생성
-- 파일 및 폴더 이름 변경
-- 파일 및 폴더 삭제
-- 파일 압축 및 압축 해제
-- 드래그 앤 드롭 기능
-- 파일 검색
-- 목록 보기 및 그리드 보기 지원
-- 다중 파일 선택
-- 키보드 단축키
-- 다크 모드 지원
+# 로그인 비밀번호
+ACCESS_PASSWORD="your_secure_password"
 
-## 최근 업데이트
+# Express 세션 시크릿 
+SESSION_SECRET="your_strong_random_session_secret_here"
+```
 
-### 2023.05.30 - 드래그앤드롭 파일 업로드 개선
-- 중복 업로드 방지 기능 추가
-- 업로드 완료 상태 관리 개선
-- 이벤트 처리 최적화
-- 업로드 UI 처리 속도 향상
-- 외부 파일 드래그앤드롭 감지 정확도 개선
+## 로깅 시스템
 
-### 2023.06.01 - 프로젝트 구조 개선
-- 프로젝트를 frontend와 backend로 분리
-- 코드 모듈화 개선
-- 유지보수성 향상
+프로젝트는 세 가지 로그 레벨을 지원합니다:
+- `minimal`: 기본 운영 정보만 기록
+- `info`: 상세한 작업 정보 기록
+- `debug`: 개발자용 디버깅 정보 포함
 
-## 기술 스택
+로그 파일:
+- `logs/server.log`: 일반 서버 로그
+- `logs/error.log`: 오류 로그
+- `logs/systemd.log`: systemd 서비스 로그
+- `logs/systemd-error.log`: systemd 오류 로그
+- `logs/nginx_error.log`: Nginx 오류 로그
 
-- **프론트엔드**: HTML, CSS, JavaScript
-- **백엔드**: Node.js, Express, explorer-Server
-- **웹 서버**: Nginx
-- **프로토콜**: explorer
+로그 분석을 위한 유틸리티 스크립트:
+```bash
+bash util/get_log_tails.sh
+```
 
 ## 프로젝트 구조
 
 ```
 explorer/
-├── frontend/             # 프론트엔드 코드
-│   ├── index.html        # 메인 HTML 파일
-│   ├── style.css         # 스타일시트
-│   ├── script.js         # 프론트엔드 JavaScript
-│   └── package.json      # 프론트엔드 의존성
+├── .env                   # 환경 변수 설정
+├── frontend/              # 프론트엔드 코드
+│   ├── index.html         # 로그인 페이지
+│   ├── main.html          # 메인 애플리케이션 페이지
+│   ├── style.css          # 스타일시트
+│   ├── script.js          # 메인 애플리케이션 스크립트
+│   ├── upload.js          # 파일 업로드 관련 스크립트
+│   ├── login.js           # 인증 관련 스크립트
+│   └── mode_logger.js     # 로그 관련 스크립트
 │
-├── backend/              # 백엔드 코드
-│   ├── server.js         # 메인 서버 파일
-│   ├── routes/           # API 라우트
-│   ├── controllers/      # 컨트롤러
-│   ├── middlewares/      # 미들웨어
-│   ├── utils/            # 유틸리티 함수
-│   ├── logs/             # 로그 파일
-│   ├── share-folder/     # 공유 폴더
-│   └── package.json      # 백엔드 의존성
+├── backend/               # 백엔드 코드
+│   ├── server.js          # 메인 서버 파일
+│   ├── backgroundWorker.js # 비동기 작업 처리용 워커
+│   ├── lockedFolders.json # 잠긴 폴더 정보
+│   ├── share-folder/      # 공유 폴더 (파일 저장소)
+│   ├── logs/              # 로그 파일 디렉토리
+│   └── tmp/               # 임시 파일 디렉토리
 │
-├── package.json          # 프로젝트 메인 package.json
-└── README.md             # 프로젝트 설명
+├── util/                  # 유틸리티 스크립트
+│   ├── get_log_tails.sh   # 로그 파일 분석 스크립트
+│   └── replace_code_block.py # 코드 블록 교체 유틸리티
+│
+└── README.md              # 프로젝트 설명
 ```
 
-## 설치 방법
+## 시스템 서비스 설정
 
-1. 저장소 클론:
-```
-git clone https://github.com/purestory/explorer.git
-```
+### systemd 서비스 파일
 
-2. 필요한 패키지 설치:
-```
-cd explorer-explorer
-npm run install-all
-```
+파일 위치: `/etc/systemd/system/explorer.service`
 
-3. 서버 시작:
-```
-npm start
-```
-
-4. 브라우저에서 접속:
-```
-http://localhost:3333
-```
-
-## 개발 모드 실행
-
-백엔드 개발 모드:
-```
-npm run backend
-```
-
-프론트엔드 개발 모드:
-```
-npm run frontend
-```
-
-## 서비스 설정 (시스템 서비스 등록)
-
-1. systemd 서비스 파일 생성:
-```
-sudo nano /etc/systemd/system/explorer.service
-```
-
-2. 다음 내용 작성:
 ```
 [Unit]
-Description=explorer Server
+Description=Explorer Server
 After=network.target
 
 [Service]
@@ -174,13 +138,7 @@ WorkingDirectory=/home/purestory/explorer
 WantedBy=multi-user.target
 ```
 
-3. 서비스 활성화 및 시작:
-```
-sudo systemctl enable explorer
-sudo systemctl start explorer
-```
-
-## Nginx 연동 설정
+### Nginx 연동 설정
 
 ```
 server {
@@ -208,7 +166,7 @@ server {
         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range';
     }
     
-    # explorer API 경로 프록시
+    # Explorer API 경로 프록시
     location /api/ {
         proxy_pass http://localhost:3333/api/;
         proxy_http_version 1.1;
@@ -219,7 +177,7 @@ server {
         proxy_read_timeout 300s;
     }
     
-    # explorer 서버 경로 프록시
+    # Explorer 서버 경로 프록시
     location /explorer/ {
         proxy_pass http://localhost:3333/explorer/;
         proxy_http_version 1.1;
@@ -229,12 +187,12 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
         
-        # explorer 메서드 지원
+        # Explorer 메서드 지원
         proxy_pass_request_headers on;
         proxy_set_header Destination $http_destination;
         proxy_set_header Overwrite $http_overwrite;
         
-        # explorer 메서드 허용
+        # Explorer 메서드 허용
         proxy_method $request_method;
         proxy_pass_request_body on;
     }
@@ -250,6 +208,7 @@ server {
 
 ## 주요 설정
 
+- **포트**: 3333 (기본값)
 - **최대 업로드 크기**: 10GB
 - **공유 폴더 위치**: /home/purestory/explorer/backend/share-folder
 - **로그 파일 위치**: /home/purestory/explorer/backend/logs/
@@ -257,35 +216,49 @@ server {
 ## 문제 해결
 
 ### share-folder 디렉토리 오류
-서비스 시작 시 "share-folder 디렉토리를 찾을 수 없습니다" 오류가 발생할 경우 다음 명령어로 해결할 수 있습니다:
+서비스 시작 시 "share-folder 디렉토리를 찾을 수 없습니다" 오류가 발생할 경우:
 ```
 mkdir -p backend/share-folder && chmod 777 backend/share-folder
 ```
 
 ### 포트 사용 중 오류
-서비스 시작 시 "EADDRINUSE: address already in use :::3333" 오류가 발생할 경우 다음 명령어로 해당 포트를 사용 중인 프로세스를 확인하고 종료할 수 있습니다:
+"EADDRINUSE: address already in use :::3333" 오류 해결:
 ```
 sudo lsof -i:3333
 sudo kill <PID>
 ```
 
 ### 드래그앤드롭 업로드 문제
-파일을 드래그앤드롭으로 업로드할 때 발생할 수 있는 문제:
 - 업로드 전송량이 흔들리는 현상은 v1.2.0 이상에서 해결됨
-- 여러 파일을 동시에 드래그앤드롭할 때 웹페이지가 멈추는 현상은 v1.2.0 이상에서 해결됨
 - 업로드 중 다른 파일을 드래그앤드롭하면 중복 업로드 방지 기능이 작동합니다
+- 대용량 파일 업로드 시 서버 성능과 메모리 사용량 모니터링이 필요합니다
 
-## 서비스 상태 확인
+## 서비스 관리
 
 서비스 상태 확인:
 ```
-systemctl status explorer
+sudo systemctl status explorer
 ```
 
 서비스 로그 확인:
 ```
-journalctl -u explorer --since today
+sudo journalctl -u explorer --since today
 ```
+
+서비스 시작/중지/재시작:
+```
+sudo systemctl start explorer
+sudo systemctl stop explorer  
+sudo systemctl restart explorer
+```
+
+## 향후 개발 계획
+
+- 삭제 비동기화 구현
+- 사용자 권한 관리 기능 개선
+- 다중 사용자 지원 확장
+- 모바일 인터페이스 최적화
+- 파일 미리보기 기능 향상
 
 ## 개발 정보
 
@@ -296,10 +269,6 @@ journalctl -u explorer --since today
 ## 주의사항
 
 - 보안을 위해 접근 제어를 설정하는 것이 좋습니다.
-- 대용량 파일 업로드 시 서버 성능에 영향을 줄 수 있습니다.
-- 정기적인 백업을 권장합니다. 
-
-
-##할일
-삭제 비동기화
+- 중요 데이터는 정기적으로 백업하세요.
+- 서버 업데이트 시 항상 `/etc/nginx/sites-enabled/purestory` 설정을 함께 검토하세요.
 
