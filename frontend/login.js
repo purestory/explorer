@@ -3,11 +3,6 @@ const passwordInput = document.getElementById('password');
 const errorMessage = document.getElementById('error-message');
 const submitButton = loginForm.querySelector('button[type="submit"]'); // 버튼 요소 가져오기
 
-// !!! 보안 경고 !!!
-// 이 비밀번호는 클라이언트 측 코드에 노출되어 매우 안전하지 않습니다.
-// 단순한 접근 제한 용도로만 사용해야 하며, 실제 보안이 필요한 시스템에는
-// 반드시 서버 측 인증을 구현해야 합니다.
-// const CORRECT_PASSWORD = "replace_with_your_actual_password"; // <-- 실제 사용할 비밀번호로 변경하세요
 
 loginForm.addEventListener('submit', async (event) => { // async 추가
     event.preventDefault(); // 기본 제출 동작 방지
