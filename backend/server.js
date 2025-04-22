@@ -425,8 +425,8 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   // <<<--- 바로 여기에서 세션 확인 후 리디렉션합니다! --->>>
   if (req.session.loggedIn) {
-    // 세션에 로그인 정보(loggedIn=true)가 있으면 /explorer/main 으로 리디렉션
-    res.redirect('/explorer/main'); // 경로 수정
+    // 세션에 로그인 정보(loggedIn=true)가 있으면 /main 으로 리디렉션
+    res.redirect('/main'); // 경로 수정: /explorer/main -> /main
   } else {
     // 로그인 정보가 없으면 index.html(로그인 페이지) 전송
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
@@ -2307,8 +2307,8 @@ app.get('/main', (req, res) => {
     // 세션에 로그인 정보(loggedIn=true)가 있으면 main.html 파일 전송
     res.sendFile(path.join(__dirname, '../frontend/main.html'));
   } else {
-    // 로그인 정보 없으면 로그인 페이지('/explorer/')로 리디렉션
-    res.redirect('/explorer/'); // 경로 수정
+    // 로그인 정보 없으면 로그인 페이지('/')로 리디렉션
+    res.redirect('/'); // 경로 수정: /explorer/ -> /
   }
 });
 
@@ -2326,7 +2326,7 @@ app.get('/logout', (req, res) => {
     const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'connect.sid';
     res.clearCookie(sessionCookieName);
 
-    // 로그아웃 성공 후 로그인 페이지('/explorer/')로 리디렉션
-    res.redirect('/explorer/'); // 경로 수정
+    // 로그아웃 성공 후 로그인 페이지('/')로 리디렉션
+    res.redirect('/'); // 경로 수정: /explorer/ -> /
   });
 });
