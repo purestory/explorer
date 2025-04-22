@@ -8,3 +8,10 @@
   to = "http://itsmyzone.iptime.org/explorer-api/:splat"
   status = 200
   # force = true # API 프록시는 항상 우선 적용하는 것이 좋을 수 있음
+
+# main.html 직접 접근 시 로그인 페이지로 리디렉션
+[[redirects]]
+  from = "/main.html"
+  to = "/"
+  status = 302 # 임시 리디렉션
+  force = true # 파일이 존재해도 강제로 리디렉션 실행
