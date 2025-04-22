@@ -136,6 +136,38 @@
             min-height: 1.2em; /* Prevent layout shift */
             font-weight: 300;
         }
+
+        .social-login-container {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: center; /* 아이콘 중앙 정렬 */
+            gap: 15px; /* 아이콘 사이 간격 */
+            flex-wrap: wrap; /* 아이콘 많아지면 줄바꿈 */
+        }
+
+        .social-login-container a {
+            display: inline-block;
+            transition: transform 0.2s ease;
+        }
+
+        .social-login-container a:hover {
+            transform: scale(1.05);
+        }
+
+        .social-login-container img {
+            height: 45px; /* 아이콘 크기 통일 */
+            width: auto;
+            border-radius: 50%; /* 구글/카카오/페이스북 아이콘 둥글게 (선택사항) */
+            vertical-align: middle;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 네이버 아이콘은 사각형 유지 */
+        .social-login-container img.naver-icon {
+             border-radius: 4px; 
+        }
     </style>
 </head>
 <body>
@@ -147,6 +179,21 @@
             <input type="password" id="password" required>
             <button type="submit">접속 승인</button>
             <p id="error-message"></p>
+
+            <div class="social-login-container">
+                <a href="https://accounts.kakao.com" target="_blank" title="카카오 로그인">
+                    <img src="https://www.kakaocorp.com/page/favicon.ico" alt="카카오 로그인" style="background-color: #FEE500; height: 45px; width: 45px; border-radius: 50%; padding: 5px;"> 
+                </a>
+                <a href="https://nid.naver.com/nidlogin.login" target="_blank" title="네이버 로그인">
+                    <img src="https://static.nid.naver.com/oauth/button_g.PNG" alt="네이버 로그인" class="naver-icon" style="height: 45px;"> 
+                </a>
+                <a href="https://accounts.google.com" target="_blank" title="구글 로그인">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="구글 로그인" style="background-color: white; padding: 10px; height: 45px; width: 45px; border-radius: 50%;"> 
+                </a>
+                <a href="https://www.facebook.com/login/" target="_blank" title="페이스북 로그인">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/1200px-Facebook_Logo_%282019%29.png" alt="페이스북 로그인" style="height: 45px; width: 45px; border-radius: 50%;">
+                </a>
+            </div>
         </form>
     </div>
 
