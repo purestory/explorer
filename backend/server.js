@@ -20,6 +20,17 @@ const iconv = require('iconv-lite');
 
 const session = require('express-session');
 
+// --- Express 세션 미들웨어 설정 --- (라우트 설정 전에 위치해야 함)
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'default_super_secret_key', // .env 파일에서 로드 (!!필수 변경!!)
+  resave: false, // 변경사항 없어도 세션 다시 저장 X
+  saveUninitialized: false, // 초기화되지 않은 세션 저장 X (로그인 시 생성)
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // HTTPS 환경에서만 쿠키 전송
+    httpOnly: true, // JavaScript에서 쿠키 접근 불가
+    maxAge: 24 * 60 * 60 * 1000 // 쿠키 유효 기간 (예: 24시간)
+  }
+}));
 
 // 쉘 인자를 안전하게 이스케이프하는 함수 (추가)
 
@@ -412,7 +423,12 @@ app.use((req, res, next) => {
 
 // 메인 페이지
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/index.html'));
+  // 이미 로그인 상태라면 /main으로 리디렉션 (선택 사항)
+  if (req.session.loggedIn) {
+    res.redirect('/main');
+  } else {
+    res.sendFile(path.join(__dirname, '../frontend/index.html'));
+  }
 });
 
 // 파일 업로드 API 수정 (비동기화 및 병렬 처리 제한)
@@ -2249,21 +2265,14 @@ app.post('/explorer-api/verify-folder-password', express.json(), async (req, res
 // <<<--- 새로운 로그인 접근 코드 검증 API 추가 --->>>
 app.post('/explorer-api/verify-access', express.json(), (req, res) => {
   const { password } = req.body;
+  const actualPassword = process.env.ACCESS_PASSWORD || "default_insecure_password"; 
 
-  // !!! 중요: 실제 비밀번호는 환경 변수 등 안전한 곳에서 가져와야 합니다 !!!
-  const actualPassword = process.env.ACCESS_PASSWORD || "default_insecure_password"; // 예: 환경 변수 ACCESS_PASSWORD 사용
-
-  if (!actualPassword || actualPassword === "default_insecure_password") {
-    errorLog('보안 경고: 서버 접근 비밀번호가 환경 변수(ACCESS_PASSWORD)에 설정되지 않았습니다.');
-    // 실제 운영 환경에서는 기본 비밀번호 허용 대신 오류를 반환해야 할 수 있습니다.
-  }
-
-  if (!password) {
-    return res.status(400).json({ success: false, message: '비밀번호가 제공되지 않았습니다.' });
-  }
+  // ... (비밀번호 검증 로직) ...
 
   if (password === actualPassword) {
-    logWithIP('AI 포털 접근 코드 검증 성공', req, 'info');
+    // <<<--- 로그인 성공 시 세션에 상태 기록 --->>>
+    req.session.loggedIn = true;
+    logWithIP('AI 포털 접근 코드 검증 성공 & 세션 설정됨', req, 'info');
     res.json({ success: true });
   } else {
     logWithIP('AI 포털 접근 코드 검증 실패', req, 'warning');
@@ -2288,3 +2297,14 @@ async function startServer() {
 }
 
 startServer(); // 서버 시작 함수 호출
+
+// <<<--- main.html 접근 제어 라우트 추가 --->>>
+app.get('/main', (req, res) => {
+  if (req.session.loggedIn) {
+    // 세션에 로그인 정보가 있으면 main.html 파일 전송
+    res.sendFile(path.join(__dirname, '../frontend/main.html'));
+  } else {
+    // 로그인 정보 없으면 로그인 페이지로 리디렉션
+    res.redirect('/'); 
+  }
+});
