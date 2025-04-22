@@ -1,2 +1,2 @@
-/   /index_netlify.html   301
+/   /index_netlify.html   200
 /explorer-api/*  http://itsmyzone.iptime.org/explorer-api/:splat  200!

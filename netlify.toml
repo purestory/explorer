@@ -1,7 +1,14 @@
-[build]
-  publish = "frontend/"
-  
+# Netlify 설정 파일
+
+# 리디렉션 규칙
 [[redirects]]
-  from = "/*"
+  from = "/"
   to = "/index_netlify.html"
+  status = 200 # URL 변경 없이 내용만 표시
+  # force = true # 다른 규칙보다 우선 적용 (필요시 주석 해제)
+
+# API 프록시 규칙 (기존 _redirects 내용과 동일하게)
+[[redirects]]
+  from = "/explorer-api/*"
+  to = "http://itsmyzone.iptime.org/explorer-api/:splat"
   status = 200
