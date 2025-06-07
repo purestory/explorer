@@ -11,8 +11,12 @@ yarn-error.log
 backend/logs/*
 !backend/logs/.gitkeep
 
-# 백업 파일
+# 백업 파일 및 폴더
 *.bak
+*.backup
+backup/
+backend/*.backup
+backend/server.js.backup
 
 # 환경 설정 파일
 .env
@@ -30,7 +34,6 @@ backend/share-folder/*
 !backend/share-folder/.gitkeep
 
 backend/lockedFolders.json
-
 
 # 에디터 설정
 .vscode/

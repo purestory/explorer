@@ -10,7 +10,7 @@ const { execSync, fork } = require('child_process');
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 const app = express();
-const PORT = process.env.PORT || 3333;
+const PORT = process.env.PORT || 3301;
 const archiver = require('archiver');
 const { promisify } = require('util');
 //const fs_stream = require('fs');
@@ -48,6 +48,9 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // --- 활성 워커 프로세스 관리 --- 
 const activeWorkers = new Set(); // 활성 워커의 참조를 저장할 Set
+
+// --- 전역 잠금 상태 변수 (배열 기반) ---
+let lockedFolders = { lockState: [] };
 
 // --- 초기 디렉토리 설정 및 검사 (비동기 함수) ---
 const LOGS_DIRECTORY = path.join(__dirname, 'logs');
@@ -1070,7 +1073,7 @@ async function calculateDirectorySize(dirPath) {
 
 
 app.get('/explorer-api/lock-status', (req, res) => {
-  res.json({ lockState: lockedFolders });
+  res.json({ lockState: lockedFolders.lockState });
 });
 
 // 폴더 잠금/해제 API (비동기화)
@@ -1105,12 +1108,12 @@ app.post('/explorer-api/lock/:path(*)', express.json(), async (req, res) => { //
 
     // lockedFolders.json 파일 로드 (비동기)
     const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
-    let lockedFolders = { lockState: [] }; // 기본값
+    // let lockedFolders = { lockState: [] }; // 기본값 - 전역 변수 사용으로 제거
     try {
       const fileContent = await fs.promises.readFile(lockedFoldersPath, 'utf8');
-      lockedFolders = JSON.parse(fileContent);
-      if (!lockedFolders.lockState) {
-        lockedFolders.lockState = [];
+      const fileData = JSON.parse(fileContent);
+      if (fileData.lockState) {
+        lockedFolders.lockState = fileData.lockState;
       }
     } catch (error) {
       if (error.code === 'ENOENT') {
@@ -1981,27 +1984,28 @@ app.post('/explorer-api/items/delete', async (req, res) => {
   // ... 기존 삭제 로직 (워커 사용) ...
 });
 
-// 전역 변수 선언 (배열 대신 Set 사용)
-let lockedFoldersSet = new Set();
-const LOCK_FILE_PATH = path.join(__dirname, 'lockedFolders.json');
 
 // 잠금 파일 로드 함수 개선
 async function loadLockedFolders() {
   try {
-    const data = await fs.promises.readFile(LOCK_FILE_PATH, 'utf8');
+    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+    const data = await fs.promises.readFile(lockedFoldersPath, 'utf8');
     const jsonData = JSON.parse(data);
     
-    // 배열을 Set으로 변환
-    lockedFoldersSet = new Set(jsonData.lockState || []);
-    log(`잠금 폴더 로드됨: ${lockedFoldersSet.size}개`, 'info');
+    // 전역 변수에 로드
+    lockedFolders = jsonData || { lockState: [] };
+    if (!lockedFolders.lockState) {
+      lockedFolders.lockState = [];
+    }
+    log(`잠금 폴더 로드됨: ${lockedFolders.lockState.length}개`, 'info');
   } catch (error) {
     if (error.code === 'ENOENT') {
       log('잠금 폴더 파일이 없습니다. 새 파일을 생성합니다.', 'info');
-      lockedFoldersSet = new Set();
+      lockedFolders = { lockState: [] };
       await saveLockedFolders();
     } else {
       errorLog('잠금 폴더 로드 오류:', error);
-      lockedFoldersSet = new Set();
+      lockedFolders = { lockState: [] };
     }
   }
 }
@@ -2009,9 +2013,9 @@ async function loadLockedFolders() {
 // 잠금 파일 저장 함수 개선
 async function saveLockedFolders() {
   try {
-    // Set을 배열로 변환하여 저장
-    const lockArray = Array.from(lockedFoldersSet);
-    await fs.promises.writeFile(LOCK_FILE_PATH, JSON.stringify({ lockState: lockArray }, null, 2), 'utf8');
+    // 전역 변수를 파일에 저장
+    const lockedFoldersPath = path.join(__dirname, 'lockedFolders.json');
+    await fs.promises.writeFile(lockedFoldersPath, JSON.stringify(lockedFolders, null, 2), 'utf8');
     log('잠금 폴더 저장됨', 'info');
   } catch (error) {
     errorLog('잠금 폴더 저장 오류:', error);
@@ -2026,8 +2030,8 @@ function isFolderLocked(targetPath) {
   // 경로 정규화
   const normalizedPath = targetPath.replace(/^\/+/, '').replace(/\/+$/, '');
   
-  // Set을 사용하여 O(1) 시간 복잡도로 확인
-  return lockedFoldersSet.has(normalizedPath);
+  // 전역 배열에서 확인
+  return lockedFolders.lockState.some(folder => folder.path === normalizedPath);
 }
 
 
@@ -2091,8 +2095,8 @@ app.post('/explorer-api/lock', (req, res) => {
     }
 
     folders.forEach(folder => {
-        if (!lockedFolders.some(f => f.path === folder.path)) {
-            lockedFolders.push(folder);
+        if (!lockedFolders.lockState.some(f => f.path === folder.path)) {
+            lockedFolders.lockState.push(folder);
         }
     });
 
@@ -2113,9 +2117,9 @@ app.post('/explorer-api/unlock', (req, res) => {
     }
 
     folders.forEach(folderPath => {
-        const index = lockedFolders.findIndex(f => f.path === folderPath);
+        const index = lockedFolders.lockState.findIndex(f => f.path === folderPath);
         if (index !== -1) {
-            lockedFolders.splice(index, 1);
+            lockedFolders.lockState.splice(index, 1);
         }
     });
 
@@ -2242,7 +2246,7 @@ app.post('/explorer-api/verify-folder-password', express.json(), async (req, res
     }
     
     // 해당 경로가 잠겨있는지 확인
-    const lockedFolder = lockedFolders.find(f => f.path === folderPath);
+    const lockedFolder = lockedFolders.lockState.find(f => f.path === folderPath);
     
     if (!lockedFolder) {
       return res.status(400).json({ success: false, message: '잠금 설정된 폴더가 아닙니다.' });

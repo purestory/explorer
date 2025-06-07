@@ -1,0 +1,18 @@
+[Unit]
+Description=Explorer Server
+After=network.target
+
+[Service]
+Type=simple
+User=purestory
+WorkingDirectory=/home/purestory/explorer/backend
+ExecStart=/home/purestory/.nvm/versions/node/v20.3.0/bin/node /home/purestory/explorer/backend/server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/home/purestory/explorer/backend/logs/server.log
+StandardError=append:/home/purestory/explorer/backend/logs/error.log
+SyslogIdentifier=explorer-server
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
