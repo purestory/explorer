@@ -3,78 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Portal Access</title>
+    <title>인터넷 탐색기</title>
+    <link rel="stylesheet" href="fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text x=%2250%22 y=%22.9em%22 font-size=%2290%22 text-anchor=%22middle%22>☁️</text></svg>">
+</head>
+<body>
     <style>
-        @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap");
-
-        :root {
-            --bg-color: #1a1a2e;
-            --primary-color: #e94560;
-            --secondary-color: #16213e;
-            --font-color: #e0e0e0;
-            --input-bg: #2a2a4e;
-            --button-bg: #0f3460;
-            --button-hover-bg: #1a5f7a;
-            --error-color: #ff6b6b;
+        #serverStatus {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        
+        #systemResources {
+            display: none; /* 기본적으로 숨기고 서버가 켜졌을 때만 표시 */
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: "Noto Sans KR", sans-serif;
-            background-color: var(--bg-color);
-            color: var(--font-color);
+        /* 로그인 모달 스타일 */
+        #loginModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            overflow: hidden;
-            position: relative;
+            z-index: 1000;
         }
 
-        body::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: 
-                radial-gradient(circle at 20% 30%, rgba(15, 52, 96, 0.3), transparent 60%),
-                radial-gradient(circle at 80% 70%, rgba(233, 69, 96, 0.2), transparent 60%);
-            z-index: 0;
-            animation: pulse 15s infinite alternate;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 0.6; transform: scale(1); }
-            100% { opacity: 1; transform: scale(1.05); }
-        }
-
-        .login-container {
-            background-color: var(--secondary-color);
+        .login-modal-content {
+            background-color: var(--secondary-color, #16213e);
             padding: 40px 50px;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
             text-align: center;
             width: 100%;
             max-width: 400px;
-            z-index: 1;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .login-container h1 {
-            color: var(--primary-color);
+        .login-modal-content h1 {
+            color: var(--primary-color, #e94560);
             margin-bottom: 15px;
             font-weight: 700;
             font-size: 1.8em;
         }
 
-        .login-container p.description {
+        .login-modal-content p.description {
             font-size: 0.95em;
             margin-bottom: 30px;
             color: #b0b0c0;
@@ -96,22 +74,22 @@
             margin-bottom: 20px;
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 6px;
-            background-color: var(--input-bg);
-            color: var(--font-color);
+            background-color: var(--input-bg, #2a2a4e);
+            color: var(--font-color, #e0e0e0);
             font-size: 1em;
             transition: border-color 0.3s ease, box-shadow 0.3s ease;
         }
 
         .login-form input[type="password"]:focus {
             outline: none;
-            border-color: var(--primary-color);
+            border-color: var(--primary-color, #e94560);
             box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
         }
 
         .login-form button {
             width: 100%;
             padding: 12px 15px;
-            background-color: var(--button-bg);
+            background-color: var(--button-bg, #0f3460);
             color: white;
             border: none;
             border-radius: 6px;
@@ -122,7 +100,7 @@
         }
 
         .login-form button:hover {
-            background-color: var(--button-hover-bg);
+            background-color: var(--button-hover-bg, #1a5f7a);
         }
         
         .login-form button:active {
@@ -130,71 +108,174 @@
         }
 
         #error-message {
-            color: var(--error-color);
+            color: var(--error-color, #ff6b6b);
             margin-top: 15px;
             font-size: 0.9em;
-            min-height: 1.2em; /* Prevent layout shift */
+            min-height: 1.2em;
             font-weight: 300;
         }
 
-        .social-login-container {
-            margin-top: 25px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: center; /* 아이콘 중앙 정렬 */
-            gap: 15px; /* 아이콘 사이 간격 */
-            flex-wrap: wrap; /* 아이콘 많아지면 줄바꿈 */
+        /* 접속 버튼 스타일 */
+        .access-button {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            background-color: var(--primary-color, #e94560);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(233, 69, 96, 0.3);
         }
 
-        .social-login-container a {
-            display: inline-block;
-            transition: transform 0.2s ease;
+        .access-button:hover {
+            background-color: #d73050;
+            transform: translate(-50%, -50%) scale(1.05);
         }
 
-        .social-login-container a:hover {
-            transform: scale(1.05);
+        .welcome-message {
+            position: fixed;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--font-color, #e0e0e0);
         }
 
-        .social-login-container img {
-            height: 45px; /* 아이콘 크기 통일 */
-            width: auto;
-            border-radius: 50%; /* 구글/카카오/페이스북 아이콘 둥글게 (선택사항) */
-            vertical-align: middle;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        .welcome-message h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: var(--primary-color, #e94560);
         }
 
-        /* 네이버 아이콘은 사각형 유지 */
-        .social-login-container img.naver-icon {
-             border-radius: 4px; 
+        .welcome-message p {
+            font-size: 1.1em;
+            color: #b0b0c0;
         }
     </style>
-</head>
-<body>
-    <div class="login-container">
-        <h1>AI 데이터 허브</h1>
-        <p class="description">인지 접근 시스템에 접속합니다.<br>지정된 접근 코드를 입력하십시오.</p>
-        <form id="login-form" class="login-form">
-            <label for="password">접근 코드:</label>
-            <input type="password" id="password" required>
-            <button type="submit">접속 승인</button>
-            <p id="error-message"></p>
-
-            <div class="social-login-container">
-                <a href="https://accounts.kakao.com" target="_blank" title="카카오 로그인">
-                    <img src="https://www.kakaocorp.com/page/favicon.ico" alt="카카오 로그인" style="background-color: #FEE500; height: 45px; width: 45px; border-radius: 50%; padding: 5px;"> 
-                </a>
-                <a href="https://nid.naver.com/nidlogin.login" target="_blank" title="네이버 로그인">
-                    <img src="https://static.nid.naver.com/oauth/button_g.PNG" alt="네이버 로그인" class="naver-icon" style="height: 45px;"> 
-                </a>
-                <a href="https://accounts.google.com" target="_blank" title="구글 로그인">
-                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="구글 로그인" style="background-color: white; padding: 10px; height: 45px; width: 45px; border-radius: 50%;"> 
-                </a>
-                <a href="https://www.facebook.com/login/" target="_blank" title="페이스북 로그인">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/1200px-Facebook_Logo_%282019%29.png" alt="페이스북 로그인" style="height: 45px; width: 45px; border-radius: 50%;">
-                </a>
+    
+    <div class="main-container" style="max-width: 1200px; margin: 0 auto; padding: 0 5px;">
+    <div class="header-container" style="margin: 0 auto; padding: 0 5px;">
+        <header style="max-width: 1200px; margin: 0 auto; padding: 10px 5px; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin-left: 30px; white-space: nowrap;"><i class="fas fa-cloud"></i> 인터넷 탐색기</h2>
+            <div class="header-right">
+                <div id="serverStatus">
+                    <span id="serverStatusIcon"></span> <span id="serverStatusText">서버 확인 중...</span>                        
+                </div>
+                <div id="systemResources" style="margin-right: 50px;">
+                    <!-- CPU 및 메모리 정보 -->
+                    <div id="cpuStatus">
+                        <i class="fas fa-tachometer-alt"></i> CPU: <span id="cpuSpeed">0GHz</span><span id="cpuUsage"></span>
+                    </div>
+                    <div id="memoryStatus">
+                        <i class="fas fa-memory"></i> RAM: <span id="memoryUsage">0GB/0GB</span>
+                    </div>
+                    <!-- 저장공간 정보 (추가) -->
+                    <div class="storage-info">
+                        <i class="fas fa-database"></i>SSD:
+                        <div id="storageInfoText">
+                            <div class="storage-info-text"><span>0B / 0B (0%)</span></div>
+                            <div class="storage-bar-container"><div class="storage-bar"></div></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </form>
+        </header>
+    </div>
+
+    <div class="container">
+        <div class="file-explorer">
+            <div class="navigation-bar">
+                <div class="breadcrumb" id="breadcrumb">
+                    <span data-path="">홈</span>
+                </div>
+                <div class="view-options">
+                    <button id="gridViewBtn" class="view-option active" title="아이콘 보기"><i class="fas fa-th"></i></button>
+                    <button id="listViewBtn" class="view-option" title="목록 보기"><i class="fas fa-list"></i></button>
+                </div>
+            </div>
+            
+            <div class="file-actions">
+                <div class="action-buttons">
+                    <button id="createFolder" class="btn btn-primary" disabled><i class="fas fa-folder-plus"></i> 새폴더</button>
+                    <div class="upload-dropdown">
+                        <button id="uploadMainBtn" class="btn btn-success" disabled><i class="fas fa-upload"></i> 업로드</button>
+                    </div>
+                    <button id="downloadBtn" class="btn btn-info" disabled><i class="fas fa-download"></i> 다운로드</button>
+                    <button id="deleteBtn" class="btn btn-danger" disabled><i class="fas fa-trash-alt"></i> 삭제</button>
+                    <button id="refreshBtn" title="새로고침" disabled><i class="fas fa-sync-alt"></i></button>
+                </div>
+                
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="파일/폴더 검색" disabled>
+                    <button class="btn btn-primary" disabled><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+            
+            <div class="file-container">
+                <div class="file-list" id="fileList">
+                    <div class="file-view" id="fileView">
+                        <!-- 로그인 전 빈 상태 -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="statusbar" id="statusbar">
+                <div class="status-info">인증이 필요합니다</div>
+                <div class="selection-info">로그인 후 이용하세요</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="rules-container">
+        <button id="rulesBtn" title="이용규칙" style="margin-left: 25px;"><i class="fas fa-book"></i>이용규칙</button>
+    </div>     
+    </div>
+
+    <!-- 환영 메시지 -->
+    <div class="welcome-message">
+        <h1><i class="fas fa-cloud"></i> AI 데이터 허브</h1>
+        <p>클라우드 파일 관리 시스템에 오신 것을 환영합니다</p>
+    </div>
+
+    <!-- 접속 버튼 -->
+    <button class="access-button" id="accessBtn">
+        <i class="fas fa-key"></i> 시스템 접속
+    </button>
+
+    <!-- 로그인 모달 -->
+    <div id="loginModal" class="modal" style="display: none;">
+        <div class="login-modal-content">
+            <h1>시스템 인증</h1>
+            <p class="description">보안 접근 시스템에 접속합니다.<br>지정된 접근 코드를 입력하십시오.</p>
+            <form id="login-form" class="login-form">
+                <label for="password">접근 코드:</label>
+                <input type="password" id="password" required>
+                <button type="submit">접속 승인</button>
+                <p id="error-message"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- 이용규칙 모달 -->
+    <div id="rulesModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-book"></i> 인터넷탐색기 서비스 이용 규칙 및 면책 조항</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="rulesContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="closeRulesBtn">확인</button>
+            </div>
+        </div>
     </div>
 
     <script src="login.js"></script>
