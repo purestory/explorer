@@ -1,0 +1,18 @@
+[Unit]
+Description=Explorer Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=purestory
+Group=purestory
+WorkingDirectory=/home/purestory/explorer/backend
+ExecStart=/bin/bash -c "source /home/purestory/.nvm/nvm.sh; /home/purestory/.nvm/versions/node/v22.14.0/bin/node /home/purestory/explorer/backend/server.js"
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=explorer-backend
+
+[Install]
+WantedBy=multi-user.target 
